@@ -1,0 +1,407 @@
+// ============================================================
+// LOSS DEFENDER - DATABASE SCHEMA
+// PostgreSQL / Neon + Prisma 7
+// ============================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MANAGER
+  OPERATOR
+  VIEWER
+}
+
+enum Marketplace {
+  FLIPKART
+  AMAZON
+  MEESHO
+  OTHER
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PACKING
+  PACKED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+}
+
+enum ShipmentStatus {
+  CREATED
+  READY_TO_PACK
+  PACKING
+  PACKED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+}
+
+enum PackingSessionStatus {
+  ACTIVE
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum EvidenceStatus {
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum MediaType {
+  VIDEO
+  PHOTO
+}
+
+// ============================================================
+// COMPANY / USER / WAREHOUSE
+// ============================================================
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  code        String?  @unique
+  isActive    Boolean  @default(true)
+
+  users       User[]
+  warehouses  Warehouse[]
+  products    Product[]
+  orders      Order[]
+  marketplaceAccounts MarketplaceAccount[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
+  @@map("companies")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  firebaseUid String   @unique
+  email       String
+  name        String?
+  role        UserRole @default(OPERATOR)
+  isActive    Boolean  @default(true)
+
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  packingSessions PackingSession[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([email])
+  @@map("users")
+}
+
+model Warehouse {
+  id          String   @id @default(cuid())
+  name        String
+  code        String
+  address     String?
+  city        String?
+  state       String?
+  country     String   @default("India")
+  isActive    Boolean  @default(true)
+
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  orders      Order[]
+  packingSessions PackingSession[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@map("warehouses")
+}
+
+// ============================================================
+// MARKETPLACE
+// ============================================================
+
+model MarketplaceAccount {
+  id              String      @id @default(cuid())
+  marketplace     Marketplace
+  accountName     String
+  sellerId        String?
+  isActive        Boolean     @default(true)
+
+  // Store encrypted/secured references only.
+  // Raw marketplace secrets should NOT be stored here.
+  credentialRef   String?
+
+  companyId       String
+  company         Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  orders          Order[]
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([companyId, marketplace, accountName])
+  @@index([companyId, marketplace])
+  @@map("marketplace_accounts")
+}
+
+// ============================================================
+// PRODUCTS
+// ============================================================
+
+model Product {
+  id              String   @id @default(cuid())
+  sku             String
+  name            String
+  description     String?
+  imageUrl        String?
+  isActive        Boolean  @default(true)
+
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  variants        ProductVariant[]
+  orderItems      OrderItem[]
+  barcodeAliases  BarcodeAlias[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([companyId, sku])
+  @@index([companyId])
+  @@index([sku])
+  @@map("products")
+}
+
+model ProductVariant {
+  id          String   @id @default(cuid())
+  sku         String
+  name        String?
+  variantName String?
+  color       String?
+  size        String?
+  imageUrl    String?
+  quantity    Int      @default(0)
+  isActive    Boolean  @default(true)
+
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  orderItems  OrderItem[]
+  barcodeAliases BarcodeAlias[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([productId, sku])
+  @@index([sku])
+  @@map("product_variants")
+}
+
+model BarcodeAlias {
+  id          String   @id @default(cuid())
+  barcode     String
+  type        String
+  isActive    Boolean  @default(true)
+
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  variantId   String?
+  variant     ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([barcode])
+  @@index([productId])
+  @@index([variantId])
+  @@map("barcode_aliases")
+}
+
+// ============================================================
+// ORDERS
+// ============================================================
+
+model Order {
+  id                  String        @id @default(cuid())
+
+  externalOrderId     String
+  marketplaceOrderId  String?
+  marketplace         Marketplace
+
+  status              OrderStatus   @default(PENDING)
+
+  customerName        String?
+  customerPhone       String?
+  shippingAddress     String?
+
+  warehouseId         String
+  warehouse           Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+
+  companyId           String
+  company             Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  marketplaceAccountId String?
+  marketplaceAccount   MarketplaceAccount? @relation(fields: [marketplaceAccountId], references: [id], onDelete: SetNull)
+
+  items               OrderItem[]
+  shipments           Shipment[]
+  packingSessions     PackingSession[]
+
+  orderedAt           DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  @@unique([companyId, marketplace, externalOrderId])
+  @@index([companyId, status])
+  @@index([warehouseId, status])
+  @@index([marketplace, externalOrderId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+
+  quantity    Int
+  unitPrice   Decimal? @db.Decimal(12, 2)
+
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  variantId   String?
+  variant     ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+// ============================================================
+// SHIPMENTS
+// ============================================================
+
+model Shipment {
+  id              String         @id @default(cuid())
+
+  awb             String
+  carrier         String?
+  trackingUrl     String?
+  status          ShipmentStatus @default(CREATED)
+
+  orderId         String
+  order           Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  packingSessions PackingSession[]
+  barcodeAliases  ShipmentBarcode[]
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([awb])
+  @@index([orderId])
+  @@index([awb])
+  @@map("shipments")
+}
+
+model ShipmentBarcode {
+  id          String   @id @default(cuid())
+  barcode     String
+  type        String
+  isActive    Boolean  @default(true)
+
+  shipmentId  String
+  shipment    Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+
+  @@unique([barcode])
+  @@index([shipmentId])
+  @@map("shipment_barcodes")
+}
+
+// ============================================================
+// PACKING / EVIDENCE
+// ============================================================
+
+model PackingSession {
+  id          String               @id @default(cuid())
+  status      PackingSessionStatus @default(ACTIVE)
+
+  startedAt   DateTime             @default(now())
+  completedAt DateTime?
+
+  orderId     String
+  order       Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  shipmentId  String
+  shipment    Shipment             @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  warehouseId String
+  warehouse   Warehouse            @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+
+  userId      String
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  media       EvidenceMedia[]
+
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([orderId])
+  @@index([shipmentId])
+  @@index([userId])
+  @@index([status])
+  @@map("packing_sessions")
+}
+
+model EvidenceMedia {
+  id              String         @id @default(cuid())
+  type            MediaType
+  status          EvidenceStatus @default(PROCESSING)
+
+  fileName        String
+  storageKey      String
+  contentType     String?
+  sizeBytes       BigInt?
+  durationSeconds Float?
+
+  packingSessionId String
+  packingSession   PackingSession @relation(fields: [packingSessionId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([packingSessionId])
+  @@index([type])
+  @@index([status])
+  @@map("evidence_media")
+}
