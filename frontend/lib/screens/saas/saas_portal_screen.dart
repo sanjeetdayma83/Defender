@@ -1,21 +1,34 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../scan_pack/scan_pack_screen.dart';
 
 enum SaaSRole { platformAdmin, companyAdmin, operator }
 
 class SaaSPortalScreen extends StatefulWidget {
-  const SaaSPortalScreen({super.key});
+  final SaaSRole initialRole;
+
+  const SaaSPortalScreen({
+    super.key,
+    this.initialRole = SaaSRole.platformAdmin,
+  });
 
   @override
   State<SaaSPortalScreen> createState() => _SaaSPortalScreenState();
 }
 
 class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
-  SaaSRole _role = SaaSRole.platformAdmin;
+  late SaaSRole _role;
   int _index = 0;
 
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _role = widget.initialRole;
+  }
+
+  
 
   String get _roleLabel {
     switch (_role) {
@@ -3230,3 +3243,6 @@ const _red = Color(0xFFDC2626);
 const _bg = Color(0xFFF8FAFC);
 const _border = Color(0xFFE2E8F0);
 const _muted = Color(0xFF64748B);
+
+
+

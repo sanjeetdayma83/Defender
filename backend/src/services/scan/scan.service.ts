@@ -1,4 +1,4 @@
-import { OrderStatus } from "../../generated/prisma/client.js";
+﻿import { OrderStatus } from "../../generated/prisma/client.js";
 import { prisma } from "../../config/prisma.js";
 
 export class ScanService {
@@ -273,7 +273,7 @@ export class ScanService {
         marketplaceOrderId: order.marketplaceOrderId,
         marketplace: order.marketplace,
         status: order.status,
-        orderDate: order.orderDate,
+        orderDate: order.orderedAt,
       },
 
       items: orderItems.map((item) => {
@@ -312,3 +312,5 @@ export class ScanService {
 }
 
 export const scanService = new ScanService();
+
+

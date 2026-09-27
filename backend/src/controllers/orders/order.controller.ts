@@ -1,9 +1,9 @@
-import type { Response } from "express";
+﻿import type { Response } from "express";
 
 import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
 import { companyContextService } from "../../services/identity/company-context.service.js";
 import { databaseOrderService } from "../../services/orders/database-order.service.js";
-import { scanLookupService } from "../../services/scan/scan-lookup.service.js";
+import { scanService } from "../../services/scan/scan.service.js";
 
 export async function listOrders(
   req: AuthenticatedRequest,
@@ -94,19 +94,30 @@ export async function lookupOrder(
 
   const { company } = await companyContextService.getCompany(firebaseUid);
 
-  const result = await scanLookupService.lookup(company.id, value);
+  try {
+    const result = await scanService.lookup(company.id, value);
 
-  if (!result.found) {
-    res.status(result.ambiguous ? 409 : 404).json({
-      success: false,
-      code: result.ambiguous ? "AMBIGUOUS_SCAN" : "ORDER_NOT_FOUND",
+    res.json({
+      success: true,
       data: result,
     });
-    return;
-  }
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Barcode, AWB, order ID or SKU was not found.";
 
-  res.json({
-    success: true,
-    data: result,
-  });
+    const status =
+      message.toLowerCase().includes("ambiguous")
+        ? 409
+        : 404;
+
+    res.status(status).json({
+      success: false,
+      code: status === 409 ? "AMBIGUOUS_SCAN" : "ORDER_NOT_FOUND",
+      message,
+    });
+  }
 }
+
+

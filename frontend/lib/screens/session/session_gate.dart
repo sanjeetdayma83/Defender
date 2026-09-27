@@ -1,10 +1,9 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/session_provider.dart';
 import '../auth/login_screen.dart';
-import '../../debug/scan_integration_test.dart';
-import '../../screens/onboarding/onboarding_screen.dart';
+import '../onboarding/onboarding_screen.dart';
 import '../saas/saas_portal_screen.dart';
 
 class LDSessionGate extends StatefulWidget {
@@ -15,19 +14,30 @@ class LDSessionGate extends StatefulWidget {
 }
 
 class _LDSessionGateState extends State<LDSessionGate> {
-  bool _scanIntegrationStarted = false;
-
   @override
   void initState() {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        context.read<SessionProvider>().initialize();
       }
-
-      context.read<SessionProvider>().initialize();
     });
+  }
+
+  SaaSRole _roleForUser(String? role) {
+    switch (role) {
+      case 'PLATFORM_ADMIN':
+        return SaaSRole.platformAdmin;
+      case 'OWNER':
+      case 'ADMIN':
+      case 'MANAGER':
+        return SaaSRole.companyAdmin;
+      case 'OPERATOR':
+      case 'VIEWER':
+      default:
+        return SaaSRole.operator;
+    }
   }
 
   @override
@@ -51,19 +61,9 @@ class _LDSessionGateState extends State<LDSessionGate> {
             return const OnboardingScreen();
 
           case SessionStatus.authenticated:
-            if (!_scanIntegrationStarted) {
-              _scanIntegrationStarted = true;
-
-              WidgetsBinding.instance.addPostFrameCallback((_) async {
-                if (!mounted) {
-                  return;
-                }
-
-                await ScanIntegrationTest.run();
-              });
-            }
-
-            return const SaaSPortalScreen();
+            return SaaSPortalScreen(
+              initialRole: _roleForUser(session.user?.role),
+            );
         }
       },
     );

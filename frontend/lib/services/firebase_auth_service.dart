@@ -1,4 +1,4 @@
-import 'package:firebase_auth/firebase_auth.dart';
+﻿import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 class FirebaseAuthService {
@@ -38,7 +38,7 @@ class FirebaseAuthService {
     provider.setCustomParameters({'prompt': 'select_account'});
 
     if (kIsWeb) {
-      await _auth.signInWithRedirect(provider);
+      await _auth.signInWithPopup(provider);
       return;
     }
 
@@ -57,3 +57,5 @@ class FirebaseAuthService {
     await _auth.signOut();
   }
 }
+
+

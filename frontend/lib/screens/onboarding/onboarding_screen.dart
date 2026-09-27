@@ -1,133 +1,230 @@
-import 'package:flutter/material.dart';
-import '../../widgets/ux/ld_ux.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../providers/session_provider.dart';
+import '../../services/onboarding/onboarding_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  final VoidCallback? onComplete;
-
-  const OnboardingScreen({super.key, this.onComplete});
+  const OnboardingScreen({super.key});
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  int _step = 0;
+  final _formKey = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  final _company = TextEditingController();
+  final _companyCode = TextEditingController();
+  final _warehouse = TextEditingController();
+  final _warehouseCode = TextEditingController();
 
-  final List<_OnboardingStep> _steps = const [
-    _OnboardingStep(
-      icon: Icons.business_rounded,
-      title: 'Set up your company',
-      description:
-          'Create your company workspace and define the basic operating information.',
-    ),
-    _OnboardingStep(
-      icon: Icons.warehouse_rounded,
-      title: 'Configure your warehouse',
-      description: 'Add your primary warehouse and prepare your packing team.',
-    ),
-    _OnboardingStep(
-      icon: Icons.upload_file_rounded,
-      title: 'Import your orders',
-      description:
-          'Upload CSV or XLSX orders, map columns, validate and import them.',
-    ),
-    _OnboardingStep(
-      icon: Icons.qr_code_scanner_rounded,
-      title: 'Start Scan & Pack',
-      description:
-          'Scan the shipping barcode, verify the order and create packing evidence.',
-    ),
-  ];
+  final OnboardingService _service = OnboardingService();
 
-  void _next() {
-    if (_step < _steps.length - 1) {
-      setState(() => _step++);
-      return;
+  bool _loading = true;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final data = await _service.getStatus();
+
+      final user = data['user'];
+      final company = data['company'];
+      final warehouses = data['warehouses'];
+
+      if (user is Map) {
+        _name.text = user['name']?.toString() ?? '';
+      }
+
+      if (company is Map) {
+        _company.text = company['name']?.toString() ?? '';
+        _companyCode.text = company['code']?.toString() ?? '';
+      }
+
+      if (warehouses is List && warehouses.isNotEmpty && warehouses.first is Map) {
+        final first = Map<String, dynamic>.from(warehouses.first as Map);
+        _warehouse.text = first['name']?.toString() ?? '';
+        _warehouseCode.text = first['code']?.toString() ?? '';
+      }
+    } catch (error) {
+      _error = error.toString().replaceFirst('Exception: ', '');
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
+  }
 
-    widget.onComplete?.call();
+  Future<void> _complete() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      await _service.updateProfile(_name.text.trim());
+
+      await _service.updateCompany(
+        name: _company.text.trim(),
+        code: _companyCode.text.trim(),
+      );
+
+      if (_warehouse.text.trim().isNotEmpty) {
+        await _service.createWarehouse(
+          name: _warehouse.text.trim(),
+          code: _warehouseCode.text.trim(),
+        );
+      }
+
+      await _service.complete();
+
+      if (!mounted) return;
+      await context.read<SessionProvider>().refresh();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _company.dispose();
+    _companyCode.dispose();
+    _warehouse.dispose();
+    _warehouseCode.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final item = _steps[_step];
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Scaffold(
-      backgroundColor: LDUXColors.background,
+      backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
         child: Center(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 700),
-              child: Column(
-                children: [
-                  const Spacer(),
-                  Container(
-                    width: 92,
-                    height: 92,
-                    decoration: BoxDecoration(
-                      color: LDUXColors.blue.withValues(alpha: 0.10),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(item.icon, size: 44, color: LDUXColors.blue),
-                  ),
-                  const SizedBox(height: 28),
-                  Text(
-                    item.title,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    item.description,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: LDUXColors.muted,
-                      height: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(
-                      _steps.length,
-                      (index) => AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        width: index == _step ? 26 : 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: index == _step
-                              ? LDUXColors.blue
-                              : LDUXColors.border,
-                          borderRadius: BorderRadius.circular(20),
+              constraints: const BoxConstraints(maxWidth: 620),
+              child: Card(
+                elevation: 0,
+                child: Padding(
+                  padding: const EdgeInsets.all(28),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Complete your workspace',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Set up your profile, company and primary warehouse.',
+                          style: TextStyle(color: Color(0xFF64748B)),
+                        ),
+                        if (_error != null) ...[
+                          const SizedBox(height: 18),
+                          Text(
+                            _error!,
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ],
+                        const SizedBox(height: 24),
+                        TextFormField(
+                          controller: _name,
+                          decoration: const InputDecoration(
+                            labelText: 'Your name',
+                            prefixIcon: Icon(Icons.person_outline),
+                          ),
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
+                                  ? 'Name is required.'
+                                  : null,
+                        ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: _company,
+                          decoration: const InputDecoration(
+                            labelText: 'Company name',
+                            prefixIcon: Icon(Icons.business_outlined),
+                          ),
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
+                                  ? 'Company name is required.'
+                                  : null,
+                        ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: _companyCode,
+                          decoration: const InputDecoration(
+                            labelText: 'Company code',
+                            prefixIcon: Icon(Icons.tag_outlined),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: _warehouse,
+                          decoration: const InputDecoration(
+                            labelText: 'Primary warehouse',
+                            prefixIcon: Icon(Icons.warehouse_outlined),
+                          ),
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
+                                  ? 'Warehouse name is required.'
+                                  : null,
+                        ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: _warehouseCode,
+                          decoration: const InputDecoration(
+                            labelText: 'Warehouse code',
+                            prefixIcon: Icon(Icons.qr_code_2_outlined),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: FilledButton(
+                            onPressed: _saving ? null : _complete,
+                            child: _saving
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('Complete Setup'),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const Spacer(),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: FilledButton(
-                      onPressed: _next,
-                      child: Text(
-                        _step == _steps.length - 1 ? 'Get Started' : 'Continue',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  if (_step < _steps.length - 1)
-                    TextButton(
-                      onPressed: widget.onComplete,
-                      child: const Text('Skip for now'),
-                    ),
-                ],
+                ),
               ),
             ),
           ),
@@ -135,16 +232,4 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
     );
   }
-}
-
-class _OnboardingStep {
-  final IconData icon;
-  final String title;
-  final String description;
-
-  const _OnboardingStep({
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
 }

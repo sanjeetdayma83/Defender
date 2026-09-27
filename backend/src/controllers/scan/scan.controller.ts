@@ -1,4 +1,4 @@
-import type { Response } from "express";
+﻿import type { Response } from "express";
 import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
 import { prisma } from "../../config/prisma.js";
 import { scanService } from "../../services/scan/scan.service.js";
@@ -88,3 +88,5 @@ export async function lookupScan(
     });
   }
 }
+
+

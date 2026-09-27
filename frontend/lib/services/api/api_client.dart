@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -35,8 +35,26 @@ class ApiClient {
     };
   }
 
-  Future<http.Response> get(Uri uri, {Map<String, String>? headers}) async {
-    return http.get(uri, headers: await _headers(additional: headers));
+  Object? _encodeBody(Object? body) {
+    if (body == null) {
+      return null;
+    }
+
+    if (body is String) {
+      return body;
+    }
+
+    return jsonEncode(body);
+  }
+
+  Future<http.Response> get(
+    Uri uri, {
+    Map<String, String>? headers,
+  }) async {
+    return http.get(
+      uri,
+      headers: await _headers(additional: headers),
+    );
   }
 
   Future<http.Response> post(
@@ -52,7 +70,7 @@ class ApiClient {
           ...?headers,
         },
       ),
-      body: body,
+      body: _encodeBody(body),
     );
   }
 
@@ -69,12 +87,18 @@ class ApiClient {
           ...?headers,
         },
       ),
-      body: body,
+      body: _encodeBody(body),
     );
   }
 
-  Future<http.Response> delete(Uri uri, {Map<String, String>? headers}) async {
-    return http.delete(uri, headers: await _headers(additional: headers));
+  Future<http.Response> delete(
+    Uri uri, {
+    Map<String, String>? headers,
+  }) async {
+    return http.delete(
+      uri,
+      headers: await _headers(additional: headers),
+    );
   }
 
   Future<http.StreamedResponse> sendMultipart(

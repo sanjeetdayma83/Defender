@@ -1,95 +1,200 @@
+﻿import 'dart:convert';
+
 import '../../models/models.dart';
+import '../api/api_client.dart';
+import '../api/api_config.dart';
 
 class OrderService {
-  static final List<Product> _products = <Product>[
-    Product(
-      sku: '97-U1YR-N3GW',
-      name: 'Warehouse Product',
-      image: '',
-      variant: 'Standard',
-      color: 'Default',
-    ),
-    Product(
-      sku: 'PC-TWISTER-001',
-      name: 'Twister Product',
-      image: '',
-      variant: 'Standard',
-      color: 'Blue',
-    ),
-    Product(
-      sku: 'DG-LT-S',
-      name: 'NOVELTY Foldable Height Adjustable White Board',
-      image: '',
-      variant: 'Standard',
-      color: 'White',
-    ),
-  ];
+  final ApiClient _apiClient;
 
-  static final List<Order> _orders = <Order>[
-    Order(
-      awb: '368275770371',
-      orderId: '406-3151945-3281902',
-      marketplace: 'Amazon',
-      product: _products[0],
-      quantity: 1,
-      status: 'Ready to Pack',
-      evidenceExists: false,
-    ),
-    Order(
-      awb: '1490841263428112',
-      orderId: '331724360573683072_1',
-      marketplace: 'Delhivery',
-      product: _products[1],
-      quantity: 1,
-      status: 'Ready to Pack',
-      evidenceExists: false,
-    ),
-    Order(
-      awb: 'FMPP3767030215',
-      orderId: 'FLIPKART-DEMO-001',
-      marketplace: 'Flipkart',
-      product: _products[2],
-      quantity: 1,
-      status: 'Ready to Pack',
-      evidenceExists: false,
-    ),
-  ];
-
-  /// Public read-only access for UI screens.
-  static List<Order> get orders => List<Order>.unmodifiable(_orders);
+  OrderService({ApiClient? apiClient})
+      : _apiClient = apiClient ?? const ApiClient();
 
   Future<Order?> findByBarcode(String barcode) async {
-    final String value = barcode.trim();
+    final value = barcode.trim();
 
-    if (value.isEmpty) {
+    if (value.isEmpty) return null;
+
+    final response = await _apiClient.post(
+      Uri.parse('${ApiConfig.baseUrl}/scan/lookup'),
+      body: jsonEncode(<String, dynamic>{'barcode': value}),
+    );
+
+    Map<String, dynamic> decoded = <String, dynamic>{};
+    try {
+      final raw = jsonDecode(response.body);
+      if (raw is Map<String, dynamic>) {
+        decoded = raw;
+      }
+    } catch (_) {}
+
+    if (response.statusCode == 404 || response.statusCode == 400) {
       return null;
     }
 
-    for (final Order order in _orders) {
-      if (order.awb.toLowerCase() == value.toLowerCase() ||
-          order.orderId.toLowerCase() == value.toLowerCase()) {
-        return order;
-      }
+    if (response.statusCode == 409) {
+      throw Exception(
+        decoded['message']?.toString() ??
+            'This SKU matches multiple pending orders. Scan the AWB.',
+      );
     }
 
-    for (final Product product in _products) {
-      if (product.sku.toLowerCase() == value.toLowerCase()) {
-        for (final Order order in _orders) {
-          if (order.product.sku.toLowerCase() == product.sku.toLowerCase()) {
-            return order;
-          }
-        }
-      }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        decoded['message']?.toString() ??
+            'Scan lookup failed (${response.statusCode}).',
+      );
     }
 
-    return null;
+    if (decoded['success'] != true) {
+      throw Exception(
+        decoded['message']?.toString() ?? 'Scan lookup failed.',
+      );
+    }
+
+    final data = decoded['data'];
+    if (data is! Map<String, dynamic>) {
+      return null;
+    }
+
+    final orderJson = data['order'];
+    final shipmentJson = data['shipment'];
+    final itemsJson = data['items'];
+
+    if (orderJson is! Map || shipmentJson is! Map) {
+      return null;
+    }
+
+    final order = Map<String, dynamic>.from(orderJson);
+    final shipment = Map<String, dynamic>.from(shipmentJson);
+
+    final items = itemsJson is List
+        ? itemsJson
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList()
+        : <Map<String, dynamic>>[];
+
+    if (items.isEmpty) {
+      throw Exception('Shipment was found, but no order item is attached.');
+    }
+
+    final first = items.first;
+    final productJson = first['product'] is Map
+        ? Map<String, dynamic>.from(first['product'] as Map)
+        : <String, dynamic>{};
+    final variantJson = first['variant'] is Map
+        ? Map<String, dynamic>.from(first['variant'] as Map)
+        : <String, dynamic>{};
+
+    final sku = first['sku']?.toString() ??
+        variantJson['sku']?.toString() ??
+        productJson['sku']?.toString() ??
+        '';
+
+    final product = Product(
+      sku: sku,
+      name: first['productName']?.toString() ??
+          productJson['name']?.toString() ??
+          'Unknown Product',
+      image: productJson['imageUrl']?.toString() ?? '',
+      variant: variantJson['name']?.toString() ??
+          variantJson['variantName']?.toString() ??
+          'Standard',
+      color: variantJson['color']?.toString() ?? 'Default',
+    );
+
+    return Order(
+      awb: shipment['awb']?.toString() ?? value,
+      orderId: order['externalOrderId']?.toString() ??
+          order['marketplaceOrderId']?.toString() ??
+          order['id']?.toString() ??
+          value,
+      marketplace: order['marketplace']?.toString() ?? 'OTHER',
+      product: product,
+      quantity: (first['quantity'] as num?)?.toInt() ?? 1,
+      status: order['status']?.toString() ?? 'PENDING',
+      evidenceExists: false,
+    );
   }
 
-  Future<List<Order>> getOrders() async {
-    return List<Order>.unmodifiable(_orders);
+  Future<List<Order>> getOrders({String? search, String? status}) async {
+    final query = <String, String>{};
+    if (search != null && search.trim().isNotEmpty) {
+      query['search'] = search.trim();
+    }
+    if (status != null && status.trim().isNotEmpty) {
+      query['status'] = status.trim();
+    }
+
+    final uri = Uri.parse('${ApiConfig.baseUrl}/orders').replace(
+      queryParameters: query.isEmpty ? null : query,
+    );
+
+    final response = await _apiClient.get(uri);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Unable to load orders (${response.statusCode}).');
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) return const <Order>[];
+
+    final rawData = decoded['data'];
+    final rawOrders = rawData is List
+        ? rawData
+        : rawData is Map && rawData['orders'] is List
+            ? rawData['orders']
+            : const [];
+
+    return (rawOrders as List)
+        .whereType<Map>()
+        .map(_mapOrder)
+        .whereType<Order>()
+        .toList();
   }
 
-  Future<List<Product>> getProducts() async {
-    return List<Product>.unmodifiable(_products);
+  Order? _mapOrder(Map raw) {
+    final order = Map<String, dynamic>.from(raw);
+    final shipments = order['shipments'];
+    final items = order['items'];
+
+    final shipment = shipments is List && shipments.isNotEmpty
+        ? Map<String, dynamic>.from(shipments.first as Map)
+        : <String, dynamic>{};
+
+    final item = items is List && items.isNotEmpty
+        ? Map<String, dynamic>.from(items.first as Map)
+        : <String, dynamic>{};
+
+    final product = item['product'] is Map
+        ? Map<String, dynamic>.from(item['product'] as Map)
+        : <String, dynamic>{};
+    final variant = item['variant'] is Map
+        ? Map<String, dynamic>.from(item['variant'] as Map)
+        : <String, dynamic>{};
+
+    final sku = variant['sku']?.toString() ??
+        product['sku']?.toString() ??
+        item['sku']?.toString() ??
+        '';
+
+    return Order(
+      awb: shipment['awb']?.toString() ?? '',
+      orderId: order['externalOrderId']?.toString() ??
+          order['id']?.toString() ??
+          '',
+      marketplace: order['marketplace']?.toString() ?? 'OTHER',
+      product: Product(
+        sku: sku,
+        name: product['name']?.toString() ?? 'Unknown Product',
+        image: product['imageUrl']?.toString() ?? '',
+        variant: variant['name']?.toString() ?? 'Standard',
+        color: variant['color']?.toString() ?? 'Default',
+      ),
+      quantity: (item['quantity'] as num?)?.toInt() ?? 1,
+      status: order['status']?.toString() ?? 'PENDING',
+      evidenceExists: false,
+    );
   }
 }

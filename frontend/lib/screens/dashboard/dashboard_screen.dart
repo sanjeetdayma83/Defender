@@ -1,7 +1,6 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../models/models.dart';
-import '../../services/orders/order_service.dart';
 import '../../services/storage/storage_usage_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_widgets.dart';
@@ -84,7 +83,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final orders = OrderService.orders;
+    final orders = <Order>[];
 
     final readyCount = orders
         .where((order) => order.status.toLowerCase().contains('ready'))
@@ -609,3 +608,4 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 }
+
