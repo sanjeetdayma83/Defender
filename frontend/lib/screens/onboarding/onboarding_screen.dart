@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/session_provider.dart';
 import '../../services/onboarding/onboarding_service.dart';
+import '../../services/warehouse/warehouse_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -20,10 +21,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _warehouseCode = TextEditingController();
 
   final OnboardingService _service = OnboardingService();
+  final WarehouseService _warehouseService = WarehouseService();
 
   bool _loading = true;
   bool _saving = false;
   String? _error;
+  String? _warehouseId;
 
   @override
   void initState() {
@@ -52,6 +55,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           warehouses.isNotEmpty &&
           warehouses.first is Map) {
         final first = Map<String, dynamic>.from(warehouses.first as Map);
+        _warehouseId = first['id']?.toString();
         _warehouse.text = first['name']?.toString() ?? '';
         _warehouseCode.text = first['code']?.toString() ?? '';
       }
@@ -78,10 +82,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         code: _companyCode.text.trim(),
       );
 
-      if (_warehouse.text.trim().isNotEmpty) {
-        await _service.createWarehouse(
-          name: _warehouse.text.trim(),
-          code: _warehouseCode.text.trim(),
+      final warehouseName = _warehouse.text.trim();
+      final warehouseCode = _warehouseCode.text.trim();
+
+      if (_warehouseId == null) {
+        final created = await _service.createWarehouse(
+          name: warehouseName,
+          code: warehouseCode,
+        );
+
+        _warehouseId = created['id']?.toString();
+      } else {
+        await _warehouseService.updateWarehouse(
+          warehouseId: _warehouseId!,
+          name: warehouseName,
+          code: warehouseCode,
         );
       }
 
@@ -202,6 +217,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             labelText: 'Warehouse code',
                             prefixIcon: Icon(Icons.qr_code_2_outlined),
                           ),
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
+                              ? 'Warehouse code is required.'
+                              : null,
                         ),
                         const SizedBox(height: 24),
                         SizedBox(

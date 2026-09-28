@@ -1,5 +1,4 @@
 ﻿import { prisma } from "../../config/prisma.js";
-
 export type WarehouseRole =
   | "PLATFORM_ADMIN"
   | "OWNER"
@@ -293,16 +292,26 @@ export class WarehouseService {
       throw new Error("WAREHOUSE_NOT_FOUND");
     }
 
+    const activeOrderStatuses = [
+      "PENDING",
+      "CONFIRMED",
+      "PACKING",
+      "PACKED",
+      "SHIPPED",
+    ] as import("../../generated/prisma/enums.js").OrderStatus[];
+
     const [activeOrders, activeSessions, totalOrders, totalSessions] =
       await Promise.all([
         prisma.order.count({
           where: {
             warehouseId,
+            status: { in: activeOrderStatuses },
           },
         }),
         prisma.packingSession.count({
           where: {
             warehouseId,
+            status: "ACTIVE",
           },
         }),
         prisma.order.count({

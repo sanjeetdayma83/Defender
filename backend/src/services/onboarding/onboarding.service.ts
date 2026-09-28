@@ -185,7 +185,11 @@ export class OnboardingService {
     });
 
     if (existingCode) {
-      throw new Error("WAREHOUSE_CODE_EXISTS");
+      if (existingCode.name.trim().toLowerCase() !== name.toLowerCase()) {
+        throw new Error("WAREHOUSE_CODE_EXISTS");
+      }
+
+      return existingCode;
     }
 
     return prisma.warehouse.create({
@@ -194,6 +198,7 @@ export class OnboardingService {
         code,
         isActive: true,
         companyId: user.companyId,
+        country: "India",
       },
     });
   }

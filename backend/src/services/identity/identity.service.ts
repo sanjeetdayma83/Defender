@@ -49,16 +49,6 @@ export class IdentityService {
       },
     });
 
-    const warehouse = await prisma.warehouse.create({
-      data: {
-        name: "Main Warehouse",
-        code: "MAIN",
-        companyId: company.id,
-        country: "India",
-        isActive: true,
-      },
-    });
-
     return prisma.user.create({
       data: {
         firebaseUid: input.firebaseUid,
