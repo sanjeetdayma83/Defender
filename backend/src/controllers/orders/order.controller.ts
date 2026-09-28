@@ -107,10 +107,7 @@ export async function lookupOrder(
         ? error.message
         : "Barcode, AWB, order ID or SKU was not found.";
 
-    const status =
-      message.toLowerCase().includes("ambiguous")
-        ? 409
-        : 404;
+    const status = message.toLowerCase().includes("ambiguous") ? 409 : 404;
 
     res.status(status).json({
       success: false,
@@ -119,5 +116,3 @@ export async function lookupOrder(
     });
   }
 }
-
-

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../scan_pack/scan_pack_screen.dart';
 
@@ -27,8 +27,6 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
     super.initState();
     _role = widget.initialRole;
   }
-
-  
 
   String get _roleLabel {
     switch (_role) {
@@ -3243,6 +3241,3 @@ const _red = Color(0xFFDC2626);
 const _bg = Color(0xFFF8FAFC);
 const _border = Color(0xFFE2E8F0);
 const _muted = Color(0xFF64748B);
-
-
-

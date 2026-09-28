@@ -6,20 +6,43 @@ export class ScanService {
     const normalized = barcode.trim();
 
     if (!normalized) {
-      return {
-        found: false,
-        lookupType: null,
-        message: "Barcode is required.",
-      };
+      throw new Error("Barcode is required.");
     }
 
     /*
      * ========================================================
-     * 1. AWB
+     * 1. SHIPPING BARCODE
      * ========================================================
      *
-     * AWB gets priority over ShipmentBarcode because an AWB
-     * may also be stored as a shipment barcode.
+     * ShipmentBarcode currently exposes shipmentId rather than
+     * a nested shipment relation in the generated Prisma client.
+     */
+    const barcodeRecord = await prisma.shipmentBarcode.findFirst({
+      where: {
+        barcode: normalized,
+      },
+    });
+
+    if (barcodeRecord) {
+      const shipment = await prisma.shipment.findUnique({
+        where: {
+          id: barcodeRecord.shipmentId,
+        },
+      });
+
+      if (shipment) {
+        const order = await this.getCompanyOrder(companyId, shipment.orderId);
+
+        if (order) {
+          return this.buildLookupResponse(shipment, order, "BARCODE");
+        }
+      }
+    }
+
+    /*
+     * ========================================================
+     * 2. AWB
+     * ========================================================
      */
     const shipmentByAwb = await prisma.shipment.findFirst({
       where: {
@@ -34,17 +57,13 @@ export class ScanService {
       );
 
       if (order) {
-        return this.buildLookupResponse(
-          shipmentByAwb,
-          order,
-          "AWB",
-        );
+        return this.buildLookupResponse(shipmentByAwb, order, "AWB");
       }
     }
 
     /*
      * ========================================================
-     * 2. EXTERNAL / MARKETPLACE ORDER ID
+     * 3. EXTERNAL / MARKETPLACE ORDER ID
      * ========================================================
      */
     const orderById = await prisma.order.findFirst({
@@ -69,52 +88,12 @@ export class ScanService {
       });
 
       if (!shipment) {
-        return {
-          found: false,
-          lookupType: "ORDER_ID",
-          message: "Order found, but no shipment is associated with this order.",
-        };
-      }
-
-      return this.buildLookupResponse(
-        shipment,
-        orderById,
-        "ORDER_ID",
-      );
-    }
-
-    /*
-     * ========================================================
-     * 3. SHIPPING BARCODE
-     * ========================================================
-     */
-    const barcodeRecord = await prisma.shipmentBarcode.findFirst({
-      where: {
-        barcode: normalized,
-      },
-    });
-
-    if (barcodeRecord) {
-      const shipment = await prisma.shipment.findUnique({
-        where: {
-          id: barcodeRecord.shipmentId,
-        },
-      });
-
-      if (shipment) {
-        const order = await this.getCompanyOrder(
-          companyId,
-          shipment.orderId,
+        throw new Error(
+          "Order found, but no shipment is associated with this order.",
         );
-
-        if (order) {
-          return this.buildLookupResponse(
-            shipment,
-            order,
-            "BARCODE",
-          );
-        }
       }
+
+      return this.buildLookupResponse(shipment, orderById, "ORDER_ID");
     }
 
     /*
@@ -122,7 +101,11 @@ export class ScanService {
      * 4. SKU
      * ========================================================
      *
-     * SKU belongs to Product / ProductVariant.
+     * OrderItem itself does not contain sku in the current
+     * Prisma schema.
+     *
+     * SKU belongs to Product / ProductVariant, so resolve the
+     * SKU there first.
      */
     const product = await prisma.product.findFirst({
       where: {
@@ -175,12 +158,9 @@ export class ScanService {
       );
 
       if (uniqueOrderIds.length > 1) {
-        return {
-          found: false,
-          lookupType: "SKU",
-          message:
-            "SKU is ambiguous. Please scan the shipping barcode or AWB instead.",
-        };
+        throw new Error(
+          "SKU is ambiguous. Please scan the shipping barcode or AWB instead.",
+        );
       }
 
       if (uniqueOrderIds.length === 1) {
@@ -192,11 +172,7 @@ export class ScanService {
         });
 
         if (!skuOrder) {
-          return {
-            found: false,
-            lookupType: "SKU",
-            message: "SKU order was not found.",
-          };
+          throw new Error("SKU order was not found.");
         }
 
         const shipment = await prisma.shipment.findFirst({
@@ -206,33 +182,18 @@ export class ScanService {
         });
 
         if (!shipment) {
-          return {
-            found: false,
-            lookupType: "SKU",
-            message:
-              "SKU matched an order, but no shipment is associated with it.",
-          };
+          throw new Error(
+            "SKU matched an order, but no shipment is associated with it.",
+          );
         }
 
-        return this.buildLookupResponse(
-          shipment,
-          skuOrder,
-          "SKU",
-        );
+        return this.buildLookupResponse(shipment, skuOrder, "SKU");
       }
     }
 
-    /*
-     * ========================================================
-     * NOT FOUND
-     * ========================================================
-     */
-    return {
-      found: false,
-      lookupType: null,
-      message: "Barcode, AWB, order ID or SKU was not found.",
-    };
+    throw new Error("Barcode, AWB, order ID or SKU was not found.");
   }
+
   private async getCompanyOrder(companyId: string, orderId: string) {
     return prisma.order.findFirst({
       where: {
@@ -297,6 +258,12 @@ export class ScanService {
       },
     });
 
+    console.log(
+      "[DEBUG] buildLookupResponse lookupType =",
+      lookupType,
+      "shipment =",
+      shipment.awb,
+    );
 
     return {
       found: true,
@@ -354,8 +321,6 @@ export class ScanService {
 }
 
 export const scanService = new ScanService();
-
-
 
 
 

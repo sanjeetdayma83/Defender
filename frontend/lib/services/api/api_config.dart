@@ -1,4 +1,4 @@
-﻿class ApiConfig {
+class ApiConfig {
   const ApiConfig._();
 
   /// Override in production with:

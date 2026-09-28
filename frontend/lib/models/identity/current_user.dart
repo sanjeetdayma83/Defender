@@ -1,4 +1,4 @@
-﻿class CurrentUser {
+class CurrentUser {
   final String id;
   final String firebaseUid;
   final String email;
@@ -35,9 +35,12 @@
     final rawWarehouses = json['warehouses'];
     final warehouses = rawWarehouses is List
         ? rawWarehouses
-            .whereType<Map>()
-            .map((item) => WarehouseInfo.fromJson(Map<String, dynamic>.from(item)))
-            .toList()
+              .whereType<Map>()
+              .map(
+                (item) =>
+                    WarehouseInfo.fromJson(Map<String, dynamic>.from(item)),
+              )
+              .toList()
         : <WarehouseInfo>[];
 
     // Backward compatibility for an older single-warehouse response.
@@ -71,11 +74,7 @@ class CompanyInfo {
   final String name;
   final String code;
 
-  const CompanyInfo({
-    required this.id,
-    required this.name,
-    required this.code,
-  });
+  const CompanyInfo({required this.id, required this.name, required this.code});
 
   factory CompanyInfo.fromJson(Map<String, dynamic> json) {
     return CompanyInfo(
@@ -108,5 +107,3 @@ class WarehouseInfo {
     );
   }
 }
-
-

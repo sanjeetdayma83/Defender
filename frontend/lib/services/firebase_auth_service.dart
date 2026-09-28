@@ -1,4 +1,4 @@
-﻿import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 class FirebaseAuthService {
@@ -57,5 +57,3 @@ class FirebaseAuthService {
     await _auth.signOut();
   }
 }
-
-

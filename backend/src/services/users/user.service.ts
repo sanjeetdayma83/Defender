@@ -28,18 +28,3 @@ export class UserService {
   }
 }
 
-export class WarehouseService {
-  async list(companyId?: string) {
-    return prisma.warehouse.findMany({
-      where: companyId
-        ? {
-            companyId,
-          }
-        : undefined,
-
-      orderBy: {
-        name: "asc",
-      },
-    });
-  }
-}

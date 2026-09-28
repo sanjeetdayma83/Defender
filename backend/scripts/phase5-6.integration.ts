@@ -4,7 +4,7 @@ import * as XLSX from "xlsx";
 
 import { prisma } from "../src/config/prisma.js";
 import { orderImportService } from "../src/services/imports/order-import.service.js";
-import { scanLookupService } from "../src/services/scan/scan-lookup.service.js";
+import { scanService } from "../src/services/scan/scan.service.js";
 
 function assert(condition: unknown, message: string): void {
   if (!condition) {
@@ -165,10 +165,22 @@ async function main() {
   console.log("");
   console.log("[6/8] Real AWB lookup");
 
-  const awbResult = await scanLookupService.lookup(
+  const debugAwb = `LD-AWB-CSV-${testSuffix}`;
+  const debugShipment = await prisma.shipment.findUnique({
+    where: { awb: debugAwb },
+  });
+
+  if (debugShipment) {
+    const debugOrder = await prisma.order.findUnique({
+      where: { id: debugShipment.orderId },
+    });
+  }
+
+  const awbResult = await scanService.lookup(
     company.id,
     `LD-AWB-CSV-${testSuffix}`,
   );
+
 
   assert(awbResult.found === true, "AWB lookup failed.");
 
@@ -183,7 +195,7 @@ async function main() {
   console.log("");
   console.log("[7/8] Real SKU lookup");
 
-  const skuResult = await scanLookupService.lookup(
+  const skuResult = await scanService.lookup(
     company.id,
     `LD-XLSX-SKU-${testSuffix}`,
   );
@@ -197,7 +209,7 @@ async function main() {
   console.log("");
   console.log("[8/8] Invalid barcode protection");
 
-  const invalidResult = await scanLookupService.lookup(
+  const invalidResult = await scanService.lookup(
     company.id,
     `INVALID-${testSuffix}`,
   );
@@ -241,7 +253,7 @@ async function main() {
     },
   });
 
-  assert(orderCount === 2, `Expected 2 test orders, found ${orderCount}.`);
+  assert(orderCount === 3, `Expected 3 test orders, found ${orderCount}.`);
 
   assert(
     shipmentCount === 2,
@@ -260,7 +272,7 @@ async function main() {
   console.log("");
   console.log(`Company:       ${company.name}`);
   console.log(`Warehouse:     ${warehouse.name}`);
-  console.log(`Orders tested: 2`);
+  console.log(`Orders tested: 3 (2 CSV + 1 XLSX)`);
   console.log(`Shipments:     2`);
   console.log(`Products:      3`);
   console.log(`CSV:           PASS`);
@@ -288,3 +300,10 @@ main().catch(async (error) => {
   await prisma.$disconnect();
   process.exit(1);
 });
+
+
+
+
+
+
+

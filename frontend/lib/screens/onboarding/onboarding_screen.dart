@@ -48,7 +48,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         _companyCode.text = company['code']?.toString() ?? '';
       }
 
-      if (warehouses is List && warehouses.isNotEmpty && warehouses.first is Map) {
+      if (warehouses is List &&
+          warehouses.isNotEmpty &&
+          warehouses.first is Map) {
         final first = Map<String, dynamic>.from(warehouses.first as Map);
         _warehouse.text = first['name']?.toString() ?? '';
         _warehouseCode.text = first['code']?.toString() ?? '';
@@ -110,9 +112,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
@@ -160,8 +160,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ),
                           validator: (value) =>
                               value == null || value.trim().isEmpty
-                                  ? 'Name is required.'
-                                  : null,
+                              ? 'Name is required.'
+                              : null,
                         ),
                         const SizedBox(height: 14),
                         TextFormField(
@@ -172,8 +172,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ),
                           validator: (value) =>
                               value == null || value.trim().isEmpty
-                                  ? 'Company name is required.'
-                                  : null,
+                              ? 'Company name is required.'
+                              : null,
                         ),
                         const SizedBox(height: 14),
                         TextFormField(
@@ -192,8 +192,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ),
                           validator: (value) =>
                               value == null || value.trim().isEmpty
-                                  ? 'Warehouse name is required.'
-                                  : null,
+                              ? 'Warehouse name is required.'
+                              : null,
                         ),
                         const SizedBox(height: 14),
                         TextFormField(
@@ -233,3 +233,4 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 }
+

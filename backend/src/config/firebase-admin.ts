@@ -27,9 +27,10 @@ function loadServiceAccount(): Record<string, unknown> {
     );
   }
 
-  return JSON.parse(
-    fs.readFileSync(serviceAccountPath, "utf8"),
-  ) as Record<string, unknown>;
+  return JSON.parse(fs.readFileSync(serviceAccountPath, "utf8")) as Record<
+    string,
+    unknown
+  >;
 }
 
 const serviceAccount = loadServiceAccount();

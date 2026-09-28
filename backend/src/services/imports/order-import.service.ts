@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+﻿import * as XLSX from "xlsx";
 
 import { prisma } from "../../config/prisma.js";
 import {
@@ -468,7 +468,8 @@ export class OrderImportService {
       issues,
     };
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(
+      async (tx) => {
       for (const row of validation.rows) {
         if (duplicateKeys.has(row.rowNumber)) {
           continue;
@@ -685,10 +686,20 @@ export class OrderImportService {
 
         result.importedRows += 1;
       }
-    });
+      },
+      {
+        timeout: 30000,
+        maxWait: 10000,
+      },
+    );
 
     return result;
   }
 }
 
 export const orderImportService = new OrderImportService();
+
+
+
+
+

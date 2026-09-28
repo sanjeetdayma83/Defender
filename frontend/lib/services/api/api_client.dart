@@ -47,14 +47,8 @@ class ApiClient {
     return jsonEncode(body);
   }
 
-  Future<http.Response> get(
-    Uri uri, {
-    Map<String, String>? headers,
-  }) async {
-    return http.get(
-      uri,
-      headers: await _headers(additional: headers),
-    );
+  Future<http.Response> get(Uri uri, {Map<String, String>? headers}) async {
+    return http.get(uri, headers: await _headers(additional: headers));
   }
 
   Future<http.Response> post(
@@ -91,13 +85,24 @@ class ApiClient {
     );
   }
 
-  Future<http.Response> delete(
+  Future<http.Response> delete(Uri uri, {Map<String, String>? headers}) async {
+    return http.delete(uri, headers: await _headers(additional: headers));
+  }
+
+  Future<http.Response> patch(
     Uri uri, {
     Map<String, String>? headers,
+    Object? body,
   }) async {
-    return http.delete(
+    return http.patch(
       uri,
-      headers: await _headers(additional: headers),
+      headers: await _headers(
+        additional: <String, String>{
+          'Content-Type': 'application/json',
+          ...?headers,
+        },
+      ),
+      body: _encodeBody(body),
     );
   }
 
@@ -142,3 +147,4 @@ class ApiClient {
     return decoded;
   }
 }
+

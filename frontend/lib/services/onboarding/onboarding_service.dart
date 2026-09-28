@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import '../api/api_client.dart';
 import '../api/api_config.dart';
@@ -7,7 +7,7 @@ class OnboardingService {
   final ApiClient _apiClient;
 
   OnboardingService({ApiClient? apiClient})
-      : _apiClient = apiClient ?? const ApiClient();
+    : _apiClient = apiClient ?? const ApiClient();
 
   Future<Map<String, dynamic>> getStatus() async {
     final response = await _apiClient.get(

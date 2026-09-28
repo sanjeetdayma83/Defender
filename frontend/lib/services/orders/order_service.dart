@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import '../../models/models.dart';
 import '../api/api_client.dart';
@@ -8,7 +8,7 @@ class OrderService {
   final ApiClient _apiClient;
 
   OrderService({ApiClient? apiClient})
-      : _apiClient = apiClient ?? const ApiClient();
+    : _apiClient = apiClient ?? const ApiClient();
 
   Future<Order?> findByBarcode(String barcode) async {
     final value = barcode.trim();
@@ -47,9 +47,7 @@ class OrderService {
     }
 
     if (decoded['success'] != true) {
-      throw Exception(
-        decoded['message']?.toString() ?? 'Scan lookup failed.',
-      );
+      throw Exception(decoded['message']?.toString() ?? 'Scan lookup failed.');
     }
 
     final data = decoded['data'];
@@ -70,9 +68,9 @@ class OrderService {
 
     final items = itemsJson is List
         ? itemsJson
-            .whereType<Map>()
-            .map((item) => Map<String, dynamic>.from(item))
-            .toList()
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList()
         : <Map<String, dynamic>>[];
 
     if (items.isEmpty) {
@@ -87,18 +85,21 @@ class OrderService {
         ? Map<String, dynamic>.from(first['variant'] as Map)
         : <String, dynamic>{};
 
-    final sku = first['sku']?.toString() ??
+    final sku =
+        first['sku']?.toString() ??
         variantJson['sku']?.toString() ??
         productJson['sku']?.toString() ??
         '';
 
     final product = Product(
       sku: sku,
-      name: first['productName']?.toString() ??
+      name:
+          first['productName']?.toString() ??
           productJson['name']?.toString() ??
           'Unknown Product',
       image: productJson['imageUrl']?.toString() ?? '',
-      variant: variantJson['name']?.toString() ??
+      variant:
+          variantJson['name']?.toString() ??
           variantJson['variantName']?.toString() ??
           'Standard',
       color: variantJson['color']?.toString() ?? 'Default',
@@ -106,7 +107,8 @@ class OrderService {
 
     return Order(
       awb: shipment['awb']?.toString() ?? value,
-      orderId: order['externalOrderId']?.toString() ??
+      orderId:
+          order['externalOrderId']?.toString() ??
           order['marketplaceOrderId']?.toString() ??
           order['id']?.toString() ??
           value,
@@ -127,9 +129,9 @@ class OrderService {
       query['status'] = status.trim();
     }
 
-    final uri = Uri.parse('${ApiConfig.baseUrl}/orders').replace(
-      queryParameters: query.isEmpty ? null : query,
-    );
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/orders',
+    ).replace(queryParameters: query.isEmpty ? null : query);
 
     final response = await _apiClient.get(uri);
 
@@ -144,8 +146,8 @@ class OrderService {
     final rawOrders = rawData is List
         ? rawData
         : rawData is Map && rawData['orders'] is List
-            ? rawData['orders']
-            : const [];
+        ? rawData['orders']
+        : const [];
 
     return (rawOrders as List)
         .whereType<Map>()
@@ -174,16 +176,16 @@ class OrderService {
         ? Map<String, dynamic>.from(item['variant'] as Map)
         : <String, dynamic>{};
 
-    final sku = variant['sku']?.toString() ??
+    final sku =
+        variant['sku']?.toString() ??
         product['sku']?.toString() ??
         item['sku']?.toString() ??
         '';
 
     return Order(
       awb: shipment['awb']?.toString() ?? '',
-      orderId: order['externalOrderId']?.toString() ??
-          order['id']?.toString() ??
-          '',
+      orderId:
+          order['externalOrderId']?.toString() ?? order['id']?.toString() ?? '',
       marketplace: order['marketplace']?.toString() ?? 'OTHER',
       product: Product(
         sku: sku,

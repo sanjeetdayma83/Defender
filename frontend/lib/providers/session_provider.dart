@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -6,19 +6,13 @@ import 'package:flutter/foundation.dart';
 import '../models/identity/current_user.dart';
 import '../services/identity/identity_service.dart';
 
-enum SessionStatus {
-  signedOut,
-  loading,
-  authenticated,
-  onboarding,
-  error,
-}
+enum SessionStatus { signedOut, loading, authenticated, onboarding, error }
 
 class SessionProvider extends ChangeNotifier {
   final IdentityService _identityService;
 
   SessionProvider({IdentityService? identityService})
-      : _identityService = identityService ?? IdentityService();
+    : _identityService = identityService ?? IdentityService();
 
   SessionStatus _status = SessionStatus.loading;
   CurrentUser? _user;
@@ -105,9 +99,7 @@ class SessionProvider extends ChangeNotifier {
 
     final firebaseUser = FirebaseAuth.instance.currentUser;
 
-    debugPrint(
-      'SESSION: loadIdentity user = ${firebaseUser?.uid ?? "NULL"}',
-    );
+    debugPrint('SESSION: loadIdentity user = ${firebaseUser?.uid ?? "NULL"}');
 
     if (firebaseUser == null) {
       _user = null;
@@ -128,9 +120,7 @@ class SessionProvider extends ChangeNotifier {
 
       final user = await _identityService.getMe();
 
-      debugPrint(
-        'SESSION: /identity/me = ${user == null ? "NULL" : "FOUND"}',
-      );
+      debugPrint('SESSION: /identity/me = ${user == null ? "NULL" : "FOUND"}');
 
       if (user == null) {
         debugPrint('SESSION: bootstrapping identity');

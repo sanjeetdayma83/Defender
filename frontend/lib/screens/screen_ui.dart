@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 const ldNavy = Color(0xFF0F172A);
 const ldBlue = Color(0xFF2563EB);
@@ -203,13 +203,20 @@ class LDStatus extends StatelessWidget {
 
 class LDSearch extends StatelessWidget {
   final String hint;
+  final TextEditingController? controller;
   final ValueChanged<String>? onChanged;
 
-  const LDSearch({super.key, required this.hint, this.onChanged});
+  const LDSearch({
+    super.key,
+    required this.hint,
+    this.controller,
+    this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
+      controller: controller,
       onChanged: onChanged,
       decoration: InputDecoration(
         hintText: hint,
@@ -331,3 +338,4 @@ Widget ldButton(
     ),
   );
 }
+
