@@ -1,6 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { prisma } from "../../config/prisma.js";
-import { scanWalletService } from "../scan-wallet/scan-wallet.service.js";
+﻿import { prisma } from "../../config/prisma.js";
+
 export interface StartPackingInput {
   awb: string;
   warehouseId: string;
@@ -94,22 +93,9 @@ export class PackingService {
       return existing;
     }
 
-    const sessionId = randomUUID();
-    const scanIdempotencyKey = `packing-session:${sessionId}:scan`;
-
     const session = await prisma.$transaction(async (tx) => {
-      await scanWalletService.consumeScansInTransaction(tx, {
-        companyId: warehouse.companyId,
-        credits: 1,
-        referenceType: "PACKING_SESSION",
-        referenceId: sessionId,
-        idempotencyKey: scanIdempotencyKey,
-        description: `Packing scan for AWB ${awb}`,
-      });
-
       const created = await tx.packingSession.create({
         data: {
-          id: sessionId,
           orderId: shipment.orderId,
           shipmentId: shipment.id,
           warehouseId: warehouse.id,
@@ -147,6 +133,7 @@ export class PackingService {
 
     return session;
   }
+
   async get(id: string) {
     return prisma.packingSession.findUnique({
       where: {

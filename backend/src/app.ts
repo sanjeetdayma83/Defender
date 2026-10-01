@@ -13,12 +13,14 @@ import dotenv from "dotenv";
 
 import storageRoutes from "./routes/storage.routes.js";
 import { healthRouter } from "./routes/health.routes.js";
-import { orderRouter } from "./routes/order.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import { firebaseAuthMiddleware } from "./middleware/firebase-auth.middleware.js";
 import identityRoutes from "./routes/identity.routes.js";
 import liveDashboardRoutes from "./routes/live-dashboard.routes.js";
 import warehouseRoutes from "./routes/warehouse.routes.js";
+
+import billingRoutes from "./routes/billing.routes.js";
+import billingWebhookRoutes from "./routes/billing-webhook.routes.js";
 
 dotenv.config();
 
@@ -26,7 +28,18 @@ export const app = express();
 
 app.use(cors());
 app.use(helmet());
-app.use(express.json({ limit: "10mb" }));
+
+app.use(
+  express.json({
+    limit: "10mb",
+    verify: (req, _res, buffer) => {
+      if ((req as express.Request).originalUrl === "/api/v1/billing/webhook/razorpay") {
+        (req as express.Request & { rawBody?: Buffer }).rawBody =
+          Buffer.from(buffer);
+      }
+    },
+  }),
+);
 
 /*
  * Public health endpoint.
@@ -50,7 +63,15 @@ app.use("/api/v1/auth", firebaseAuthMiddleware, authRoutes);
 
 app.use("/api/v1/storage", firebaseAuthMiddleware, storageRoutes);
 
-app.use("/api/v1/orders", firebaseAuthMiddleware, orderRouter);
+/*
+ * Razorpay webhook MUST be public.
+ */
+app.use("/api/v1/billing/webhook", billingWebhookRoutes);
+
+/*
+ * Customer billing APIs require Firebase authentication.
+ */
+app.use("/api/v1/billing", firebaseAuthMiddleware, billingRoutes);
 
 app.get("/", (_req, res) => {
   res.json({
@@ -58,6 +79,7 @@ app.get("/", (_req, res) => {
     service: "loss-defender-backend",
   });
 });
+
 app.use("/api/v1/onboarding", firebaseAuthMiddleware, onboardingRoutes);
 app.use("/api/v1/identity", firebaseAuthMiddleware, identityRoutes);
 app.use("/api/v1/dashboard", firebaseAuthMiddleware, liveDashboardRoutes);
@@ -80,5 +102,4 @@ app.use(
 );
 
 app.use("/api/v1/scan", scanRouter);
-
 

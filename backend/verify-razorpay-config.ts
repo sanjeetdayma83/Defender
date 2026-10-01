@@ -1,0 +1,21 @@
+﻿import "dotenv/config";
+
+const names = [
+  "RAZORPAY_KEY_ID",
+  "RAZORPAY_KEY_SECRET",
+  "RAZORPAY_WEBHOOK_SECRET",
+  "RAZORPAY_STARTER_MONTHLY_PRICE_PAISE",
+  "RAZORPAY_STARTER_YEARLY_PRICE_PAISE",
+  "RAZORPAY_GROWTH_MONTHLY_PRICE_PAISE",
+  "RAZORPAY_GROWTH_YEARLY_PRICE_PAISE",
+  "RAZORPAY_PROFESSIONAL_MONTHLY_PRICE_PAISE",
+  "RAZORPAY_PROFESSIONAL_YEARLY_PRICE_PAISE",
+];
+
+for (const name of names) {
+  const value = process.env[name]?.trim();
+
+  console.log(
+    `${name}: ${value ? "SET" : "MISSING"}`
+  );
+}

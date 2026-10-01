@@ -1,7 +1,7 @@
 ﻿import type { Response } from "express";
 import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
-import { prisma } from "../../config/prisma.js";
 import { scanService } from "../../services/scan/scan.service.js";
+import { identityService } from "../../services/identity/identity.service.js";
 
 export async function lookupScan(
   req: AuthenticatedRequest,
@@ -28,15 +28,12 @@ export async function lookupScan(
       return;
     }
 
-    const user = await prisma.user.findUnique({
-      where: {
-        firebaseUid,
-      },
-      select: {
-        companyId: true,
-        isActive: true,
-      },
-    });
+    const identity = await identityService.getByFirebaseUid(firebaseUid);
+
+    const user = {
+      companyId: identity.companyId,
+      isActive: identity.isActive,
+    };
 
     if (!user) {
       res.status(403).json({

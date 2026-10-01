@@ -1,0 +1,61 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Loss Defender - Razorpay Test</title>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+
+<body>
+  <h2>Loss Defender — Razorpay Test Payment</h2>
+
+  <button id="payButton">
+    Pay ₹1 Test
+  </button>
+
+  <pre id="result"></pre>
+
+  <script>
+    const options = {
+      key: "YOUR_RAZORPAY_KEY_ID",
+      amount: 100,
+      currency: "INR",
+      name: "Loss Defender",
+      description: "Starter Monthly Test Payment",
+
+      order_id: "order_TiMRs0j5opbuUz",
+
+      handler: function (response) {
+        document.getElementById("result").textContent =
+          JSON.stringify(response, null, 2);
+
+        console.log("RAZORPAY PAYMENT RESPONSE");
+        console.log(response);
+      },
+
+      prefill: {
+        name: "Loss Defender Test",
+        email: "admin@lossdefender.local"
+      },
+
+      theme: {
+        color: "#3399cc"
+      }
+    };
+
+    const rzp = new Razorpay(options);
+
+    rzp.on("payment.failed", function (response) {
+      document.getElementById("result").textContent =
+        JSON.stringify(response.error, null, 2);
+
+      console.error("RAZORPAY PAYMENT FAILED");
+      console.error(response.error);
+    });
+
+    document.getElementById("payButton").onclick = function () {
+      rzp.open();
+    };
+  </script>
+</body>
+</html>

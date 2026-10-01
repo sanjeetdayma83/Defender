@@ -1,9 +1,205 @@
-import { OrderStatus } from "../../generated/prisma/client.js";
-import { prisma } from "../../config/prisma.js";
+﻿import { prisma } from "../../config/prisma.js";
+
+type LiveOrder = {
+  id: string;
+  companyId: string;
+  warehouseId: string | null;
+  marketplace: string | null;
+  marketplaceOrderId: string | null;
+  status: string | null;
+  awb: string | null;
+  courier: string | null;
+  items: any;
+  metadata: any;
+  createdAt: Date;
+};
 
 export class ScanService {
+  private normalize(value: string) {
+    return value.trim();
+  }
+
+  private async findOrderByIdentifier(companyId: string, value: string) {
+    const normalized = this.normalize(value);
+
+    const directAwb = await prisma.$queryRawUnsafe<LiveOrder[]>(
+      `SELECT
+        o.id,
+        o."companyId",
+        o."warehouseId",
+        o.marketplace,
+        o."marketplaceOrderId",
+        o.status,
+        o.awb,
+        o.courier,
+        o.items,
+        o.metadata,
+        o."createdAt"
+       FROM "Order" o
+       WHERE o."companyId" = $1
+         AND lower(trim(coalesce(o.awb, ''))) = lower(trim($2))
+       LIMIT 1`,
+      companyId,
+      normalized,
+    );
+
+    if (directAwb.length) {
+      return {
+        order: directAwb[0],
+        lookupType: "AWB" as const,
+      };
+    }
+
+    const identifierRows = await prisma.$queryRawUnsafe<
+      { order_id: string; identifier_type: string }[]
+    >(
+      `SELECT oi.order_id, oi.identifier_type
+       FROM order_identifiers oi
+       WHERE oi.company_id = $1
+         AND (
+           lower(trim(coalesce(oi.normalized_value, ''))) = lower(trim($2))
+           OR lower(trim(coalesce(oi.identifier_value, ''))) = lower(trim($2))
+         )
+       ORDER BY
+         CASE
+           WHEN oi.identifier_type = 'awb' THEN 1
+           WHEN oi.identifier_type IN ('barcode', 'shipping_barcode') THEN 2
+           WHEN oi.identifier_type = 'order_id' THEN 3
+           ELSE 4
+         END,
+         oi.created_at DESC
+       LIMIT 1`,
+      companyId,
+      normalized,
+    );
+
+    if (!identifierRows.length) {
+      return null;
+    }
+
+    const orderRows = await prisma.$queryRawUnsafe<LiveOrder[]>(
+      `SELECT
+        o.id,
+        o."companyId",
+        o."warehouseId",
+        o.marketplace,
+        o."marketplaceOrderId",
+        o.status,
+        o.awb,
+        o.courier,
+        o.items,
+        o.metadata,
+        o."createdAt"
+       FROM "Order" o
+       WHERE o.id = $1
+         AND o."companyId" = $2
+       LIMIT 1`,
+      identifierRows[0].order_id,
+      companyId,
+    );
+
+    if (!orderRows.length) {
+      return null;
+    }
+
+    const type = identifierRows[0].identifier_type;
+
+    return {
+      order: orderRows[0],
+      lookupType:
+        type === "awb"
+          ? ("AWB" as const)
+          : type === "order_id"
+            ? ("ORDER_ID" as const)
+            : ("BARCODE" as const),
+    };
+  }
+
+  private async findOrderByOrderId(companyId: string, value: string) {
+    const rows = await prisma.$queryRawUnsafe<LiveOrder[]>(
+      `SELECT
+        o.id,
+        o."companyId",
+        o."warehouseId",
+        o.marketplace,
+        o."marketplaceOrderId",
+        o.status,
+        o.awb,
+        o.courier,
+        o.items,
+        o.metadata,
+        o."createdAt"
+       FROM "Order" o
+       WHERE o."companyId" = $1
+         AND (
+           o.id::text = $2
+           OR lower(trim(coalesce(o."marketplaceOrderId", ''))) = lower(trim($2))
+         )
+       LIMIT 1`,
+      companyId,
+      value,
+    );
+
+    return rows[0] ?? null;
+  }
+
+  private parseItems(order: LiveOrder) {
+    if (!Array.isArray(order.items)) {
+      return [];
+    }
+
+    return order.items.map((item: any, index: number) => ({
+      id: `${order.id}-item-${index + 1}`,
+      sku: item?.sku ?? null,
+      productName: item?.name ?? "Unknown Product",
+      quantity: Number(item?.qty ?? item?.quantity ?? 0),
+      variant: null,
+      product: {
+        id: null,
+        sku: item?.sku ?? null,
+        name: item?.name ?? "Unknown Product",
+        imageUrl: item?.imageUrl ?? null,
+      },
+      status: item?.status ?? null,
+      scannedQty: Number(item?.scannedQty ?? 0),
+    }));
+  }
+
+  private buildLookupResponse(
+    order: LiveOrder,
+    lookupType: "BARCODE" | "AWB" | "ORDER_ID" | "SKU",
+    matchedIdentifier?: string | null,
+  ) {
+    const items = this.parseItems(order);
+
+    const barcodes = matchedIdentifier
+      ? [matchedIdentifier]
+      : [];
+
+    return {
+      found: true,
+      lookupType,
+      shipment: {
+        id: order.id,
+        awb: order.awb,
+        carrier: order.courier,
+        status: order.status,
+        barcodes,
+      },
+      order: {
+        id: order.id,
+        externalOrderId: order.id,
+        marketplaceOrderId: order.marketplaceOrderId,
+        marketplace: order.marketplace,
+        status: order.status,
+        orderDate: order.createdAt,
+      },
+      items,
+    };
+  }
+
   async lookup(companyId: string, barcode: string) {
-    const normalized = barcode.trim();
+    const normalized = this.normalize(barcode);
 
     if (!normalized) {
       return {
@@ -13,350 +209,95 @@ export class ScanService {
       };
     }
 
-    /*
-     * ========================================================
-     * 1. AWB
-     * ========================================================
-     *
-     * AWB gets priority over ShipmentBarcode because an AWB
-     * may also be stored as a shipment barcode.
-     */
-    const shipmentByAwb = await prisma.shipment.findFirst({
-      where: {
-        awb: normalized,
-      },
-    });
+    const identifierResult = await this.findOrderByIdentifier(
+      companyId,
+      normalized,
+    );
 
-    if (shipmentByAwb) {
-      const order = await this.getCompanyOrder(
-        companyId,
-        shipmentByAwb.orderId,
+    if (identifierResult) {
+      return this.buildLookupResponse(
+        identifierResult.order,
+        identifierResult.lookupType,
+        normalized,
       );
-
-      if (order) {
-        return this.buildLookupResponse(
-          shipmentByAwb,
-          order,
-          "AWB",
-        );
-      }
     }
 
-    /*
-     * ========================================================
-     * 2. EXTERNAL / MARKETPLACE ORDER ID
-     * ========================================================
-     */
-    const orderById = await prisma.order.findFirst({
-      where: {
-        companyId,
-        OR: [
-          {
-            externalOrderId: normalized,
-          },
-          {
-            marketplaceOrderId: normalized,
-          },
-        ],
-      },
-    });
+    const orderById = await this.findOrderByOrderId(
+      companyId,
+      normalized,
+    );
 
     if (orderById) {
-      const shipment = await prisma.shipment.findFirst({
-        where: {
-          orderId: orderById.id,
-        },
-      });
-
-      if (!shipment) {
-        return {
-          found: false,
-          lookupType: "ORDER_ID",
-          message: "Order found, but no shipment is associated with this order.",
-        };
-      }
-
       return this.buildLookupResponse(
-        shipment,
         orderById,
         "ORDER_ID",
+        null,
       );
     }
 
-    /*
-     * ========================================================
-     * 3. SHIPPING BARCODE
-     * ========================================================
-     */
-    const barcodeRecord = await prisma.shipmentBarcode.findFirst({
-      where: {
-        barcode: normalized,
-      },
-    });
+    const skuOrders = await prisma.$queryRawUnsafe<LiveOrder[]>(
+      `SELECT
+        o.id,
+        o."companyId",
+        o."warehouseId",
+        o.marketplace,
+        o."marketplaceOrderId",
+        o.status,
+        o.awb,
+        o.courier,
+        o.items,
+        o.metadata,
+        o."createdAt"
+       FROM "Order" o
+       WHERE o."companyId" = $1
+         AND o.status IN (
+           'pending',
+           'confirmed',
+           'packing',
+           'packed',
+           'queued',
+           'synced',
+           'evidence_ready'
+         )
+         AND EXISTS (
+           SELECT 1
+           FROM jsonb_array_elements(
+             CASE
+               WHEN jsonb_typeof(o.items) = 'array' THEN o.items
+               ELSE '[]'::jsonb
+             END
+           ) item
+           WHERE lower(trim(coalesce(item->>'sku', ''))) =
+                 lower(trim($2))
+         )
+       ORDER BY o."createdAt" DESC`,
+      companyId,
+      normalized,
+    );
 
-    if (barcodeRecord) {
-      const shipment = await prisma.shipment.findUnique({
-        where: {
-          id: barcodeRecord.shipmentId,
-        },
-      });
-
-      if (shipment) {
-        const order = await this.getCompanyOrder(
-          companyId,
-          shipment.orderId,
-        );
-
-        if (order) {
-          return this.buildLookupResponse(
-            shipment,
-            order,
-            "BARCODE",
-          );
-        }
-      }
+    if (skuOrders.length > 1) {
+      return {
+        found: false,
+        lookupType: "SKU",
+        message:
+          "SKU is ambiguous. Please scan the shipping barcode or AWB instead.",
+      };
     }
 
-    /*
-     * ========================================================
-     * 4. SKU
-     * ========================================================
-     *
-     * SKU belongs to Product / ProductVariant.
-     */
-    const product = await prisma.product.findFirst({
-      where: {
-        companyId,
-        sku: normalized,
-      },
-    });
-
-    const variant = await prisma.productVariant.findFirst({
-      where: {
-        sku: normalized,
-        product: {
-          companyId,
-        },
-      },
-    });
-
-    const productIds: string[] = [];
-
-    if (product) {
-      productIds.push(product.id);
-    }
-
-    if (variant && !productIds.includes(variant.productId)) {
-      productIds.push(variant.productId);
-    }
-
-    if (productIds.length > 0) {
-      const orderItems = await prisma.orderItem.findMany({
-        where: {
-          productId: {
-            in: productIds,
-          },
-          order: {
-            companyId,
-            status: {
-              in: [
-                OrderStatus.PENDING,
-                OrderStatus.CONFIRMED,
-                OrderStatus.PACKING,
-                OrderStatus.PACKED,
-              ],
-            },
-          },
-        },
-      });
-
-      const uniqueOrderIds = Array.from(
-        new Set(orderItems.map((item) => item.orderId)),
+    if (skuOrders.length === 1) {
+      return this.buildLookupResponse(
+        skuOrders[0],
+        "SKU",
+        null,
       );
-
-      if (uniqueOrderIds.length > 1) {
-        return {
-          found: false,
-          lookupType: "SKU",
-          message:
-            "SKU is ambiguous. Please scan the shipping barcode or AWB instead.",
-        };
-      }
-
-      if (uniqueOrderIds.length === 1) {
-        const skuOrder = await prisma.order.findFirst({
-          where: {
-            id: uniqueOrderIds[0],
-            companyId,
-          },
-        });
-
-        if (!skuOrder) {
-          return {
-            found: false,
-            lookupType: "SKU",
-            message: "SKU order was not found.",
-          };
-        }
-
-        const shipment = await prisma.shipment.findFirst({
-          where: {
-            orderId: skuOrder.id,
-          },
-        });
-
-        if (!shipment) {
-          return {
-            found: false,
-            lookupType: "SKU",
-            message:
-              "SKU matched an order, but no shipment is associated with it.",
-          };
-        }
-
-        return this.buildLookupResponse(
-          shipment,
-          skuOrder,
-          "SKU",
-        );
-      }
     }
 
-    /*
-     * ========================================================
-     * NOT FOUND
-     * ========================================================
-     */
     return {
       found: false,
       lookupType: null,
       message: "Barcode, AWB, order ID or SKU was not found.",
     };
   }
-  private async getCompanyOrder(companyId: string, orderId: string) {
-    return prisma.order.findFirst({
-      where: {
-        id: orderId,
-        companyId,
-      },
-    });
-  }
-
-  private async buildLookupResponse( shipment: any, order: any, lookupType: "BARCODE" | "AWB" | "ORDER_ID" | "SKU", ) {
-    const orderItems = await prisma.orderItem.findMany({
-      where: {
-        orderId: order.id,
-      },
-    });
-
-    const productIds = Array.from(
-      new Set(orderItems.map((item) => item.productId)),
-    );
-
-    const variantIds = Array.from(
-      new Set(
-        orderItems
-          .map((item) => item.variantId)
-          .filter((id): id is string => Boolean(id)),
-      ),
-    );
-
-    const products =
-      productIds.length > 0
-        ? await prisma.product.findMany({
-            where: {
-              id: {
-                in: productIds,
-              },
-            },
-          })
-        : [];
-
-    const variants =
-      variantIds.length > 0
-        ? await prisma.productVariant.findMany({
-            where: {
-              id: {
-                in: variantIds,
-              },
-            },
-          })
-        : [];
-
-    const productMap = new Map(
-      products.map((product) => [product.id, product]),
-    );
-
-    const variantMap = new Map(
-      variants.map((variant) => [variant.id, variant]),
-    );
-
-    const shipmentBarcodes = await prisma.shipmentBarcode.findMany({
-      where: {
-        shipmentId: shipment.id,
-      },
-    });
-
-
-    return {
-      found: true,
-      lookupType,
-      shipment: {
-        id: shipment.id,
-        awb: shipment.awb,
-        carrier: shipment.carrier,
-        status: shipment.status,
-        barcodes: shipmentBarcodes.map((item) => item.barcode),
-      },
-
-      order: {
-        id: order.id,
-        externalOrderId: order.externalOrderId,
-        marketplaceOrderId: order.marketplaceOrderId,
-        marketplace: order.marketplace,
-        status: order.status,
-        orderDate: order.orderedAt,
-      },
-
-      items: orderItems.map((item) => {
-        const product = productMap.get(item.productId);
-
-        const variant = item.variantId ? variantMap.get(item.variantId) : null;
-
-        return {
-          id: item.id,
-          sku: variant?.sku ?? product?.sku ?? null,
-          productName: product?.name ?? "Unknown Product",
-          quantity: item.quantity,
-
-          variant: variant
-            ? {
-                id: variant.id,
-                sku: variant.sku,
-                name: variant.name,
-                color: variant.color,
-                size: variant.size,
-              }
-            : null,
-
-          product: product
-            ? {
-                id: product.id,
-                sku: product.sku,
-                name: product.name,
-                imageUrl: product.imageUrl,
-              }
-            : null,
-        };
-      }),
-    };
-  }
 }
 
 export const scanService = new ScanService();
-
-
-
-
-
-

@@ -1,4 +1,5 @@
-﻿import { cert, getApps, initializeApp } from "firebase-admin/app";
+﻿import "dotenv/config";
+import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import fs from "node:fs";
 import path from "node:path";
@@ -44,3 +45,4 @@ const firebaseApp =
 
 export const firebaseAdmin = firebaseApp;
 export const firebaseAuth = getAuth(firebaseApp);
+
