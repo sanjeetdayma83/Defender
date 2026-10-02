@@ -3,11 +3,18 @@ import { prisma } from "../../config/prisma.js";
 import { razorpayService } from "../razorpay/razorpay.service.js";
 import { getCommercialPlan } from "./commercial-plan.config.js";
 import { scanWalletService } from "../scan-wallet/scan-wallet.service.js";
+import { invoiceService } from "../invoice/invoice.service.js";
 
 export interface CreatePlanOrderInput {
   companyId: string;
   planCode: string;
   billingInterval?: "MONTHLY" | "YEARLY";
+}
+
+interface InvoicePaymentVerificationRow {
+  id: string;
+  invoiceNumber: string;
+  status: string;
 }
 
 interface BillingPaymentRow {
@@ -370,6 +377,32 @@ export class BillingService {
       }
 
       if (payment.status === "SUCCESS") {
+        await invoiceService.createFromBillingPaymentInTransaction(
+          tx,
+          payment.companyId,
+          payment.id,
+        );
+
+        const existingInvoiceRows =
+          await tx.$queryRawUnsafe<InvoicePaymentVerificationRow[]>(
+            `
+            SELECT
+              "id",
+              "invoiceNumber",
+              "status"
+            FROM "invoices"
+            WHERE "companyId" = $1
+              AND "billingPaymentId" = $2
+            LIMIT 1
+            `,
+            payment.companyId,
+            payment.id,
+          );
+
+        if (existingInvoiceRows.length !== 1) {
+          throw new Error("INVOICE_CREATION_FAILED");
+        }
+
         return payment;
       }
 
@@ -580,6 +613,36 @@ export class BillingService {
         now,
       );
 
+      if (updatedRows.length !== 1) {
+        throw new Error("PAYMENT_CONFIRMATION_FAILED");
+      }
+
+      await invoiceService.createFromBillingPaymentInTransaction(
+        tx,
+        payment.companyId,
+        payment.id,
+      );
+
+      const invoiceRows =
+        await tx.$queryRawUnsafe<InvoicePaymentVerificationRow[]>(
+          `
+          SELECT
+            "id",
+            "invoiceNumber",
+            "status"
+          FROM "invoices"
+          WHERE "companyId" = $1
+            AND "billingPaymentId" = $2
+          LIMIT 1
+          `,
+          payment.companyId,
+          payment.id,
+        );
+
+      if (invoiceRows.length !== 1) {
+        throw new Error("INVOICE_CREATION_FAILED");
+      }
+
       return updatedRows[0];
     });
   }
@@ -624,6 +687,7 @@ export class BillingService {
 }
 
 export const billingService = new BillingService();
+
 
 
 

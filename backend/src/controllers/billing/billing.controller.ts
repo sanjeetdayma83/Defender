@@ -2,6 +2,7 @@
 import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
 import { companyContextService } from "../../services/identity/company-context.service.js";
 import { billingService } from "../../services/billing/billing.service.js";
+import { invoicePdfService } from "../../services/invoice/invoice-pdf.service.js";
 
 async function getCompany(req: AuthenticatedRequest) {
   const uid = req.firebaseUser?.uid;
@@ -152,6 +153,58 @@ export async function verifyRazorpayPayment(
     res.status(status).json({
       success: false,
       message,
+    });
+  }
+}
+
+export async function getInvoicePdf(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const { company } = await getCompany(req);
+    const invoiceId = String(req.params.invoiceId ?? "").trim();
+
+    if (!invoiceId) {
+      res.status(400).json({
+        success: false,
+        message: "invoiceId is required.",
+      });
+      return;
+    }
+
+    const result = await invoicePdfService.generateOrGet(
+      company.id,
+      invoiceId,
+    );
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error("Invoice PDF generation failed:", error);
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to generate invoice PDF.";
+
+    const status =
+      message === "AUTHENTICATION_REQUIRED"
+        ? 401
+        : message === "INVOICE_NOT_FOUND"
+          ? 404
+          : 500;
+
+    res.status(status).json({
+      success: false,
+      message:
+        message === "INVOICE_NOT_FOUND"
+          ? "Invoice not found."
+          : status === 401
+            ? "Authentication required."
+            : "Unable to generate invoice PDF.",
     });
   }
 }

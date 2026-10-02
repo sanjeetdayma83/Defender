@@ -1,7 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../scan_pack/scan_pack_screen.dart';
-import '../../debug/scan_integration_test.dart';
 
 enum SaaSRole { platformAdmin, companyAdmin, operator }
 
@@ -440,12 +439,10 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
           ),
           const SizedBox(width: 10),
           IconButton(
-            tooltip: 'Run Scan Integration Test',
-            onPressed: () async {
-              await ScanIntegrationTest.run();
-            },
-            icon: const Icon(Icons.bug_report_outlined),
+            onPressed: () {},
+            icon: const Icon(Icons.notifications_none_rounded),
           ),
+          const SizedBox(width: 5),
           CircleAvatar(
             radius: 18,
             backgroundColor: _navy,
@@ -3244,4 +3241,3 @@ const _red = Color(0xFFDC2626);
 const _bg = Color(0xFFF8FAFC);
 const _border = Color(0xFFE2E8F0);
 const _muted = Color(0xFF64748B);
-

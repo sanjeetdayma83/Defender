@@ -1,0 +1,605 @@
+[1mdiff --git a/backend/prisma/schema.prisma b/backend/prisma/schema.prisma[m
+[1mindex 9134c13..25f318d 100644[m
+[1m--- a/backend/prisma/schema.prisma[m
+[1m+++ b/backend/prisma/schema.prisma[m
+[36m@@ -1,3 +1,38 @@[m
+[32m+[m[32menum AuditAction {[m
+[32m+[m[32m  CREATE[m
+[32m+[m[32m  UPDATE[m
+[32m+[m[32m  DELETE[m
+[32m+[m[32m  LOGIN[m
+[32m+[m[32m  LOGOUT[m
+[32m+[m[32m  IMPORT[m
+[32m+[m[32m  SCAN[m
+[32m+[m[32m  PACKING_STARTED[m
+[32m+[m[32m  EVIDENCE_UPLOADED[m
+[32m+[m[32m  WALLET_CONSUMED[m
+[32m+[m[32m  PACKING_COMPLETED[m
+[32m+[m[32m  ORDER_PACKED[m
+[32m+[m[32m  ERROR[m
+[32m+[m
+[32m+[m[32m  PLAN_CREATED[m
+[32m+[m[32m  PLAN_UPDATED[m
+[32m+[m[32m  PLAN_DEACTIVATED[m
+[32m+[m
+[32m+[m[32m  SUBSCRIPTION_CREATED[m
+[32m+[m[32m  SUBSCRIPTION_ACTIVATED[m
+[32m+[m[32m  SUBSCRIPTION_UPDATED[m
+[32m+[m[32m  SUBSCRIPTION_CANCELLED[m
+[32m+[m[32m  SUBSCRIPTION_EXPIRED[m
+[32m+[m
+[32m+[m[32m  PAYMENT_CREATED[m
+[32m+[m[32m  PAYMENT_SUCCESS[m
+[32m+[m[32m  PAYMENT_FAILED[m
+[32m+[m[32m  PAYMENT_REFUNDED[m
+[32m+[m
+[32m+[m[32m  CREDIT_ALLOCATION[m
+[32m+[m[32m  EXTRA_SCAN_PURCHASE[m
+[32m+[m[32m  RETENTION_PURCHASE[m
+[32m+[m[32m}[m
+[32m+[m
+ // ============================================================[m
+ // LOSS DEFENDER - DATABASE SCHEMA[m
+ // PostgreSQL / Neon + Prisma 7[m
+[36m@@ -101,10 +136,48 @@[m [menum ScanTransactionType {[m
+   EXPIRATION[m
+ }[m
+ [m
+[32m+[m[32menum PaymentStatus {[m
+[32m+[m[32m  CREATED[m
+[32m+[m[32m  PENDING[m
+[32m+[m[32m  SUCCESS[m
+[32m+[m[32m  FAILED[m
+[32m+[m[32m  REFUNDED[m
+[32m+[m[32m  CANCELLED[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32menum PaymentItemType {[m
+[32m+[m[32m  PLAN[m
+[32m+[m[32m  EXTRA_SCAN_PACK[m
+[32m+[m[32m  RETENTION[m
+[32m+[m[32m  ADJUSTMENT[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32menum SubscriptionEntitlementUnit {[m
+[32m+[m[32m  COUNT[m
+[32m+[m[32m  DAYS[m
+[32m+[m[32m  BOOLEAN[m
+[32m+[m[32m}[m
+[32m+[m
+ // ============================================================[m
+ // COMPANY / USER / WAREHOUSE[m
+ // ============================================================[m
+ [m
+[32m+[m[32menum InvoiceStatus {[m
+[32m+[m[32m  DRAFT[m
+[32m+[m[32m  ISSUED[m
+[32m+[m[32m  PAID[m
+[32m+[m[32m  VOID[m
+[32m+[m[32m  CANCELLED[m
+[32m+[m[32m  REFUNDED[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32menum InvoiceItemType {[m
+[32m+[m[32m  PLAN[m
+[32m+[m[32m  EXTRA_SCAN_PACK[m
+[32m+[m[32m  RETENTION[m
+[32m+[m[32m  ADJUSTMENT[m
+[32m+[m[32m}[m
+[32m+[m
+ model Company {[m
+   id       String  @id @default(cuid())[m
+   name     String[m
+[36m@@ -116,9 +189,15 @@[m [mmodel Company {[m
+   products            Product[][m
+   orders              Order[][m
+   marketplaceAccounts MarketplaceAccount[][m
+[32m+[m[32m  auditLogs           AuditLog[][m
+[32m+[m[32m  storageObjects      StorageObject[][m
+[32m+[m[32m  storageUsageEvents  StorageUsageEvent[][m
+[32m+[m[32m  billingProfile      BillingProfile?[m
+[32m+[m[32m  invoices            Invoice[][m
+ [m
+   subscription Subscription?[m
+   scanWallet   ScanWallet?[m
+[32m+[m[32m  payments     Payment[][m
+ [m
+   createdAt DateTime @default(now())[m
+   updatedAt DateTime @updatedAt[m
+[36m@@ -132,6 +211,8 @@[m [mmodel User {[m
+   firebaseUid String   @unique[m
+   email       String[m
+   name        String?[m
+[32m+[m[32m  phone       String?[m
+[32m+[m[32m  designation String?[m
+   role        UserRole @default(OPERATOR)[m
+   isActive    Boolean  @default(true)[m
+ [m
+[36m@@ -139,6 +220,7 @@[m [mmodel User {[m
+   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)[m
+ [m
+   packingSessions PackingSession[][m
+[32m+[m[32m  auditLogs       AuditLog[][m
+ [m
+   createdAt DateTime @default(now())[m
+   updatedAt DateTime @updatedAt[m
+[36m@@ -303,6 +385,7 @@[m [mmodel Order {[m
+   items           OrderItem[][m
+   shipments       Shipment[][m
+   packingSessions PackingSession[][m
+[32m+[m[32m  auditLogs       AuditLog[][m
+ [m
+   orderedAt DateTime?[m
+   createdAt DateTime  @default(now())[m
+[36m@@ -354,6 +437,7 @@[m [mmodel Shipment {[m
+   order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)[m
+ [m
+   packingSessions PackingSession[][m
+[32m+[m[32m  auditLogs       AuditLog[][m
+   barcodeAliases  ShipmentBarcode[][m
+ [m
+   createdAt DateTime @default(now())[m
+[36m@@ -404,7 +488,8 @@[m [mmodel PackingSession {[m
+   userId String[m
+   user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)[m
+ [m
+[31m-  media EvidenceMedia[][m
+[32m+[m[32m  media     EvidenceMedia[][m
+[32m+[m[32m  auditLogs AuditLog[][m
+ [m
+   createdAt DateTime @default(now())[m
+   updatedAt DateTime @updatedAt[m
+[36m@@ -457,9 +542,18 @@[m [mmodel Plan {[m
+   maxOperators       Int @default(1)[m
+   maxOrdersPerMonth  Int @default(0)[m
+ [m
+[32m+[m[32m  // Billing configuration[m
+[32m+[m[32m  pricePaise          Int?[m
+[32m+[m[32m  gstPercent          Int  @default(18)[m
+[32m+[m[32m  validityMonths      Int?[m
+[32m+[m[32m  includedScans       Int  @default(0)[m
+[32m+[m[32m  normalRetentionDays Int  @default(30)[m
+[32m+[m[32m  sortOrder           Int  @default(0)[m
+[32m+[m
+   isActive Boolean @default(true)[m
+ [m
+   subscriptions Subscription[][m
+[32m+[m[32m  features      PlanFeature[][m
+ [m
+   createdAt DateTime @default(now())[m
+   updatedAt DateTime @updatedAt[m
+[36m@@ -489,6 +583,9 @@[m [mmodel Subscription {[m
+   trialEnd           DateTime?[m
+   cancelledAt        DateTime?[m
+ [m
+[32m+[m[32m  entitlements SubscriptionEntitlement[][m
+[32m+[m[32m  payments     Payment[][m
+[32m+[m
+   createdAt DateTime @default(now())[m
+   updatedAt DateTime @updatedAt[m
+ [m
+[36m@@ -498,6 +595,178 @@[m [mmodel Subscription {[m
+   @@map("subscriptions")[m
+ }[m
+ [m
+[32m+[m[32mmodel PlanFeature {[m
+[32m+[m[32m  id String @id @default(cuid())[m
+[32m+[m
+[32m+[m[32m  planId String[m
+[32m+[m[32m  plan   Plan   @relation(fields: [planId], references: [id], onDelete: Cascade)[m
+[32m+[m
+[32m+[m[32m  featureCode String[m
+[32m+[m[32m  enabled     Boolean @default(true)[m
+[32m+[m
+[32m+[m[32m  quantity Int?[m
+[32m+[m[32m  unit     String?[m
+[32m+[m
+[32m+[m[32m  metadata Json?[m
+[32m+[m
+[32m+[m[32m  createdAt DateTime @default(now())[m
+[32m+[m[32m  updatedAt DateTime @updatedAt[m
+[32m+[m
+[32m+[m[32m  @@unique([planId, featureCode])[m
+[32m+[m[32m  @@index([planId])[m
+[32m+[m[32m  @@index([featureCode])[m
+[32m+[m[32m  @@map("plan_features")[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mmodel SubscriptionEntitlement {[m
+[32m+[m[32m  id String @id @default(cuid())[m
+[32m+[m
+[32m+[m[32m  subscriptionId String[m
+[32m+[m[32m  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)[m
+[32m+[m
+[32m+[m[32m  code         String[m
+[32m+[m[32m  name         String[m
+[32m+[m[32m  valueInt     Int?[m
+[32m+[m[32m  valueDecimal Decimal?                    @db.Decimal(12, 4)[m
+[32m+[m[32m  unit         SubscriptionEntitlementUnit @default(COUNT)[m
+[32m+[m[32m  metadata     Json?[m
+[32m+[m
+[32m+[m[32m  createdAt DateTime @default(now())[m
+[32m+[m[32m  updatedAt DateTime @updatedAt[m
+[32m+[m
+[32m+[m[32m  @@unique([subscriptionId, code])[m
+[32m+[m[32m  @@index([subscriptionId])[m
+[32m+[m[32m  @@map("subscription_entitlements")[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mmodel ExtraScanPack {[m
+[32m+[m[32m  id String @id @default(cuid())[m
+[32m+[m
+[32m+[m[32m  code        String  @unique[m
+[32m+[m[32m  name        String[m
+[32m+[m[32m  description String?[m
+[32m+[m
+[32m+[m[32m  scanCredits Int[m
+[32m+[m
+[32m+[m[32m  pricePaise Int[m
+[32m+[m[32m  gstPercent Int @default(18)[m
+[32m+[m
+[32m+[m[32m  isActive  Boolean @default(true)[m
+[32m+[m[32m  sortOrder Int     @default(0)[m
+[32m+[m
+[32m+[m[32m  createdAt DateTime @default(now())[m
+[32m+[m[32m  updatedAt DateTime @updatedAt[m
+[32m+[m
+[32m+[m[32m  @@index([isActive])[m
+[32m+[m[32m  @@index([sortOrder])[m
+[32m+[m[32m  @@map("extra_scan_packs")[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mmodel RetentionOption {[m
+[32m+[m[32m  id String @id @default(cuid())[m
+[32m+[m
+[32m+[m[32m  code String @unique[m
+[32m+[m[32m  name String[m
+[32m+[m
+[32m+[m[32m  retentionDays Int[m
+[32m+[m
+[32m+[m[32m  pricePaisePerScan Int[m
+[32m+[m[32m  gstPercent        Int @default(18)[m
+[32m+[m
+[32m+[m[32m  isActive  Boolean @default(true)[m
+[32m+[m[32m  sortOrder Int     @default(0)[m
+[32m+[m
+[32m+[m[32m  createdAt DateTime @default(now())[m
+[32m+[m[32m  updatedAt DateTime @updatedAt[m
+[32m+[m
+[32m+[m[32m  @@unique([retentionDays])[m
+[32m+[m[32m  @@index([isActive])[m
+[32m+[m[32m  @@index([sortOrder])[m
+[32m+[m[32m  @@map("retention_options")[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mmodel BillingWebhookEvent {[m
+[32m+[m[32m  id            String               @id @default(cuid())[m
+[32m+[m[32m  provider      SubscriptionProvider[m
+[32m+[m[32m  eventId       String[m
+[32m+[m[32m  eventType     String[m
+[32m+[m[32m  payload       Json[m
+[32m+[m[32m  processed     Boolean              @default(false)[m
+[32m+[m[32m  processedAt   DateTime?[m
+[32m+[m[32m  failureReason String?[m
+[32m+[m[32m  createdAt     DateTime             @default(now())[m
+[32m+[m[32m  updatedAt     DateTime             @updatedAt[m
+[32m+[m
+[32m+[m[32m  @@unique([provider, eventId])[m
+[32m+[m[32m  @@index([provider, eventType])[m
+[32m+[m[32m  @@index([processed])[m
+[32m+[m[32m  @@map("billing_webhook_events")[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mmodel Payment {[m
+[32m+[m[32m  id String @id @default(cuid())[m
+[32m+[m
+[32m+[m[32m  companyId String[m
+[32m+[m[32m  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)[m
+[32m+[m
+[32m+[m[32m  subscriptionId String?[m
+[32m+[m[32m  subscription   Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)[m
+[32m+[m
+[32m+[m[32m  provider          SubscriptionProvider @default(MANUAL)[m
+[32m+[m[32m  providerPaymentId String?[m
+[32m+[m[32m  providerOrderId   String?[m
+[32m+[m[32m  providerSignature String?[m
+[32m+[m
+[32m+[m[32m  status PaymentStatus @default(PENDING)[m
+[32m+[m
+[32m+[m[32m  currency      String @default("INR")[m
+[32m+[m[32m  subtotalPaise Int[m
+[32m+[m[32m  gstPaise      Int    @default(0)[m
+[32m+[m[32m  totalPaise    Int[m
+[32m+[m
+[32m+[m[32m  paidAt        DateTime?[m
+[32m+[m[32m  failureReason String?[m
+[32m+[m[32m  metadata      Json?[m
+[32m+[m
+[32m+[m[32m  items    PaymentItem[][m
+[32m+[m[32m  invoices Invoice[][m
+[32m+[m
+[32m+[m[32m  createdAt DateTime @default(now())[m
+[32m+[m[32m  updatedAt DateTime @updatedAt[m
+[32m+[m
+[32m+[m[32m  @@unique([provider, providerPaymentId])[m
+[32m+[m[32m  @@index([companyId, createdAt])[m
+[32m+[m[32m  @@index([subscriptionId])[m
+[32m+[m[32m  @@index([status])[m
+[32m+[m[32m  @@map("payments")[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mmodel PaymentItem {[m
+[32m+[m[32m  id String @id @default(cuid())[m
+[32m+[m
+[32m+[m[32m  paymentId String[m
+[32m+[m[32m  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)[m
+[32m+[m
+[32m+[m[32m  itemType    PaymentItemType[m
+[32m+[m[32m  referenceId String?[m
+[32m+[m[32m  code        String[m
+[32m+[m[32m  name        String[m
+[32m+[m
+[32m+[m[32m  quantity Int @default(1)[m
+[32m+[m
+[32m+[m[32m  unitPricePaise Int[m
+[32m+[m[32m  gstPaise       Int @default(0)[m
+[32m+[m[32m  totalPaise     Int[m
+[32m+[m
+[32m+[m[32m  metadata Json?[m
+[32m+[m
+[32m+[m[32m  createdAt DateTime @default(now())[m
+[32m+[m
+[32m+[m[32m  @@index([paymentId])[m
+[32m+[m[32m  @@index([itemType])[m
+[32m+[m[32m  @@map("payment_items")[m
+[32m+[m[32m}[m
+[32m+[m
+ // ============================================================[m
+ // SCAN WALLET[m
+ // ============================================================[m
+[36m@@ -547,3 +816,245 @@[m [mmodel ScanTransaction {[m
+   @@index([referenceType, referenceId])[m
+   @@map("scan_transactions")[m
+ }[m
+[32m+[m
+[32m+[m[32mmodel AuditLog {[m
+[32m+[m[32m  id     String      @id @default(cuid())[m
+[32m+[m[32m  action AuditAction[m
+[32m+[m
+[32m+[m[32m  companyId String[m
+[32m+[m[32m  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)[m
+[32m+[m
+[32m+[m[32m  userId String?[m
+[32m+[m[32m  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)[m
+[32m+[m
+[32m+[m[32m  orderId String?[m
+[32m+[m[32m  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)[m
+[32m+[m
+[32m+[m[32m  shipmentId String?[m
+[32m+[m[32m  shipment   Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)[m
+[32m+[m
+[32m+[m[32m  packingSessionId String?[m
+[32m+[m[32m  packingSession   PackingSession? @relation(fields: [packingSessionId], references: [id], onDelete: SetNull)[m
+[32m+[m
+[32m+[m[32m  referenceType String?[m
+[32m+[m[32m  referenceId   String?[m
+[32m+[m
+[32m+[m[32m  awb         String?[m
+[32m+[m[32m  description String?[m
+[32m+[m[32m  metadata    Json?[m
+[32m+[m
+[32m+[m[32m  createdAt DateTime @default(now())[m
+[32m+[m
+[32m+[m[32m  @@index([companyId, createdAt])[m
+[32m+[m[32m  @@index([userId, createdAt])[m
+[32m+[m[32m  @@index([orderId, createdAt])[m
+[32m+[m[32m  @@index([shipmentId, createdAt])[m
+[32m+[m[32m  @@index([packingSessionId, createdAt])[m
+[32m+[m[32m  @@index([action, createdAt])[m
+[32m+[m[32m  @@index([referenceType, referenceId])[m
+[32m+[m[32m  @@map("audit_logs")[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32menum StorageObjectType {[m
+[32m+[m[32m  EVIDENCE[m
+[32m+[m[32m  INVOICE[m
+[32m+[m[32m  CREDIT_NOTE[m
+[32m+[m[32m  EXPORT[m
+[32m+[m[32m  OTHER[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32menum StorageUsageEventType {[m
+[32m+[m[32m  UPLOAD[m
+[32m+[m[32m  DELETE[m
+[32m+[m[32m  RETENTION_DELETE[m
+[32m+[m[32m  RECONCILIATION[m
+[32m+[m[32m  ADJUSTMENT[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mmodel StorageObject {[m
+[32m+[m[32m  id String @id @default(cuid())[m
+[32m+[m
+[32m+[m[32m  companyId String[m
+[32m+[m[32m  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)[m
+[32m+[m
+[32m+[m[32m  objectType StorageObjectType @default(OTHER)[m
+[32m+[m
+[32m+[m[32m  bucket     String[m
+[32m+[m[32m  storageKey String[m
+[32m+[m
+[32m+[m[32m  contentType String?[m
+[32m+[m[32m  sizeBytes   BigInt  @default(0)[m
+[32m+[m
+[32m+[m[32m  originalFileName String?[m
+[32m+[m
+[32m+[m[32m  checksum String?[m
+[32m+[m
+[32m+[m[32m  referenceType String?[m
+[32m+[m[32m  referenceId   String?[m
+[32m+[m
+[32m+[m[32m  createdAt          DateTime            @default(now())[m
+[32m+[m[32m  updatedAt          DateTime            @updatedAt[m
+[32m+[m[32m  storageUsageEvents StorageUsageEvent[][m
+[32m+[m[32m  invoices           Invoice[][m
+[32m+[m
+[32m+[m[32m  @@index([companyId, objectType])[m
+[32m+[m[32m  @@index([companyId, createdAt])[m
+[32m+[m[32m  @@index([storageKey])[m
+[32m+[m[32m  @@index([referenceType, referenceId])[m
+[32m+[m[32m  @@map("storage_objects")[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mmodel StorageUsageEvent {[m
+[32m+[m[32m  id String @id @default(cuid())[m
+[32m+[m
+[32m+[m[32m  companyId String[m
+[32m+[m[32m  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)[m
+[32m+[m
+[32m+[m[32m  storageObjectId String?[m
+[32m+[m[32m  storageObject   StorageObject? @relation(fields: [storageObjectId], references: [id], onDelete: SetNull)[m
+[32m+[m
+[32m+[m[32m  eventType StorageUsageEventType[m
+[32m+[m
+[32m+[m[32m  sizeBytes BigInt[m
+[32m+[m
+[32m+[m[32m  reason String?[m
+[32m+[m
+[32m+[m[32m  idempotencyKey String? @unique[m
+[32m+[m
+[32m+[m[32m  createdAt DateTime @default(now())[m
+[32m+[m
+[32m+[m[32m  @@index([companyId, createdAt])[m
+[32m+[m[32m  @@index([companyId, eventType])[m
+[32m+[m[32m  @@index([storageObjectId])[m
+[32m+[m[32m  @@map("storage_usage_events")[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mmodel BillingProfile {[m
+[32m+[m[32m  id String @id @default(cuid())[m
+[32m+[m
+[32m+[m[32m  companyId String  @unique[m
+[32m+[m[32m  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)[m
+[32m+[m
+[32m+[m[32m  legalName   String[m
+[32m+[m[32m  displayName String?[m
+[32m+[m
+[32m+[m[32m  gstin String?[m
+[32m+[m[32m  pan   String?[m
+[32m+[m
+[32m+[m[32m  addressLine1 String?[m
+[32m+[m[32m  addressLine2 String?[m
+[32m+[m[32m  city         String?[m
+[32m+[m[32m  state        String?[m
+[32m+[m[32m  stateCode    String?[m
+[32m+[m[32m  postalCode   String?[m
+[32m+[m[32m  country      String  @default("India")[m
+[32m+[m
+[32m+[m[32m  billingEmail String?[m
+[32m+[m[32m  billingPhone String?[m
+[32m+[m
+[32m+[m[32m  createdAt DateTime @default(now())[m
+[32m+[m[32m  updatedAt DateTime @updatedAt[m
+[32m+[m
+[32m+[m[32m  @@index([gstin])[m
+[32m+[m[32m  @@map("billing_profiles")[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mmodel Invoice {[m
+[32m+[m[32m  id String @id @default(cuid())[m
+[32m+[m
+[32m+[m[32m  companyId String[m
+[32m+[m[32m  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)[m
+[32m+[m
+[32m+[m[32m  paymentId String?  @unique[m
+[32m+[m[32m  payment   Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)[m
+[32m+[m
+[32m+[m[32m  invoiceNumber String @unique[m
+[32m+[m
+[32m+[m[32m  status InvoiceStatus @default(DRAFT)[m
+[32m+[m
+[32m+[m[32m  currency String @default("INR")[m
+[32m+[m
+[32m+[m[32m  customerLegalName   String[m
+[32m+[m[32m  customerDisplayName String?[m
+[32m+[m
+[32m+[m[32m  customerGstin String?[m
+[32m+[m[32m  customerPan   String?[m
+[32m+[m
+[32m+[m[32m  customerAddressLine1 String?[m
+[32m+[m[32m  customerAddressLine2 String?[m
+[32m+[m[32m  customerCity         String?[m
+[32m+[m[32m  customerState        String?[m
+[32m+[m[32m  customerStateCode    String?[m
+[32m+[m[32m  customerPostalCode   String?[m
+[32m+[m[32m  customerCountry      String  @default("India")[m
+[32m+[m
+[32m+[m[32m  customerBillingEmail String?[m
+[32m+[m[32m  customerBillingPhone String?[m
+[32m+[m
+[32m+[m[32m  placeOfSupplyState     String?[m
+[32m+[m[32m  placeOfSupplyStateCode String?[m
+[32m+[m
+[32m+[m[32m  subtotalPaise Int[m
+[32m+[m[32m  gstPaise      Int @default(0)[m
+[32m+[m[32m  totalPaise    Int[m
+[32m+[m
+[32m+[m[32m  issuedAt DateTime?[m
+[32m+[m[32m  paidAt   DateTime?[m
+[32m+[m[32m  voidedAt DateTime?[m
+[32m+[m
+[32m+[m[32m  pdfStorageObjectId String?[m
+[32m+[m[32m  pdfStorageObject   StorageObject? @relation(fields: [pdfStorageObjectId], references: [id], onDelete: SetNull)[m
+[32m+[m
+[32m+[m[32m  items InvoiceItem[][m
+[32m+[m
+[32m+[m[32m  createdAt DateTime @default(now())[m
+[32m+[m[32m  updatedAt DateTime @updatedAt[m
+[32m+[m
+[32m+[m[32m  @@index([companyId, createdAt])[m
+[32m+[m[32m  @@index([companyId, status])[m
+[32m+[m[32m  @@index([paymentId])[m
+[32m+[m[32m  @@index([pdfStorageObjectId])[m
+[32m+[m[32m  @@map("invoices")[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mmodel InvoiceSequence {[m
+[32m+[m[32m  id        String   @id @default(cuid())[m
+[32m+[m[32m  year      Int      @unique[m
+[32m+[m[32m  nextValue Int      @default(1)[m
+[32m+[m[32m  createdAt DateTime @default(now())[m
+[32m+[m[32m  updatedAt DateTime @updatedAt[m
+[32m+[m
+[32m+[m[32m  @@map("invoice_sequences")[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mmodel InvoiceItem {[m
+[32m+[m[32m  id String @id @default(cuid())[m
+[32m+[m
+[32m+[m[32m  invoiceId String[m
+[32m+[m[32m  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)[m
+[32m+[m
+[32m+[m[32m  itemType InvoiceItemType[m
+[32m+[m
+[32m+[m[32m  description String[m
+[32m+[m
+[32m+[m[32m  quantity Int @default(1)[m
+[32m+[m
+[32m+[m[32m  unitPricePaise     Int[m
+[32m+[m[32m  taxableAmountPaise Int[m
+[32m+[m
+[32m+[m[32m  gstPercent Int @default(18)[m
+[32m+[m[32m  gstPaise   Int @default(0)[m
+[32m+[m
+[32m+[m[32m  totalPaise Int[m
+[32m+[m
+[32m+[m[32m  referenceType String?[m
+[32m+[m[32m  referenceId   String?[m
+[32m+[m
+[32m+[m[32m  metadata Json?[m
+[32m+[m
+[32m+[m[32m  createdAt DateTime @default(now())[m
+[32m+[m
+[32m+[m[32m  @@index([invoiceId])[m
+[32m+[m[32m  @@index([referenceType, referenceId])[m
+[32m+[m[32m  @@map("invoice_items")[m
+[32m+[m[32m}[m

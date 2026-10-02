@@ -12,6 +12,8 @@ import helmet from "helmet";
 import dotenv from "dotenv";
 
 import storageRoutes from "./routes/storage.routes.js";
+import packingRoutes from "./routes/packing.routes.js";
+import evidenceRoutes from "./routes/evidence.routes.js";
 import { healthRouter } from "./routes/health.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import { firebaseAuthMiddleware } from "./middleware/firebase-auth.middleware.js";
@@ -62,6 +64,8 @@ app.use("/api/v1/health", healthRouter);
 app.use("/api/v1/auth", firebaseAuthMiddleware, authRoutes);
 
 app.use("/api/v1/storage", firebaseAuthMiddleware, storageRoutes);
+app.use("/api/v1/packing", firebaseAuthMiddleware, packingRoutes);
+app.use("/api/v1/evidence", firebaseAuthMiddleware, evidenceRoutes);
 
 /*
  * Razorpay webhook MUST be public.
@@ -85,6 +89,8 @@ app.use("/api/v1/identity", firebaseAuthMiddleware, identityRoutes);
 app.use("/api/v1/dashboard", firebaseAuthMiddleware, liveDashboardRoutes);
 app.use("/api/v1/warehouses", firebaseAuthMiddleware, warehouseRoutes);
 
+app.use("/api/v1/scan", firebaseAuthMiddleware, scanRouter);
+
 app.use(
   (
     error: unknown,
@@ -101,5 +107,7 @@ app.use(
   },
 );
 
-app.use("/api/v1/scan", scanRouter);
+
+
+
 
