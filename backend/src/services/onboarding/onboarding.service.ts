@@ -1,4 +1,5 @@
-import { prisma } from "../../config/prisma.js";
+﻿import { prisma } from "../../config/prisma.js";
+import { entitlementService } from "../plans/entitlement.service.js";
 import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
 
 type ProfileInput = {
@@ -192,6 +193,7 @@ export class OnboardingService {
       return existingCode;
     }
 
+    await entitlementService.assertWarehouseCapacity(user.companyId);
     return prisma.warehouse.create({
       data: {
         name,

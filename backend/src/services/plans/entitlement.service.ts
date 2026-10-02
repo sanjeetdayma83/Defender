@@ -1,64 +1,41 @@
 ﻿import { prisma } from "../../config/prisma.js";
-
-export type EntitlementPlan =
-  | "free"
-  | "starter"
-  | "growth"
-  | "enterprise";
+import {
+  planConfigurationService,
+  type PlanConfiguration,
+} from "../billing/plan-configuration.service.js";
 
 export interface PlanEntitlements {
-  plan: EntitlementPlan;
+  plan: string;
   includedScans: number;
   maxWarehouses: number | null;
   maxOperators: number | null;
   normalRetentionDays: number;
+  storageQuotaBytes: bigint;
 }
 
-const ENTITLEMENTS: Record<EntitlementPlan, PlanEntitlements> = {
-  free: {
-    plan: "free",
-    includedScans: 0,
-    maxWarehouses: 1,
-    maxOperators: 0,
-    normalRetentionDays: 30,
-  },
-
-  starter: {
-    plan: "starter",
-    includedScans: 5100,
-    maxWarehouses: 1,
-    maxOperators: 3,
-    normalRetentionDays: 30,
-  },
-
-  growth: {
-    plan: "growth",
-    includedScans: 22200,
-    maxWarehouses: 3,
-    maxOperators: 10,
-    normalRetentionDays: 30,
-  },
-
-  enterprise: {
-    plan: "enterprise",
-    includedScans: 56200,
-    maxWarehouses: null,
-    maxOperators: null,
-    normalRetentionDays: 30,
-  },
-};
+function toEntitlements(plan: PlanConfiguration): PlanEntitlements {
+  return {
+    plan: plan.code,
+    includedScans: plan.includedScans,
+    maxWarehouses: plan.maxWarehouses,
+    maxOperators: plan.maxOperators,
+    normalRetentionDays: plan.retentionDays,
+    storageQuotaBytes: plan.storageQuotaBytes,
+  };
+}
 
 export class EntitlementService {
-  getEntitlements(plan: string): PlanEntitlements {
-    const normalized = plan.trim().toLowerCase() as EntitlementPlan;
+  async getEntitlements(plan: string): Promise<PlanEntitlements> {
+    const normalized = plan.trim().toLowerCase();
 
-    const entitlements = ENTITLEMENTS[normalized];
+    const configuration =
+      await planConfigurationService.getActivePlan(normalized);
 
-    if (!entitlements) {
+    if (!configuration) {
       throw new Error(`Unsupported company plan: ${plan}`);
     }
 
-    return entitlements;
+    return toEntitlements(configuration);
   }
 
   async getCompanyEntitlements(
@@ -154,6 +131,9 @@ export class EntitlementService {
       );
     }
 
+    const entitlements =
+      await this.getCompanyEntitlements(companyId);
+
     const rows = await prisma.$queryRawUnsafe<
       Array<{
         storageUsed: bigint;
@@ -175,42 +155,18 @@ export class EntitlementService {
       throw new Error(`Company not found: ${companyId}`);
     }
 
-    const storageUsed = Number(rows[0].storageUsed);
-    const storageQuota = Number(rows[0].storageQuota);
+    const storageUsed = rows[0].storageUsed;
+    const storageQuota =
+      entitlements.storageQuotaBytes;
 
-    if (storageUsed + additionalBytes > storageQuota) {
+    if (
+      storageQuota > 0n &&
+      storageUsed + BigInt(additionalBytes) > storageQuota
+    ) {
       throw new Error(
-        `STORAGE_QUOTA_EXCEEDED:${storageQuota}`,
+        `STORAGE_LIMIT_REACHED:${storageQuota.toString()}`,
       );
     }
-  }
-
-  async getStorageUsage(companyId: string) {
-    const rows = await prisma.$queryRawUnsafe<
-      Array<{
-        storageUsed: bigint;
-        storageQuota: bigint;
-      }>
-    >(
-      `
-      SELECT
-        COALESCE("storageUsed", 0)::bigint AS "storageUsed",
-        COALESCE("storageQuota", 0)::bigint AS "storageQuota"
-      FROM "Company"
-      WHERE id = $1
-      LIMIT 1
-      `,
-      companyId,
-    );
-
-    if (!rows[0]) {
-      throw new Error(`Company not found: ${companyId}`);
-    }
-
-    return {
-      usedBytes: Number(rows[0].storageUsed),
-      quotaBytes: Number(rows[0].storageQuota),
-    };
   }
 }
 

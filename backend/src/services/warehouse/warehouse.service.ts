@@ -1,4 +1,5 @@
 ﻿import { prisma } from "../../config/prisma.js";
+import { entitlementService } from "../plans/entitlement.service.js";
 export type WarehouseRole =
   | "PLATFORM_ADMIN"
   | "OWNER"
@@ -143,6 +144,7 @@ export class WarehouseService {
       throw new Error("WAREHOUSE_CODE_REQUIRED");
     }
 
+    await entitlementService.assertWarehouseCapacity(companyId);
     return prisma.warehouse.create({
       data: {
         companyId,

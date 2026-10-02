@@ -1,7 +1,7 @@
 ﻿import crypto from "node:crypto";
 import { prisma } from "../../config/prisma.js";
 import { razorpayService } from "../razorpay/razorpay.service.js";
-import { getCommercialPlan } from "./commercial-plan.config.js";
+import { planConfigurationService } from "./plan-configuration.service.js";
 import { scanWalletService } from "../scan-wallet/scan-wallet.service.js";
 import { invoiceService } from "../invoice/invoice.service.js";
 
@@ -91,11 +91,11 @@ function isSupportedPaidPlan(plan: string): boolean {
   );
 }
 
-function getValidityMonths(
+async function getValidityMonths(
   plan: string,
   billingInterval: "MONTHLY" | "YEARLY",
-): number {
-  const commercialPlan = getCommercialPlan(plan);
+): Promise<number> {
+  const commercialPlan = await planConfigurationService.getActivePlan(plan);
 
   if (commercialPlan) {
     return commercialPlan.validityMonths;
@@ -125,24 +125,29 @@ export class BillingService {
      * base prices. Legacy professional continues using the
      * existing MONTHLY/YEARLY environment configuration.
      */
-    const commercialPlan = getCommercialPlan(plan);
+    const commercialPlan = await planConfigurationService.getActivePlan(plan);
 
-    const subtotalPaise = commercialPlan
+    const subtotalPaise: bigint = commercialPlan
       ? commercialPlan.pricePaise
-      : getPlanPricePaise(
-          plan,
-          billingInterval,
+      : BigInt(
+          await getPlanPricePaise(
+            plan,
+            billingInterval,
+          ),
         );
 
-    const validityMonths = getValidityMonths(plan, billingInterval);
+    const validityMonths = commercialPlan
+      ? commercialPlan.validityMonths
+      : await getValidityMonths(plan, billingInterval);
 
-    const gstPercent = getGstPercent();
+    const gstPercent = commercialPlan
+      ? commercialPlan.gstPercent
+      : getGstPercent();
 
-    const gstPaise = Math.round(
-      (subtotalPaise * gstPercent) / 100,
-    );
+    const gstPaise =
+      (subtotalPaise * BigInt(gstPercent)) / 100n;
 
-    const totalPaise = subtotalPaise + gstPaise;
+    const totalPaise: bigint = subtotalPaise + gstPaise;
 
     const paymentId = crypto.randomUUID();
 
@@ -152,10 +157,18 @@ export class BillingService {
       gstPercent,
       validityMonths,
       commercialPlan: Boolean(commercialPlan),
+
+      // Immutable purchase-time commercial snapshot.
+      planName: commercialPlan?.name ?? null,
+      planDescription: commercialPlan?.description ?? null,
+      pricePaise: commercialPlan?.pricePaise?.toString() ?? subtotalPaise.toString(),
+      currency: commercialPlan?.currency ?? "INR",
       includedScans: commercialPlan?.includedScans ?? null,
+      retentionDays: commercialPlan?.retentionDays ?? null,
+      storageQuotaBytes: commercialPlan?.storageQuotaBytes?.toString() ?? null,
       maxWarehouses: commercialPlan?.maxWarehouses ?? null,
       maxOperators: commercialPlan?.maxOperators ?? null,
-      retentionDays: commercialPlan?.retentionDays ?? null,
+
     };
 
     await prisma.$executeRawUnsafe(
@@ -205,7 +218,7 @@ export class BillingService {
       const receipt = `ld_${paymentId}`.slice(0, 40);
 
       const order = await razorpayService.createOrder({
-        amountPaise: totalPaise,
+        amountPaise: Number(totalPaise),
         receipt,
         notes: {
           paymentId,
@@ -557,7 +570,7 @@ export class BillingService {
        * plan definition.
        */
       const normalizedPaymentPlan = normalizePlanCode(payment.plan);
-      const commercialPlan = getCommercialPlan(normalizedPaymentPlan);
+      const commercialPlan = await planConfigurationService.getActivePlan(normalizedPaymentPlan);
 
       if (commercialPlan) {
         const metadata =
@@ -687,6 +700,12 @@ export class BillingService {
 }
 
 export const billingService = new BillingService();
+
+
+
+
+
+
 
 
 
