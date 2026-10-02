@@ -57,6 +57,7 @@ export async function createEvidence(
       String(type ?? "VIDEO").toUpperCase() === "PHOTO" ? "PHOTO" : "VIDEO";
 
     const evidence = await service.create({
+      companyId: user.companyId,
       recordingId: String(recordingId),
       type: normalizedType,
       fileName: fileName == null ? undefined : String(fileName),
@@ -159,3 +160,4 @@ export async function listEvidence(
     });
   }
 }
+

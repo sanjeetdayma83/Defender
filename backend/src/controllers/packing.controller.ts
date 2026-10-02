@@ -1,8 +1,10 @@
 ﻿import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middleware/firebase-auth.middleware.js";
 import { PackingService } from "../services/packing/packing.service.js";
+import { CompanyContextService } from "../services/identity/company-context.service.js";
 
 const service = new PackingService();
+const companyContextService = new CompanyContextService();
 
 export async function startPacking(
   req: AuthenticatedRequest,
@@ -68,7 +70,19 @@ export async function getPacking(
   try {
     const id = String(req.params.id ?? "");
 
-    const session = await service.get(id);
+    const firebaseUid = req.firebaseUser?.uid;
+
+    if (!firebaseUid) {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+      return;
+    }
+
+    const { company } = await companyContextService.getCompany(firebaseUid);
+
+    const session = await service.get(id, company.id);
 
     if (!session) {
       res.status(404).json({
@@ -99,7 +113,19 @@ export async function completePacking(
   try {
     const id = String(req.params.id ?? "");
 
-    const session = await service.complete(id);
+    const firebaseUid = req.firebaseUser?.uid;
+
+    if (!firebaseUid) {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+      return;
+    }
+
+    const { company } = await companyContextService.getCompany(firebaseUid);
+
+    const session = await service.complete(id, company.id);
 
     res.json({
       success: true,
@@ -127,7 +153,19 @@ export async function cancelPacking(
   try {
     const id = String(req.params.id ?? "");
 
-    const session = await service.cancel(id);
+    const firebaseUid = req.firebaseUser?.uid;
+
+    if (!firebaseUid) {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+      return;
+    }
+
+    const { company } = await companyContextService.getCompany(firebaseUid);
+
+    const session = await service.cancel(id, company.id);
 
     res.json({
       success: true,
@@ -163,7 +201,18 @@ export async function getPackingByShipment(
       return;
     }
 
-    const sessions = await service.getByShipment(shipmentId);
+    const firebaseUid = req.firebaseUser?.uid;
+
+    if (!firebaseUid) {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+      return;
+    }
+
+    const { company } = await companyContextService.getCompany(firebaseUid);
+    const sessions = await service.getByShipment(shipmentId, company.id);
 
     res.json({
       success: true,
@@ -179,3 +228,5 @@ export async function getPackingByShipment(
     });
   }
 }
+
+

@@ -14,7 +14,7 @@ const router = Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 1024 * 1024 * 1024,
+    fileSize: 250 * 1024 * 1024,
   },
 });
 
@@ -28,3 +28,4 @@ router.get("/evidence/:awb", getEvidence);
 
 router.get("/usage", getStorageUsage);
 export default router;
+

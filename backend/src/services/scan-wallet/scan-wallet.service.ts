@@ -183,6 +183,15 @@ export class ScanWalletService {
     this.assertCompanyId(input.companyId);
     this.assertPositiveCredits(input.credits);
 
+    await tx.$executeRawUnsafe(
+      `
+      SELECT pg_advisory_xact_lock(
+        hashtextextended($1, 0)
+      )
+      `,
+      input.companyId,
+    );
+
     if (input.idempotencyKey?.trim()) {
       const existing = await tx.$queryRawUnsafe<ScanTransaction[]>(
         `
@@ -199,9 +208,11 @@ export class ScanWalletService {
           description,
           "createdAt"
         FROM scan_transactions
-        WHERE "idempotencyKey" = $1
+        WHERE "companyId" = $1
+          AND "idempotencyKey" = $2
         LIMIT 1
         `,
+        input.companyId,
         input.idempotencyKey.trim(),
       );
 
@@ -372,6 +383,15 @@ export class ScanWalletService {
     this.assertPositiveCredits(credits);
 
     return prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(
+        `
+        SELECT pg_advisory_xact_lock(
+          hashtextextended($1, 0)
+        )
+        `,
+        input.companyId,
+      );
+
       if (input.idempotencyKey?.trim()) {
         const existing = await tx.$queryRawUnsafe<ScanTransaction[]>(
           `
@@ -554,6 +574,15 @@ export class ScanWalletService {
     const credits = input.credits ?? 1;
     this.assertPositiveCredits(credits);
 
+    await tx.$executeRawUnsafe(
+      `
+      SELECT pg_advisory_xact_lock(
+        hashtextextended($1, 0)
+      )
+      `,
+      input.companyId,
+    );
+
     if (input.idempotencyKey?.trim()) {
       const existing = await tx.$queryRawUnsafe<ScanTransaction[]>(
         `
@@ -570,9 +599,11 @@ export class ScanWalletService {
           description,
           "createdAt"
         FROM scan_transactions
-        WHERE "idempotencyKey" = $1
+        WHERE "companyId" = $1
+          AND "idempotencyKey" = $2
         LIMIT 1
         `,
+        input.companyId,
         input.idempotencyKey.trim(),
       );
 
@@ -756,3 +787,4 @@ export class ScanWalletService {
 }
 
 export const scanWalletService = new ScanWalletService();
+

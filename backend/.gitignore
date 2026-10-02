@@ -13,3 +13,8 @@ npm-debug.log*
 firebase-service-account.json
 
 /src/generated/prisma
+# Keep production storage controller source tracked.
+!backend/src/controllers/storage/
+!backend/src/controllers/storage/**
+!src/controllers/storage/
+!src/controllers/storage/**

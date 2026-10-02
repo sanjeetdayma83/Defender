@@ -348,7 +348,7 @@ export class PackingService {
     return mapRecording(recording);
   }
 
-  async get(id: string) {
+  async get(id: string, companyId: string) {
     if (!id?.trim()) {
       throw new Error("Recording ID is required.");
     }
@@ -370,21 +370,17 @@ export class PackingService {
           r.mode
         FROM "Recording" r
         WHERE r.id = $1
-          AND r."companyId" = (
-            SELECT "companyId"
-            FROM "User"
-            WHERE id = r."operatorId"
-            LIMIT 1
-          )
+          AND r."companyId" = $2
         LIMIT 1
       `,
       id,
+      companyId,
     );
 
     return rows[0] ? mapRecording(rows[0]) : null;
   }
 
-  async complete(id: string) {
+  async complete(id: string, companyId: string) {
     if (!id?.trim()) {
       throw new Error("Recording ID is required.");
     }
@@ -414,9 +410,11 @@ export class PackingService {
           ) AS "evidenceCount"
         FROM "Recording" r
         WHERE r.id = $1
+          AND r."companyId" = $2
         LIMIT 1
       `,
       id,
+      companyId,
     );
 
     if (!existing[0]) {
@@ -431,8 +429,10 @@ export class PackingService {
             status = 'completed'::"RecordingStatus",
             "stoppedAt" = COALESCE("stoppedAt", CURRENT_TIMESTAMP)
           WHERE id = $1
+            AND "companyId" = $2
         `,
         id,
+        companyId,
       );
 
       if (existing[0].orderId && existing[0].evidenceCount > 0) {
@@ -467,9 +467,11 @@ export class PackingService {
             mode
           FROM "Recording"
           WHERE id = $1
+            AND "companyId" = $2
           LIMIT 1
         `,
         id,
+        companyId,
       );
 
       if (!rows[0]) {
@@ -482,7 +484,7 @@ export class PackingService {
     return mapRecording(result);
   }
 
-  async cancel(id: string) {
+  async cancel(id: string, companyId: string) {
     if (!id?.trim()) {
       throw new Error("Recording ID is required.");
     }
@@ -504,9 +506,11 @@ export class PackingService {
           mode
         FROM "Recording"
         WHERE id = $1
+          AND "companyId" = $2
         LIMIT 1
       `,
       id,
+      companyId,
     );
 
     if (!existing[0]) {
@@ -521,8 +525,10 @@ export class PackingService {
             status = 'failed'::"RecordingStatus",
             "stoppedAt" = COALESCE("stoppedAt", CURRENT_TIMESTAMP)
           WHERE id = $1
+            AND "companyId" = $2
         `,
         id,
+        companyId,
       );
 
       const rows = await tx.$queryRawUnsafe<RecordingRow[]>(
@@ -542,9 +548,11 @@ export class PackingService {
             mode
           FROM "Recording"
           WHERE id = $1
+            AND "companyId" = $2
           LIMIT 1
         `,
         id,
+        companyId,
       );
 
       if (!rows[0]) {
@@ -557,7 +565,7 @@ export class PackingService {
     return mapRecording(result);
   }
 
-  async getByShipment(shipmentId: string) {
+  async getByShipment(shipmentId: string, companyId: string) {
     if (!shipmentId?.trim()) {
       throw new Error("Shipment ID is required.");
     }
@@ -581,10 +589,12 @@ export class PackingService {
         JOIN "Order" o
           ON o.id = r."orderId"
         WHERE o.id = $1
+          AND o."companyId" = $2
           AND r."companyId" = o."companyId"
         ORDER BY r."startedAt" DESC
       `,
       shipmentId,
+      companyId,
     );
 
     return rows.map(mapRecording);
@@ -592,3 +602,5 @@ export class PackingService {
 }
 
 export const packingService = new PackingService();
+
+

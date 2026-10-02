@@ -8,6 +8,7 @@ export interface CreateEvidenceInput {
   contentType?: string;
   sizeBytes?: number;
   durationSeconds?: number;
+  companyId?: string;
 }
 
 type EvidenceRow = {
@@ -40,9 +41,11 @@ export class EvidenceService {
           r.status::text AS status
         FROM "Recording" r
         WHERE r.id = $1
+          AND ($2::text IS NULL OR r."companyId" = $2)
         LIMIT 1
       `,
       input.recordingId,
+      input.companyId ?? null,
     );
 
     const recording = recordingRows[0];
@@ -69,9 +72,11 @@ export class EvidenceService {
           e."orderId"
         FROM "Evidence" e
         WHERE e."recordingId" = $1
+          AND ($2::text IS NULL OR e."companyId" = $2)
         LIMIT 1
       `,
       input.recordingId,
+      input.companyId ?? null,
     );
 
     if (existingRows[0]) {
@@ -139,3 +144,5 @@ export class EvidenceService {
 }
 
 export const evidenceService = new EvidenceService();
+
+
