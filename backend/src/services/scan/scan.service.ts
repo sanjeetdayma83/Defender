@@ -63,7 +63,7 @@ export class ScanService {
        ORDER BY
          CASE
            WHEN oi.identifier_type = 'awb' THEN 1
-           WHEN oi.identifier_type IN ('barcode', 'shipping_barcode') THEN 2
+           WHEN oi.identifier_type = 'barcode' THEN 2
            WHEN oi.identifier_type = 'order_id' THEN 3
            ELSE 4
          END,
@@ -251,12 +251,9 @@ export class ScanService {
        FROM "Order" o
        WHERE o."companyId" = $1
          AND o.status IN (
-           'pending',
-           'confirmed',
-           'packing',
-           'packed',
            'queued',
            'synced',
+           'packing',
            'evidence_ready'
          )
          AND EXISTS (
@@ -301,3 +298,5 @@ export class ScanService {
 }
 
 export const scanService = new ScanService();
+
+

@@ -1,0 +1,5272 @@
+﻿===== RELEASE HARDENING SOURCE SNAPSHOT =====
+Generated: 2026-10-02 13:47:01
+Branch:
+recovery/billing-db-foundation
+
+===== GIT STATUS =====
+?? release-hardening-source-snapshot.txt
+
+============================================================
+FILE: src\app.ts
+============================================================
+import scanRouter from "./routes/scan.routes.js";
+import importsRoutes from "./routes/imports.routes.js";
+import productsRoutes from "./routes/products.routes.js";
+import ordersRoutes from "./routes/orders.routes.js";
+import shipmentsRoutes from "./routes/shipments.routes.js";
+import plansRoutes from "./routes/plans.routes.js";
+import walletRoutes from "./routes/wallet.routes.js";
+import express from "express";
+import onboardingRoutes from "./routes/onboarding.routes.js";
+import cors from "cors";
+import helmet from "helmet";
+import dotenv from "dotenv";
+
+import storageRoutes from "./routes/storage.routes.js";
+import packingRoutes from "./routes/packing.routes.js";
+import evidenceRoutes from "./routes/evidence.routes.js";
+import { healthRouter } from "./routes/health.routes.js";
+import authRoutes from "./routes/auth.routes.js";
+import { firebaseAuthMiddleware } from "./middleware/firebase-auth.middleware.js";
+import identityRoutes from "./routes/identity.routes.js";
+import liveDashboardRoutes from "./routes/live-dashboard.routes.js";
+import warehouseRoutes from "./routes/warehouse.routes.js";
+
+import billingRoutes from "./routes/billing.routes.js";
+import billingWebhookRoutes from "./routes/billing-webhook.routes.js";
+
+dotenv.config();
+
+export const app = express();
+
+app.use(cors());
+app.use(helmet());
+
+app.use(
+  express.json({
+    limit: "10mb",
+    verify: (req, _res, buffer) => {
+      if ((req as express.Request).originalUrl === "/api/v1/billing/webhook/razorpay") {
+        (req as express.Request & { rawBody?: Buffer }).rawBody =
+          Buffer.from(buffer);
+      }
+    },
+  }),
+);
+
+/*
+ * Public health endpoint.
+ */
+app.use("/api/v1/plans", firebaseAuthMiddleware, plansRoutes);
+
+app.use("/api/v1/wallet", firebaseAuthMiddleware, walletRoutes);
+app.use("/api/v1/imports", firebaseAuthMiddleware, importsRoutes);
+
+app.use("/api/v1/products", firebaseAuthMiddleware, productsRoutes);
+
+app.use("/api/v1/orders", firebaseAuthMiddleware, ordersRoutes);
+
+app.use("/api/v1/shipments", firebaseAuthMiddleware, shipmentsRoutes);
+app.use("/api/v1/health", healthRouter);
+
+/*
+ * Firebase-authenticated endpoints.
+ */
+app.use("/api/v1/auth", firebaseAuthMiddleware, authRoutes);
+
+app.use("/api/v1/storage", firebaseAuthMiddleware, storageRoutes);
+app.use("/api/v1/packing", firebaseAuthMiddleware, packingRoutes);
+app.use("/api/v1/evidence", firebaseAuthMiddleware, evidenceRoutes);
+
+/*
+ * Razorpay webhook MUST be public.
+ */
+app.use("/api/v1/billing/webhook", billingWebhookRoutes);
+
+/*
+ * Customer billing APIs require Firebase authentication.
+ */
+app.use("/api/v1/billing", firebaseAuthMiddleware, billingRoutes);
+
+app.get("/", (_req, res) => {
+  res.json({
+    success: true,
+    service: "loss-defender-backend",
+  });
+});
+
+app.use("/api/v1/onboarding", firebaseAuthMiddleware, onboardingRoutes);
+app.use("/api/v1/identity", firebaseAuthMiddleware, identityRoutes);
+app.use("/api/v1/dashboard", firebaseAuthMiddleware, liveDashboardRoutes);
+app.use("/api/v1/warehouses", firebaseAuthMiddleware, warehouseRoutes);
+
+app.use("/api/v1/scan", firebaseAuthMiddleware, scanRouter);
+
+app.use(
+  (
+    error: unknown,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction,
+  ) => {
+    console.error(error);
+
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  },
+);
+
+
+
+
+
+
+
+============================================================
+FILE: src\services\scan-wallet\scan-wallet.service.ts
+============================================================
+import crypto from "node:crypto";
+import { prisma } from "../../config/prisma.js";
+
+export type ScanTransactionType =
+  | "ALLOCATION"
+  | "CONSUMPTION"
+  | "TOPUP"
+  | "REFUND"
+  | "ADJUSTMENT"
+  | "EXPIRATION";
+
+export interface ScanWallet {
+  id: string;
+  companyId: string;
+  balance: number;
+  lifetimeAllocated: number;
+  lifetimeConsumed: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ScanTransaction {
+  id: string;
+  walletId: string;
+  companyId: string;
+  type: ScanTransactionType;
+  credits: number;
+  balanceAfter: number;
+  referenceType: string | null;
+  referenceId: string | null;
+  idempotencyKey: string | null;
+  description: string | null;
+  createdAt: Date;
+}
+
+export interface AllocateScansInput {
+  companyId: string;
+  credits: number;
+  referenceType?: string;
+  referenceId?: string;
+  idempotencyKey?: string;
+  description?: string;
+  type?: "ALLOCATION" | "TOPUP" | "REFUND" | "ADJUSTMENT";
+}
+
+export interface ConsumeScansInput {
+  companyId: string;
+  credits?: number;
+  referenceType?: string;
+  referenceId?: string;
+  idempotencyKey?: string;
+  description?: string;
+}
+
+type TransactionClient = Parameters<
+  Parameters<typeof prisma.$transaction>[0]
+>[0];
+
+export class ScanWalletService {
+  private generateId(): string {
+    return crypto.randomUUID();
+  }
+
+  private assertCompanyId(companyId: string): void {
+    if (!companyId?.trim()) {
+      throw new Error("Company ID is required.");
+    }
+  }
+
+  private assertPositiveCredits(credits: number): void {
+    if (!Number.isInteger(credits) || credits <= 0) {
+      throw new Error("Scan credits must be a positive integer.");
+    }
+  }
+
+  async getOrCreateWallet(companyId: string): Promise<ScanWallet> {
+    this.assertCompanyId(companyId);
+
+    const existing = await prisma.$queryRawUnsafe<ScanWallet[]>(
+      `
+      SELECT
+        id,
+        "companyId",
+        balance,
+        "lifetimeAllocated",
+        "lifetimeConsumed",
+        "createdAt",
+        "updatedAt"
+      FROM scan_wallets
+      WHERE "companyId" = $1
+      LIMIT 1
+      `,
+      companyId,
+    );
+
+    if (existing.length > 0) {
+      return existing[0];
+    }
+
+    const walletId = this.generateId();
+
+    const created = await prisma.$queryRawUnsafe<ScanWallet[]>(
+      `
+      INSERT INTO scan_wallets (
+        id,
+        "companyId"
+      )
+      VALUES ($1, $2)
+      ON CONFLICT ("companyId")
+      DO UPDATE SET
+        "updatedAt" = CURRENT_TIMESTAMP
+      RETURNING
+        id,
+        "companyId",
+        balance,
+        "lifetimeAllocated",
+        "lifetimeConsumed",
+        "createdAt",
+        "updatedAt"
+      `,
+      walletId,
+      companyId,
+    );
+
+    return created[0];
+  }
+
+  async getWallet(companyId: string): Promise<ScanWallet> {
+    this.assertCompanyId(companyId);
+
+    const wallet = await prisma.$queryRawUnsafe<ScanWallet[]>(
+      `
+      SELECT
+        id,
+        "companyId",
+        balance,
+        "lifetimeAllocated",
+        "lifetimeConsumed",
+        "createdAt",
+        "updatedAt"
+      FROM scan_wallets
+      WHERE "companyId" = $1
+      LIMIT 1
+      `,
+      companyId,
+    );
+
+    if (wallet.length === 0) {
+      throw new Error("Scan wallet not found.");
+    }
+
+    return wallet[0];
+  }
+
+  async getBalance(companyId: string): Promise<number> {
+    const wallet = await this.getWallet(companyId);
+    return wallet.balance;
+  }
+
+  async allocateScans(
+    input: AllocateScansInput,
+  ): Promise<{
+    wallet: ScanWallet;
+    transaction: ScanTransaction;
+    alreadyProcessed: boolean;
+  }> {
+    this.assertCompanyId(input.companyId);
+    this.assertPositiveCredits(input.credits);
+
+    return prisma.$transaction(async (tx) => {
+      return this.allocateScansInTransaction(tx, input);
+    });
+  }
+
+  async allocateScansInTransaction(
+    tx: TransactionClient,
+    input: AllocateScansInput,
+  ): Promise<{
+    wallet: ScanWallet;
+    transaction: ScanTransaction;
+    alreadyProcessed: boolean;
+  }> {
+    this.assertCompanyId(input.companyId);
+    this.assertPositiveCredits(input.credits);
+
+    if (input.idempotencyKey?.trim()) {
+      const existing = await tx.$queryRawUnsafe<ScanTransaction[]>(
+        `
+        SELECT
+          id,
+          "walletId",
+          "companyId",
+          type,
+          credits,
+          "balanceAfter",
+          "referenceType",
+          "referenceId",
+          "idempotencyKey",
+          description,
+          "createdAt"
+        FROM scan_transactions
+        WHERE "idempotencyKey" = $1
+        LIMIT 1
+        `,
+        input.idempotencyKey.trim(),
+      );
+
+      if (existing.length > 0) {
+        const wallet = await tx.$queryRawUnsafe<ScanWallet[]>(
+          `
+          SELECT
+            id,
+            "companyId",
+            balance,
+            "lifetimeAllocated",
+            "lifetimeConsumed",
+            "createdAt",
+            "updatedAt"
+          FROM scan_wallets
+          WHERE id = $1
+          LIMIT 1
+          `,
+          existing[0].walletId,
+        );
+
+        if (wallet.length === 0) {
+          throw new Error(
+            "Existing scan transaction references a missing wallet.",
+          );
+        }
+
+        return {
+          wallet: wallet[0],
+          transaction: existing[0],
+          alreadyProcessed: true,
+        };
+      }
+    }
+
+    const walletId = this.generateId();
+
+    await tx.$executeRawUnsafe(
+      `
+      INSERT INTO scan_wallets (
+        id,
+        "companyId"
+      )
+      VALUES ($1, $2)
+      ON CONFLICT ("companyId")
+      DO NOTHING
+      `,
+      walletId,
+      input.companyId,
+    );
+
+    const walletRows = await tx.$queryRawUnsafe<ScanWallet[]>(
+      `
+      SELECT
+        id,
+        "companyId",
+        balance,
+        "lifetimeAllocated",
+        "lifetimeConsumed",
+        "createdAt",
+        "updatedAt"
+      FROM scan_wallets
+      WHERE "companyId" = $1
+      FOR UPDATE
+      `,
+      input.companyId,
+    );
+
+    if (walletRows.length === 0) {
+      throw new Error("Unable to create or load scan wallet.");
+    }
+
+    const wallet = walletRows[0];
+    const newBalance = wallet.balance + input.credits;
+
+    const updatedWalletRows = await tx.$queryRawUnsafe<ScanWallet[]>(
+      `
+      UPDATE scan_wallets
+      SET
+        balance = $1,
+        "lifetimeAllocated" = "lifetimeAllocated" + $2,
+        "updatedAt" = CURRENT_TIMESTAMP
+      WHERE id = $3
+      RETURNING
+        id,
+        "companyId",
+        balance,
+        "lifetimeAllocated",
+        "lifetimeConsumed",
+        "createdAt",
+        "updatedAt"
+      `,
+      newBalance,
+      input.credits,
+      wallet.id,
+    );
+
+    const transactionId = this.generateId();
+
+    const transactionRows = await tx.$queryRawUnsafe<ScanTransaction[]>(
+      `
+      INSERT INTO scan_transactions (
+        id,
+        "walletId",
+        "companyId",
+        type,
+        credits,
+        "balanceAfter",
+        "referenceType",
+        "referenceId",
+        "idempotencyKey",
+        description
+      )
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10
+      )
+      RETURNING
+        id,
+        "walletId",
+        "companyId",
+        type,
+        credits,
+        "balanceAfter",
+        "referenceType",
+        "referenceId",
+        "idempotencyKey",
+        description,
+        "createdAt"
+      `,
+      transactionId,
+      wallet.id,
+      input.companyId,
+      input.type ?? "ALLOCATION",
+      input.credits,
+      newBalance,
+      input.referenceType ?? null,
+      input.referenceId ?? null,
+      input.idempotencyKey?.trim() || null,
+      input.description ?? null,
+    );
+
+    return {
+      wallet: updatedWalletRows[0],
+      transaction: transactionRows[0],
+      alreadyProcessed: false,
+    };
+  }
+
+  async consumeScans(
+    input: ConsumeScansInput,
+  ): Promise<{
+    wallet: ScanWallet;
+    transaction: ScanTransaction;
+    alreadyProcessed: boolean;
+  }> {
+    this.assertCompanyId(input.companyId);
+
+    const credits = input.credits ?? 1;
+    this.assertPositiveCredits(credits);
+
+    return prisma.$transaction(async (tx) => {
+      if (input.idempotencyKey?.trim()) {
+        const existing = await tx.$queryRawUnsafe<ScanTransaction[]>(
+          `
+          SELECT
+            id,
+            "walletId",
+            "companyId",
+            type,
+            credits,
+            "balanceAfter",
+            "referenceType",
+            "referenceId",
+            "idempotencyKey",
+            description,
+            "createdAt"
+          FROM scan_transactions
+          WHERE "idempotencyKey" = $1
+          LIMIT 1
+          `,
+          input.idempotencyKey.trim(),
+        );
+
+        if (existing.length > 0) {
+          const wallet = await tx.$queryRawUnsafe<ScanWallet[]>(
+            `
+            SELECT
+              id,
+              "companyId",
+              balance,
+              "lifetimeAllocated",
+              "lifetimeConsumed",
+              "createdAt",
+              "updatedAt"
+            FROM scan_wallets
+            WHERE id = $1
+            LIMIT 1
+            `,
+            existing[0].walletId,
+          );
+
+          if (wallet.length === 0) {
+            throw new Error(
+              "Existing scan transaction references a missing wallet.",
+            );
+          }
+
+          return {
+            wallet: wallet[0],
+            transaction: existing[0],
+            alreadyProcessed: true,
+          };
+        }
+      }
+
+      const walletRows = await tx.$queryRawUnsafe<ScanWallet[]>(
+        `
+        SELECT
+          id,
+          "companyId",
+          balance,
+          "lifetimeAllocated",
+          "lifetimeConsumed",
+          "createdAt",
+          "updatedAt"
+        FROM scan_wallets
+        WHERE "companyId" = $1
+        FOR UPDATE
+        `,
+        input.companyId,
+      );
+
+      if (walletRows.length === 0) {
+        throw new Error(
+          "Scan wallet not found. Allocate scan credits before consuming.",
+        );
+      }
+
+      const wallet = walletRows[0];
+
+      if (wallet.balance < credits) {
+        throw new Error(
+          `Insufficient scan credits. Required: ${credits}. Available: ${wallet.balance}.`,
+        );
+      }
+
+      const newBalance = wallet.balance - credits;
+
+      const updatedWalletRows = await tx.$queryRawUnsafe<ScanWallet[]>(
+        `
+        UPDATE scan_wallets
+        SET
+          balance = $1,
+          "lifetimeConsumed" = "lifetimeConsumed" + $2,
+          "updatedAt" = CURRENT_TIMESTAMP
+        WHERE id = $3
+        RETURNING
+          id,
+          "companyId",
+          balance,
+          "lifetimeAllocated",
+          "lifetimeConsumed",
+          "createdAt",
+          "updatedAt"
+        `,
+        newBalance,
+        credits,
+        wallet.id,
+      );
+
+      const transactionId = this.generateId();
+
+      const transactionRows = await tx.$queryRawUnsafe<ScanTransaction[]>(
+        `
+        INSERT INTO scan_transactions (
+          id,
+          "walletId",
+          "companyId",
+          type,
+          credits,
+          "balanceAfter",
+          "referenceType",
+          "referenceId",
+          "idempotencyKey",
+          description
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          'CONSUMPTION',
+          $4,
+          $5,
+          $6,
+          $7,
+          $8,
+          $9
+        )
+        RETURNING
+          id,
+          "walletId",
+          "companyId",
+          type,
+          credits,
+          "balanceAfter",
+          "referenceType",
+          "referenceId",
+          "idempotencyKey",
+          description,
+          "createdAt"
+        `,
+        transactionId,
+        wallet.id,
+        input.companyId,
+        -credits,
+        newBalance,
+        input.referenceType ?? null,
+        input.referenceId ?? null,
+        input.idempotencyKey?.trim() || null,
+        input.description ?? null,
+      );
+
+      return {
+        wallet: updatedWalletRows[0],
+        transaction: transactionRows[0],
+        alreadyProcessed: false,
+      };
+    });
+  }
+
+    async consumeScansInTransaction(
+    tx: TransactionClient,
+    input: ConsumeScansInput,
+  ): Promise<{
+    wallet: ScanWallet;
+    transaction: ScanTransaction;
+    alreadyProcessed: boolean;
+  }> {
+    this.assertCompanyId(input.companyId);
+
+    const credits = input.credits ?? 1;
+    this.assertPositiveCredits(credits);
+
+    if (input.idempotencyKey?.trim()) {
+      const existing = await tx.$queryRawUnsafe<ScanTransaction[]>(
+        `
+        SELECT
+          id,
+          "walletId",
+          "companyId",
+          type,
+          credits,
+          "balanceAfter",
+          "referenceType",
+          "referenceId",
+          "idempotencyKey",
+          description,
+          "createdAt"
+        FROM scan_transactions
+        WHERE "idempotencyKey" = $1
+        LIMIT 1
+        `,
+        input.idempotencyKey.trim(),
+      );
+
+      if (existing.length > 0) {
+        const wallet = await tx.$queryRawUnsafe<ScanWallet[]>(
+          `
+          SELECT
+            id,
+            "companyId",
+            balance,
+            "lifetimeAllocated",
+            "lifetimeConsumed",
+            "createdAt",
+            "updatedAt"
+          FROM scan_wallets
+          WHERE id = $1
+          LIMIT 1
+          `,
+          existing[0].walletId,
+        );
+
+        if (wallet.length === 0) {
+          throw new Error(
+            "Existing scan transaction references a missing wallet.",
+          );
+        }
+
+        return {
+          wallet: wallet[0],
+          transaction: existing[0],
+          alreadyProcessed: true,
+        };
+      }
+    }
+
+    const walletRows = await tx.$queryRawUnsafe<ScanWallet[]>(
+      `
+      SELECT
+        id,
+        "companyId",
+        balance,
+        "lifetimeAllocated",
+        "lifetimeConsumed",
+        "createdAt",
+        "updatedAt"
+      FROM scan_wallets
+      WHERE "companyId" = $1
+      FOR UPDATE
+      `,
+      input.companyId,
+    );
+
+    if (walletRows.length === 0) {
+      throw new Error(
+        "Scan wallet not found. Allocate scan credits before consuming.",
+      );
+    }
+
+    const wallet = walletRows[0];
+
+    if (wallet.balance < credits) {
+      throw new Error(
+        `Insufficient scan credits. Required: ${credits}. Available: ${wallet.balance}.`,
+      );
+    }
+
+    const newBalance = wallet.balance - credits;
+
+    const updatedWalletRows = await tx.$queryRawUnsafe<ScanWallet[]>(
+      `
+      UPDATE scan_wallets
+      SET
+        balance = $1,
+        "lifetimeConsumed" = "lifetimeConsumed" + $2,
+        "updatedAt" = CURRENT_TIMESTAMP
+      WHERE id = $3
+      RETURNING
+        id,
+        "companyId",
+        balance,
+        "lifetimeAllocated",
+        "lifetimeConsumed",
+        "createdAt",
+        "updatedAt"
+      `,
+      newBalance,
+      credits,
+      wallet.id,
+    );
+
+    const transactionId = this.generateId();
+
+    const transactionRows = await tx.$queryRawUnsafe<ScanTransaction[]>(
+      `
+      INSERT INTO scan_transactions (
+        id,
+        "walletId",
+        "companyId",
+        type,
+        credits,
+        "balanceAfter",
+        "referenceType",
+        "referenceId",
+        "idempotencyKey",
+        description
+      )
+      VALUES (
+        $1,
+        $2,
+        $3,
+        'CONSUMPTION',
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9
+      )
+      RETURNING
+        id,
+        "walletId",
+        "companyId",
+        type,
+        credits,
+        "balanceAfter",
+        "referenceType",
+        "referenceId",
+        "idempotencyKey",
+        description,
+        "createdAt"
+      `,
+      transactionId,
+      wallet.id,
+      input.companyId,
+      -credits,
+      newBalance,
+      input.referenceType ?? null,
+      input.referenceId ?? null,
+      input.idempotencyKey?.trim() || null,
+      input.description ?? null,
+    );
+
+    return {
+      wallet: updatedWalletRows[0],
+      transaction: transactionRows[0],
+      alreadyProcessed: false,
+    };
+  }
+
+  async getTransactions(
+    companyId: string,
+    limit = 50,
+  ): Promise<ScanTransaction[]> {
+    this.assertCompanyId(companyId);
+
+    const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 500);
+
+    return prisma.$queryRawUnsafe<ScanTransaction[]>(
+      `
+      SELECT
+        id,
+        "walletId",
+        "companyId",
+        type,
+        credits,
+        "balanceAfter",
+        "referenceType",
+        "referenceId",
+        "idempotencyKey",
+        description,
+        "createdAt"
+      FROM scan_transactions
+      WHERE "companyId" = $1
+      ORDER BY "createdAt" DESC
+      LIMIT $2
+      `,
+      companyId,
+      safeLimit,
+    );
+  }
+}
+
+export const scanWalletService = new ScanWalletService();
+
+
+============================================================
+FILE: src\controllers\wallet\wallet.controller.ts
+============================================================
+import type { Response } from "express";
+import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
+import { scanWalletService } from "../../services/wallet/scan-wallet.service.js";
+import { companyContextService } from "../../services/identity/company-context.service.js";
+
+export async function getWallet(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  const firebaseUid = req.firebaseUser?.uid;
+
+  if (!firebaseUid) {
+    res.status(401).json({
+      success: false,
+      message: "Authentication required.",
+    });
+    return;
+  }
+
+  const { company } = await companyContextService.getCompany(firebaseUid);
+
+  const wallet = await scanWalletService.get(company.id);
+
+  res.json({
+    success: true,
+    data: wallet,
+  });
+}
+
+export async function consumeCredits(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  const firebaseUid = req.firebaseUser?.uid;
+
+  if (!firebaseUid) {
+    res.status(401).json({
+      success: false,
+      message: "Authentication required.",
+    });
+    return;
+  }
+
+  const { company } = await companyContextService.getCompany(firebaseUid);
+
+  const credits = Number(req.body?.credits ?? 1);
+
+  if (!Number.isInteger(credits) || credits <= 0) {
+    res.status(400).json({
+      success: false,
+      message: "credits must be a positive integer.",
+    });
+    return;
+  }
+
+  try {
+    const transaction = await scanWalletService.consume(
+      company.id,
+      credits,
+      req.body?.description ?? "Packing scan",
+      req.body?.referenceType,
+      req.body?.referenceId,
+      req.body?.idempotencyKey,
+    );
+
+    res.json({
+      success: true,
+      data: transaction,
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "INSUFFICIENT_SCAN_CREDITS"
+    ) {
+      res.status(409).json({
+        success: false,
+        code: "INSUFFICIENT_SCAN_CREDITS",
+        message: "Insufficient scan credits.",
+      });
+      return;
+    }
+
+    throw error;
+  }
+}
+
+export async function topUpCredits(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  const firebaseUid = req.firebaseUser?.uid;
+
+  if (!firebaseUid) {
+    res.status(401).json({
+      success: false,
+      message: "Authentication required.",
+    });
+    return;
+  }
+
+  const { user, company } = await companyContextService.getCompany(firebaseUid);
+
+  if (!["PLATFORM_ADMIN", "OWNER", "ADMIN"].includes(user.role)) {
+    res.status(403).json({
+      success: false,
+      message: "You do not have permission to top up credits.",
+    });
+    return;
+  }
+
+  const credits = Number(req.body?.credits);
+
+  if (!Number.isInteger(credits) || credits <= 0) {
+    res.status(400).json({
+      success: false,
+      message: "credits must be a positive integer.",
+    });
+    return;
+  }
+
+  const transaction = await scanWalletService.topUp(
+    company.id,
+    credits,
+    req.body?.description ?? "Scan credit top-up",
+    req.body?.referenceType,
+    req.body?.referenceId,
+    req.body?.idempotencyKey,
+  );
+
+  res.json({
+    success: true,
+    data: transaction,
+  });
+}
+
+export async function refundCredits(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  const firebaseUid = req.firebaseUser?.uid;
+
+  if (!firebaseUid) {
+    res.status(401).json({
+      success: false,
+      message: "Authentication required.",
+    });
+    return;
+  }
+
+  const { user, company } = await companyContextService.getCompany(firebaseUid);
+
+  if (!["PLATFORM_ADMIN", "OWNER", "ADMIN"].includes(user.role)) {
+    res.status(403).json({
+      success: false,
+      message: "You do not have permission to refund credits.",
+    });
+    return;
+  }
+
+  const credits = Number(req.body?.credits);
+
+  if (!Number.isInteger(credits) || credits <= 0) {
+    res.status(400).json({
+      success: false,
+      message: "credits must be a positive integer.",
+    });
+    return;
+  }
+
+  const transaction = await scanWalletService.refund(
+    company.id,
+    credits,
+    req.body?.description ?? "Scan credit refund",
+    req.body?.referenceType,
+    req.body?.referenceId,
+    req.body?.idempotencyKey,
+  );
+
+  res.json({
+    success: true,
+    data: transaction,
+  });
+}
+
+
+============================================================
+FILE: src\routes\wallet.routes.ts
+============================================================
+import { Router } from "express";
+import {
+  getWallet,
+  consumeCredits,
+  topUpCredits,
+  refundCredits,
+} from "../controllers/wallet/wallet.controller.js";
+
+const router = Router();
+
+router.get("/", getWallet);
+router.post("/consume", consumeCredits);
+router.post("/top-up", topUpCredits);
+router.post("/refund", refundCredits);
+
+export default router;
+
+
+============================================================
+FILE: src\services\packing\packing.service.ts
+============================================================
+import { randomUUID } from "node:crypto";
+import { prisma } from "../../config/prisma.js";
+import { scanWalletService } from "../scan-wallet/scan-wallet.service.js";
+
+export interface StartPackingInput {
+  awb: string;
+  warehouseId: string;
+  firebaseUid: string;
+  email?: string;
+  name?: string;
+}
+
+type RecordingRow = {
+  id: string;
+  companyId: string;
+  operatorId: string;
+  stationId: string | null;
+  status: string;
+  startedAt: Date;
+  stoppedAt: Date | null;
+  segmentCount: number;
+  b2KeyPrefix: string | null;
+  createdAt: Date;
+  orderId: string | null;
+  mode: string;
+};
+
+function mapRecording(row: RecordingRow) {
+  return {
+    id: row.id,
+    companyId: row.companyId,
+    operatorId: row.operatorId,
+    stationId: row.stationId,
+    status: row.status,
+    startedAt: row.startedAt,
+    stoppedAt: row.stoppedAt,
+    segmentCount: row.segmentCount,
+    b2KeyPrefix: row.b2KeyPrefix,
+    createdAt: row.createdAt,
+    orderId: row.orderId,
+    mode: row.mode,
+  };
+}
+
+async function getRecordingById(
+  id: string,
+  companyId: string,
+): Promise<RecordingRow | null> {
+  const rows = await prisma.$queryRawUnsafe<RecordingRow[]>(
+    `
+      SELECT
+        id,
+        "companyId",
+        "operatorId",
+        "stationId",
+        status,
+        "startedAt",
+        "stoppedAt",
+        "segmentCount",
+        "b2KeyPrefix",
+        "createdAt",
+        "orderId",
+        mode
+      FROM "Recording"
+      WHERE id = $1
+        AND "companyId" = $2
+      LIMIT 1
+    `,
+    id,
+    companyId,
+  );
+
+  return rows[0] ?? null;
+}
+
+export class PackingService {
+  async start(input: StartPackingInput) {
+    const awb = String(input.awb ?? "").trim();
+
+    if (!awb) {
+      throw new Error("AWB is required.");
+    }
+
+    if (!input.warehouseId?.trim()) {
+      throw new Error("Warehouse ID is required.");
+    }
+
+    if (!input.firebaseUid?.trim()) {
+      throw new Error("Authenticated Firebase user is required.");
+    }
+
+    const context = await prisma.$queryRawUnsafe<
+      Array<{
+        userId: string;
+        userCompanyId: string;
+        userRole: string;
+        userStatus: string;
+        userWarehouseId: string | null;
+        userStationId: string | null;
+        warehouseId: string;
+        warehouseCompanyId: string;
+        warehouseStatus: string;
+        orderId: string;
+        orderCompanyId: string;
+        orderWarehouseId: string | null;
+        orderStatus: string;
+        orderAwb: string | null;
+        marketplaceOrderId: string | null;
+      }>
+    >(
+      `
+        SELECT
+          u.id AS "userId",
+          u."companyId" AS "userCompanyId",
+          u.role::text AS "userRole",
+          u.status::text AS "userStatus",
+          u."warehouseId" AS "userWarehouseId",
+          u."stationId" AS "userStationId",
+
+          w.id AS "warehouseId",
+          w."companyId" AS "warehouseCompanyId",
+          w.status::text AS "warehouseStatus",
+
+          o.id AS "orderId",
+          o."companyId" AS "orderCompanyId",
+          o."warehouseId" AS "orderWarehouseId",
+          o.status::text AS "orderStatus",
+          o.awb AS "orderAwb",
+          o."marketplaceOrderId" AS "marketplaceOrderId"
+        FROM "User" u
+        JOIN "Warehouse" w
+          ON w.id = $2
+        JOIN "Order" o
+          ON o.awb = $3
+        WHERE u."clerkId" = $1
+        LIMIT 1
+      `,
+      input.firebaseUid.trim(),
+      input.warehouseId.trim(),
+      awb,
+    );
+
+    if (context.length === 0) {
+      const userRows = await prisma.$queryRawUnsafe<
+        Array<{
+          id: string;
+          companyId: string;
+          role: string;
+          status: string;
+          warehouseId: string | null;
+        }>
+      >(
+        `
+          SELECT
+            id,
+            "companyId",
+            role::text AS role,
+            status::text AS status,
+            "warehouseId"
+          FROM "User"
+          WHERE "clerkId" = $1
+          LIMIT 1
+        `,
+        input.firebaseUid.trim(),
+      );
+
+      if (userRows.length === 0) {
+        throw new Error("Authenticated user is not registered.");
+      }
+
+      if (userRows[0].status !== "active") {
+        throw new Error("User account is inactive.");
+      }
+
+      throw new Error(
+        "Warehouse or order not found for the authenticated company.",
+      );
+    }
+
+    const row = context[0];
+
+    if (row.userStatus !== "active") {
+      throw new Error("User account is inactive.");
+    }
+
+    if (
+      row.userRole !== "company_admin" &&
+      row.userRole !== "packing_operator"
+    ) {
+      throw new Error("User is not authorized for packing.");
+    }
+
+    if (row.warehouseStatus !== "active") {
+      throw new Error("Warehouse is inactive.");
+    }
+
+    if (row.userCompanyId !== row.warehouseCompanyId) {
+      throw new Error("Authenticated user does not belong to this company.");
+    }
+
+    if (row.orderCompanyId !== row.warehouseCompanyId) {
+      throw new Error("Shipment does not belong to this warehouse company.");
+    }
+
+    if (
+      row.orderWarehouseId &&
+      row.orderWarehouseId !== row.warehouseId
+    ) {
+      throw new Error("Order does not belong to the selected warehouse.");
+    }
+
+    if (
+      row.userWarehouseId &&
+      row.userWarehouseId !== row.warehouseId
+    ) {
+      throw new Error("User is not assigned to the selected warehouse.");
+    }
+
+    const existing = await prisma.$queryRawUnsafe<RecordingRow[]>(
+      `
+        SELECT
+          id,
+          "companyId",
+          "operatorId",
+          "stationId",
+          status,
+          "startedAt",
+          "stoppedAt",
+          "segmentCount",
+          "b2KeyPrefix",
+          "createdAt",
+          "orderId",
+          mode
+        FROM "Recording"
+        WHERE "companyId" = $1
+          AND "operatorId" = $2
+          AND "orderId" = $3
+          AND status IN ('started', 'paused')
+        ORDER BY "startedAt" DESC
+        LIMIT 1
+      `,
+      row.userCompanyId,
+      row.userId,
+      row.orderId,
+    );
+
+    if (existing[0]) {
+      return mapRecording(existing[0]);
+    }
+
+    const recordingId = randomUUID();
+    const idempotencyKey = `packing-recording:${recordingId}:scan`;
+
+    const recording = await prisma.$transaction(async (tx) => {
+      await scanWalletService.consumeScansInTransaction(tx, {
+        companyId: row.userCompanyId,
+        credits: 1,
+        referenceType: "PACKING_RECORDING",
+        referenceId: recordingId,
+        idempotencyKey,
+        description: `Packing scan for AWB ${awb}`,
+      });
+
+      await tx.$executeRawUnsafe(
+        `
+          INSERT INTO "Recording" (
+            id,
+            "companyId",
+            "operatorId",
+            "stationId",
+            status,
+            "startedAt",
+            "stoppedAt",
+            "segmentCount",
+            "b2KeyPrefix",
+            "createdAt",
+            "orderId",
+            mode
+          )
+          VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            'started'::"RecordingStatus",
+            CURRENT_TIMESTAMP,
+            NULL,
+            0,
+            $5,
+            CURRENT_TIMESTAMP,
+            $6,
+            'forward'::"RecordingMode"
+          )
+        `,
+        recordingId,
+        row.userCompanyId,
+        row.userId,
+        row.userStationId,
+        `companies/${row.userCompanyId}/recordings/${recordingId}`,
+        row.orderId,
+      );
+
+      await tx.$executeRawUnsafe(
+        `
+          UPDATE "Order"
+          SET
+            "assignedOperatorId" = $1,
+            "updatedAt" = CURRENT_TIMESTAMP
+          WHERE id = $2
+            AND "companyId" = $3
+        `,
+        row.userId,
+        row.orderId,
+        row.userCompanyId,
+      );
+
+      const created = await tx.$queryRawUnsafe<RecordingRow[]>(
+        `
+          SELECT
+            id,
+            "companyId",
+            "operatorId",
+            "stationId",
+            status,
+            "startedAt",
+            "stoppedAt",
+            "segmentCount",
+            "b2KeyPrefix",
+            "createdAt",
+            "orderId",
+            mode
+          FROM "Recording"
+          WHERE id = $1
+            AND "companyId" = $2
+          LIMIT 1
+        `,
+        recordingId,
+        row.userCompanyId,
+      );
+
+      if (!created[0]) {
+        throw new Error("Unable to create recording.");
+      }
+
+      return created[0];
+    });
+
+    return mapRecording(recording);
+  }
+
+  async get(id: string) {
+    if (!id?.trim()) {
+      throw new Error("Recording ID is required.");
+    }
+
+    const rows = await prisma.$queryRawUnsafe<RecordingRow[]>(
+      `
+        SELECT
+          r.id,
+          r."companyId",
+          r."operatorId",
+          r."stationId",
+          r.status,
+          r."startedAt",
+          r."stoppedAt",
+          r."segmentCount",
+          r."b2KeyPrefix",
+          r."createdAt",
+          r."orderId",
+          r.mode
+        FROM "Recording" r
+        WHERE r.id = $1
+          AND r."companyId" = (
+            SELECT "companyId"
+            FROM "User"
+            WHERE id = r."operatorId"
+            LIMIT 1
+          )
+        LIMIT 1
+      `,
+      id,
+    );
+
+    return rows[0] ? mapRecording(rows[0]) : null;
+  }
+
+  async complete(id: string) {
+    if (!id?.trim()) {
+      throw new Error("Recording ID is required.");
+    }
+
+    const existing = await prisma.$queryRawUnsafe<
+      Array<RecordingRow & { evidenceCount: number }>
+    >(
+      `
+        SELECT
+          r.id,
+          r."companyId",
+          r."operatorId",
+          r."stationId",
+          r.status,
+          r."startedAt",
+          r."stoppedAt",
+          r."segmentCount",
+          r."b2KeyPrefix",
+          r."createdAt",
+          r."orderId",
+          r.mode,
+          (
+            SELECT COUNT(*)::int
+            FROM "Evidence" e
+            WHERE e."recordingId" = r.id
+              AND e."companyId" = r."companyId"
+          ) AS "evidenceCount"
+        FROM "Recording" r
+        WHERE r.id = $1
+        LIMIT 1
+      `,
+      id,
+    );
+
+    if (!existing[0]) {
+      throw new Error("Recording not found.");
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(
+        `
+          UPDATE "Recording"
+          SET
+            status = 'completed'::"RecordingStatus",
+            "stoppedAt" = COALESCE("stoppedAt", CURRENT_TIMESTAMP)
+          WHERE id = $1
+        `,
+        id,
+      );
+
+      if (existing[0].orderId && existing[0].evidenceCount > 0) {
+        await tx.$executeRawUnsafe(
+          `
+            UPDATE "Order"
+            SET
+              status = 'evidence_ready'::"OrderStatus",
+              "updatedAt" = CURRENT_TIMESTAMP
+            WHERE id = $1
+              AND "companyId" = $2
+          `,
+          existing[0].orderId,
+          existing[0].companyId,
+        );
+      }
+
+      const rows = await tx.$queryRawUnsafe<RecordingRow[]>(
+        `
+          SELECT
+            id,
+            "companyId",
+            "operatorId",
+            "stationId",
+            status,
+            "startedAt",
+            "stoppedAt",
+            "segmentCount",
+            "b2KeyPrefix",
+            "createdAt",
+            "orderId",
+            mode
+          FROM "Recording"
+          WHERE id = $1
+          LIMIT 1
+        `,
+        id,
+      );
+
+      if (!rows[0]) {
+        throw new Error("Recording not found after completion.");
+      }
+
+      return rows[0];
+    });
+
+    return mapRecording(result);
+  }
+
+  async cancel(id: string) {
+    if (!id?.trim()) {
+      throw new Error("Recording ID is required.");
+    }
+
+    const existing = await prisma.$queryRawUnsafe<RecordingRow[]>(
+      `
+        SELECT
+          id,
+          "companyId",
+          "operatorId",
+          "stationId",
+          status,
+          "startedAt",
+          "stoppedAt",
+          "segmentCount",
+          "b2KeyPrefix",
+          "createdAt",
+          "orderId",
+          mode
+        FROM "Recording"
+        WHERE id = $1
+        LIMIT 1
+      `,
+      id,
+    );
+
+    if (!existing[0]) {
+      throw new Error("Recording not found.");
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(
+        `
+          UPDATE "Recording"
+          SET
+            status = 'failed'::"RecordingStatus",
+            "stoppedAt" = COALESCE("stoppedAt", CURRENT_TIMESTAMP)
+          WHERE id = $1
+        `,
+        id,
+      );
+
+      const rows = await tx.$queryRawUnsafe<RecordingRow[]>(
+        `
+          SELECT
+            id,
+            "companyId",
+            "operatorId",
+            "stationId",
+            status,
+            "startedAt",
+            "stoppedAt",
+            "segmentCount",
+            "b2KeyPrefix",
+            "createdAt",
+            "orderId",
+            mode
+          FROM "Recording"
+          WHERE id = $1
+          LIMIT 1
+        `,
+        id,
+      );
+
+      if (!rows[0]) {
+        throw new Error("Recording not found after cancellation.");
+      }
+
+      return rows[0];
+    });
+
+    return mapRecording(result);
+  }
+
+  async getByShipment(shipmentId: string) {
+    if (!shipmentId?.trim()) {
+      throw new Error("Shipment ID is required.");
+    }
+
+    const rows = await prisma.$queryRawUnsafe<RecordingRow[]>(
+      `
+        SELECT
+          r.id,
+          r."companyId",
+          r."operatorId",
+          r."stationId",
+          r.status,
+          r."startedAt",
+          r."stoppedAt",
+          r."segmentCount",
+          r."b2KeyPrefix",
+          r."createdAt",
+          r."orderId",
+          r.mode
+        FROM "Recording" r
+        JOIN "Order" o
+          ON o.id = r."orderId"
+        WHERE o.id = $1
+          AND r."companyId" = o."companyId"
+        ORDER BY r."startedAt" DESC
+      `,
+      shipmentId,
+    );
+
+    return rows.map(mapRecording);
+  }
+}
+
+export const packingService = new PackingService();
+
+
+============================================================
+FILE: src\controllers\packing.controller.ts
+============================================================
+import type { Response } from "express";
+import type { AuthenticatedRequest } from "../middleware/firebase-auth.middleware.js";
+import { PackingService } from "../services/packing/packing.service.js";
+
+const service = new PackingService();
+
+export async function startPacking(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const { awb, warehouseId } = req.body ?? {};
+
+    if (!awb || !warehouseId) {
+      res.status(400).json({
+        success: false,
+        message: "awb and warehouseId are required.",
+      });
+      return;
+    }
+
+    if (!req.firebaseUser?.uid) {
+      res.status(401).json({
+        success: false,
+        message: "Authenticated Firebase user is required.",
+      });
+      return;
+    }
+
+    const session = await service.start({
+      awb: String(awb),
+      warehouseId: String(warehouseId),
+      firebaseUid: req.firebaseUser.uid,
+      email: req.firebaseUser.email,
+      name: req.firebaseUser.name,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: session,
+    });
+  } catch (error) {
+    console.error("Packing session start failed:", error);
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to start packing session.";
+
+    const status =
+      message.includes("not found") ||
+      message.includes("does not belong") ||
+      message.includes("inactive")
+        ? 404
+        : 400;
+
+    res.status(status).json({
+      success: false,
+      message,
+    });
+  }
+}
+
+export async function getPacking(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const id = String(req.params.id ?? "");
+
+    const session = await service.get(id);
+
+    if (!session) {
+      res.status(404).json({
+        success: false,
+        message: "Packing session not found.",
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: session,
+    });
+  } catch (error) {
+    console.error("Packing session lookup failed:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to load packing session.",
+    });
+  }
+}
+
+export async function completePacking(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const id = String(req.params.id ?? "");
+
+    const session = await service.complete(id);
+
+    res.json({
+      success: true,
+      data: session,
+    });
+  } catch (error) {
+    console.error("Packing completion failed:", error);
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to complete packing session.";
+
+    res.status(message.includes("not found") ? 404 : 400).json({
+      success: false,
+      message,
+    });
+  }
+}
+
+export async function cancelPacking(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const id = String(req.params.id ?? "");
+
+    const session = await service.cancel(id);
+
+    res.json({
+      success: true,
+      data: session,
+    });
+  } catch (error) {
+    console.error("Packing cancellation failed:", error);
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to cancel packing session.";
+
+    res.status(message.includes("not found") ? 404 : 400).json({
+      success: false,
+      message,
+    });
+  }
+}
+
+export async function getPackingByShipment(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const shipmentId = String(req.params.shipmentId ?? "");
+
+    if (!shipmentId) {
+      res.status(400).json({
+        success: false,
+        message: "Shipment ID is required.",
+      });
+      return;
+    }
+
+    const sessions = await service.getByShipment(shipmentId);
+
+    res.json({
+      success: true,
+      data: sessions,
+      count: sessions.length,
+    });
+  } catch (error) {
+    console.error("Shipment packing sessions lookup failed:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to load packing sessions.",
+    });
+  }
+}
+
+
+============================================================
+FILE: src\services\evidence\evidence.service.ts
+============================================================
+import { prisma } from "../../config/prisma.js";
+
+export interface CreateEvidenceInput {
+  recordingId: string;
+  type: "VIDEO" | "PHOTO";
+  fileName?: string;
+  storageKey?: string;
+  contentType?: string;
+  sizeBytes?: number;
+  durationSeconds?: number;
+}
+
+type EvidenceRow = {
+  id: string;
+  companyId: string;
+  recordingId: string;
+  status: string;
+  frameCount: number;
+  frames: unknown;
+  checksum: string | null;
+  createdAt: Date;
+  orderId: string | null;
+};
+
+export class EvidenceService {
+  async create(input: CreateEvidenceInput): Promise<EvidenceRow> {
+    const recordingRows = await prisma.$queryRawUnsafe<
+      Array<{
+        id: string;
+        companyId: string;
+        orderId: string | null;
+        status: string;
+      }>
+    >(
+      `
+        SELECT
+          r.id,
+          r."companyId",
+          r."orderId",
+          r.status::text AS status
+        FROM "Recording" r
+        WHERE r.id = $1
+        LIMIT 1
+      `,
+      input.recordingId,
+    );
+
+    const recording = recordingRows[0];
+
+    if (!recording) {
+      throw new Error("RECORDING_NOT_FOUND");
+    }
+
+    if (!["started", "paused", "completed"].includes(recording.status)) {
+      throw new Error("RECORDING_NOT_READY_FOR_EVIDENCE");
+    }
+
+    const existingRows = await prisma.$queryRawUnsafe<EvidenceRow[]>(
+      `
+        SELECT
+          e.id,
+          e."companyId",
+          e."recordingId",
+          e.status::text AS status,
+          e."frameCount",
+          e.frames,
+          e.checksum,
+          e."createdAt",
+          e."orderId"
+        FROM "Evidence" e
+        WHERE e."recordingId" = $1
+        LIMIT 1
+      `,
+      input.recordingId,
+    );
+
+    if (existingRows[0]) {
+      return existingRows[0];
+    }
+
+    const evidenceId = crypto.randomUUID();
+
+    const createdRows = await prisma.$queryRawUnsafe<EvidenceRow[]>(
+      `
+        INSERT INTO "Evidence"
+          ("id", "companyId", "recordingId", "status", "frameCount", "frames", "checksum", "createdAt", "orderId")
+        VALUES
+          ($1, $2, $3, 'processing'::"EvidenceStatus", 0, '[]'::jsonb, NULL, CURRENT_TIMESTAMP, $4)
+        RETURNING
+          "id",
+          "companyId",
+          "recordingId",
+          status::text AS status,
+          "frameCount",
+          frames,
+          checksum,
+          "createdAt",
+          "orderId"
+      `,
+      evidenceId,
+      recording.companyId,
+      recording.id,
+      recording.orderId,
+    );
+
+    const evidence = createdRows[0];
+
+    if (!evidence) {
+      throw new Error("EVIDENCE_CREATION_FAILED");
+    }
+
+    return evidence;
+  }
+
+  async getByAwb(awb: string, companyId: string): Promise<EvidenceRow[]> {
+    return prisma.$queryRawUnsafe<EvidenceRow[]>(
+      `
+        SELECT
+          e.id,
+          e."companyId",
+          e."recordingId",
+          e.status::text AS status,
+          e."frameCount",
+          e.frames,
+          e.checksum,
+          e."createdAt",
+          e."orderId"
+        FROM "Evidence" e
+        JOIN "Order" o
+          ON o.id = e."orderId"
+        WHERE e."companyId" = $1
+          AND o.awb = $2
+        ORDER BY e."createdAt" DESC
+      `,
+      companyId,
+      awb,
+    );
+  }
+}
+
+export const evidenceService = new EvidenceService();
+
+
+============================================================
+FILE: src\controllers\evidence.controller.ts
+============================================================
+import type { Response } from "express";
+import type { AuthenticatedRequest } from "../middleware/firebase-auth.middleware.js";
+import { CompanyContextService } from "../services/identity/company-context.service.js";
+import { EvidenceService } from "../services/evidence/evidence.service.js";
+
+const service = new EvidenceService();
+const companyContextService = new CompanyContextService();
+
+export async function createEvidence(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  try {
+    const {
+      recordingId,
+      type,
+      fileName,
+      storageKey,
+      contentType,
+      sizeBytes,
+      durationSeconds,
+    } = req.body ?? {};
+
+    if (!recordingId) {
+      return res.status(400).json({
+        success: false,
+        message: "recordingId is required.",
+      });
+    }
+
+    const firebaseUid = req.firebaseUser?.uid;
+
+    if (!firebaseUid) {
+      return res.status(401).json({
+        success: false,
+        message: "Authenticated Firebase user is required.",
+      });
+    }
+
+    const user = await companyContextService.getUser(firebaseUid);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User identity not found.",
+      });
+    }
+
+    if (user.status !== "active") {
+      return res.status(403).json({
+        success: false,
+        message: "User is not active.",
+      });
+    }
+
+    const normalizedType =
+      String(type ?? "VIDEO").toUpperCase() === "PHOTO" ? "PHOTO" : "VIDEO";
+
+    const evidence = await service.create({
+      recordingId: String(recordingId),
+      type: normalizedType,
+      fileName: fileName == null ? undefined : String(fileName),
+      storageKey: storageKey == null ? undefined : String(storageKey),
+      contentType: contentType == null ? undefined : String(contentType),
+      sizeBytes: sizeBytes == null ? undefined : Number(sizeBytes),
+      durationSeconds:
+        durationSeconds == null ? undefined : Number(durationSeconds),
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: evidence,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to create evidence.";
+
+    if (message === "RECORDING_NOT_FOUND") {
+      return res.status(404).json({
+        success: false,
+        message: "Recording not found.",
+      });
+    }
+
+    if (message === "RECORDING_NOT_READY_FOR_EVIDENCE") {
+      return res.status(409).json({
+        success: false,
+        message: "Recording is not ready for evidence.",
+      });
+    }
+
+    if (message === "EVIDENCE_CREATION_FAILED") {
+      return res.status(500).json({
+        success: false,
+        message: "Evidence creation failed.",
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message,
+    });
+  }
+}
+
+export async function listEvidence(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  try {
+    const awb = String(req.params.awb ?? "").trim();
+
+    if (!awb) {
+      return res.status(400).json({
+        success: false,
+        message: "AWB is required.",
+      });
+    }
+
+    const firebaseUid = req.firebaseUser?.uid;
+
+    if (!firebaseUid) {
+      return res.status(401).json({
+        success: false,
+        message: "Authenticated Firebase user is required.",
+      });
+    }
+
+    const user = await companyContextService.getUser(firebaseUid);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User identity not found.",
+      });
+    }
+
+    if (user.status !== "active") {
+      return res.status(403).json({
+        success: false,
+        message: "User is not active.",
+      });
+    }
+
+    const records = await service.getByAwb(awb, user.companyId);
+
+    return res.json({
+      success: true,
+      data: records,
+      count: records.length,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to fetch evidence.";
+
+    return res.status(500).json({
+      success: false,
+      message,
+    });
+  }
+}
+
+
+============================================================
+FILE: src\controllers\storage\storage.controller.ts
+============================================================
+import type { Response } from "express";
+import { entitlementService } from "../../services/plans/entitlement.service.js";
+import { randomUUID, createHash } from "node:crypto";
+import {
+  DeleteObjectCommand,
+  PutObjectCommand,
+  S3Client,
+  GetObjectCommand,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
+import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
+import { companyContextService } from "../../services/identity/company-context.service.js";
+import { prisma } from "../../config/prisma.js";
+import { b2Config } from "../../config/b2.config.js";
+
+const s3 = new S3Client({
+  region: b2Config.region,
+  endpoint: b2Config.endpoint,
+  credentials: {
+    accessKeyId: b2Config.keyId,
+    secretAccessKey: b2Config.applicationKey,
+  },
+});
+
+function requireFirebaseUid(req: AuthenticatedRequest): string {
+  const uid = req.firebaseUser?.uid;
+
+  if (!uid) {
+    throw new Error("AUTHENTICATION_REQUIRED");
+  }
+
+  return uid;
+}
+
+function sanitizeFileName(fileName: string): string {
+  const normalized = fileName
+    .normalize("NFKD")
+    .replace(/[^\w.\-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return normalized || "file";
+}
+
+function getObjectType(
+  value: unknown,
+): "EVIDENCE" | "INVOICE" | "CREDIT_NOTE" | "EXPORT" | "OTHER" {
+  const normalized = String(value ?? "EVIDENCE").toUpperCase();
+
+  if (
+    normalized === "INVOICE" ||
+    normalized === "CREDIT_NOTE" ||
+    normalized === "EXPORT" ||
+    normalized === "OTHER"
+  ) {
+    return normalized;
+  }
+
+  return "EVIDENCE";
+}
+
+function jsonSafe<T>(value: T): T {
+  return JSON.parse(
+    JSON.stringify(value, (_key, currentValue) =>
+      typeof currentValue === "bigint"
+        ? currentValue.toString()
+        : currentValue,
+    ),
+  ) as T;
+}
+
+async function getCompanyContext(req: AuthenticatedRequest) {
+  const firebaseUid = requireFirebaseUid(req);
+  return companyContextService.getCompany(firebaseUid);
+}
+
+async function validateRecording(
+  recordingId: string,
+  companyId: string,
+) {
+  const rows = await prisma.$queryRawUnsafe<Array<{
+    id: string;
+    companyId: string;
+    operatorId: string;
+    orderId: string | null;
+    status: string;
+    mode: string;
+    segmentCount: number;
+    b2KeyPrefix: string | null;
+  }>>(
+    `
+      SELECT
+        r.id,
+        r."companyId",
+        r."operatorId",
+        r."orderId",
+        r.status::text AS status,
+        r.mode::text AS mode,
+        r."segmentCount",
+        r."b2KeyPrefix"
+      FROM "Recording" r
+      WHERE r.id = $1
+        AND r."companyId" = $2
+      LIMIT 1
+    `,
+    recordingId,
+    companyId,
+  );
+
+  const recording = rows[0];
+
+  if (!recording) {
+    throw new Error("RECORDING_NOT_FOUND");
+  }
+
+  if (!["started", "paused"].includes(recording.status)) {
+    throw new Error("RECORDING_NOT_ACTIVE");
+  }
+
+  return recording;
+}
+
+async function uploadEvidence(
+  req: AuthenticatedRequest,
+  res: Response,
+  mediaType: "VIDEO" | "PHOTO",
+): Promise<void> {
+  let storageKey = "";
+
+  try {
+    const { company } = await getCompanyContext(req);
+
+    const file = req.file;
+
+    if (!file) {
+      res.status(400).json({
+        success: false,
+        message: "File is required. Use multipart/form-data field 'file'.",
+      });
+      return;
+    }
+
+    const recordingId = String(
+      req.body?.recordingId ?? "",
+    ).trim();
+
+    if (!recordingId) {
+      res.status(400).json({
+        success: false,
+        message: "recordingId is required.",
+      });
+      return;
+    }
+
+    const session = await validateRecording(
+      recordingId,
+      company.id,
+    );
+
+    const originalFileName = file.originalname || "file";
+    const safeFileName = sanitizeFileName(originalFileName);
+
+    const extension =
+      safeFileName.includes(".")
+        ? safeFileName.substring(safeFileName.lastIndexOf("."))
+        : "";
+
+    const date = new Date().toISOString().slice(0, 10);
+
+    storageKey = [
+      company.id,
+      "evidence",
+      mediaType.toLowerCase(),
+      date,
+      `${randomUUID()}${extension}`,
+    ].join("/");
+
+    const checksum = createHash("sha256")
+      .update(file.buffer)
+      .digest("hex");
+
+    await entitlementService.assertStorageCapacity(company.id, file.size);
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: b2Config.bucketName,
+        Key: storageKey,
+        Body: file.buffer,
+        ContentType: file.mimetype || "application/octet-stream",
+        Metadata: {
+          companyId: company.id,
+          recordingId: session.id,
+          mediaType,
+          originalFileName: safeFileName,
+          checksum,
+        },
+      }),
+    );
+
+    const idempotencyHeader =
+      req.headers["idempotency-key"] ??
+      req.headers["x-idempotency-key"];
+
+    const idempotencyKey = Array.isArray(idempotencyHeader)
+      ? idempotencyHeader[0]
+      : idempotencyHeader;
+
+    const result = await prisma.$transaction(async (tx) => {
+      const lockedRows = await tx.$queryRawUnsafe<Array<{
+        id: string;
+        companyId: string;
+        orderId: string | null;
+        segmentCount: number;
+      }>>(
+        `
+          SELECT
+            r.id,
+            r."companyId",
+            r."orderId",
+            r."segmentCount"
+          FROM "Recording" r
+          WHERE r.id = $1
+            AND r."companyId" = $2
+          FOR UPDATE
+        `,
+        recordingId,
+        company.id,
+      );
+
+      const recording = lockedRows[0];
+
+      if (!recording) {
+        throw new Error("RECORDING_NOT_FOUND");
+      }
+
+      const sequence = recording.segmentCount + 1;
+      const segmentId = randomUUID();
+
+      const segment = await tx.$queryRawUnsafe<Array<{
+        id: string;
+        recordingId: string;
+        sequence: number;
+        b2Key: string;
+        checksum: string;
+        sizeBytes: bigint;
+        uploadedAt: Date | null;
+      }>>(
+        `
+          INSERT INTO "RecordingSegment"
+            ("id", "recordingId", "sequence", "b2Key", "checksum", "sizeBytes", "uploadedAt")
+          VALUES
+            ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+          RETURNING
+            "id",
+            "recordingId",
+            "sequence",
+            "b2Key",
+            "checksum",
+            "sizeBytes",
+            "uploadedAt"
+        `,
+        segmentId,
+        recording.id,
+        sequence,
+        storageKey,
+        checksum,
+        BigInt(file.size),
+      );
+
+      await tx.$executeRawUnsafe(
+        `
+          UPDATE "Recording"
+          SET "segmentCount" = $1
+          WHERE id = $2
+            AND "companyId" = $3
+        `,
+        sequence,
+        recording.id,
+        company.id,
+      );
+
+      return {
+        recording,
+        segment: segment[0],
+      };
+    });
+
+    res.status(201).json({
+      success: true,
+      data: jsonSafe({
+        id: result.segment.id,
+        type: mediaType,
+        status: "uploaded",
+        fileName: originalFileName,
+        storageKey,
+        contentType: file.mimetype || null,
+        sizeBytes: file.size,
+        recordingId: result.segment.recordingId,
+        sequence: result.segment.sequence,
+        checksum: result.segment.checksum,
+        uploadedAt: result.segment.uploadedAt,
+      }),
+    });    res.status(201).json({
+      success: true,
+      data: jsonSafe({
+        id: result.segment.id,
+        type: mediaType,
+        status: "uploaded",
+        fileName: originalFileName,
+        storageKey: result.segment.b2Key,
+        contentType: file.mimetype || null,
+        sizeBytes: result.segment.sizeBytes,
+        recordingId: result.segment.recordingId,
+        sequence: result.segment.sequence,
+        checksum: result.segment.checksum,
+        uploadedAt: result.segment.uploadedAt,
+      }),
+    });
+  } catch (error) {
+    console.error(
+      `${mediaType} storage upload failed:`,
+      error,
+    );
+
+    if (storageKey) {
+      try {
+        await s3.send(
+          new DeleteObjectCommand({
+            Bucket: b2Config.bucketName,
+            Key: storageKey,
+          }),
+        );
+      } catch (cleanupError) {
+        console.error(
+          "Failed to clean up uploaded B2 object:",
+          cleanupError,
+        );
+      }
+    }
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to upload file.";
+
+    if (message === "AUTHENTICATION_REQUIRED") {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+      return;
+    }
+
+    if (message === "USER_NOT_FOUND") {
+      res.status(404).json({
+        success: false,
+        message: "Authenticated user is not registered.",
+      });
+      return;
+    }
+
+    if (message === "USER_INACTIVE") {
+      res.status(403).json({
+        success: false,
+        message: "User account is inactive.",
+      });
+      return;
+    }
+
+    if (message === "COMPANY_INACTIVE") {
+      res.status(403).json({
+        success: false,
+        message: "Company account is inactive.",
+      });
+      return;
+    }
+
+    if (message === "RECORDING_NOT_FOUND") {
+      res.status(404).json({
+        success: false,
+        message: "Packing session not found for your company.",
+      });
+      return;
+    }
+
+    if (message.includes("Unique constraint")) {
+      res.status(409).json({
+        success: false,
+        message: "This upload has already been processed.",
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to upload file.",
+    });
+  }
+}
+
+export async function uploadRecording(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  await uploadEvidence(req, res, "VIDEO");
+}
+
+export async function uploadPhoto(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  await uploadEvidence(req, res, "PHOTO");
+}
+
+export async function getMediaUrl(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const { company } = await getCompanyContext(req);
+
+    const storageKey = String(
+      req.query.storageKey ?? "",
+    ).trim();
+
+    if (!storageKey) {
+      res.status(400).json({
+        success: false,
+        message: "storageKey is required.",
+      });
+      return;
+    }
+
+    const storageObject = await prisma.storageObject.findFirst({
+      where: {
+        companyId: company.id,
+        storageKey,
+      },
+      select: {
+        id: true,
+        bucket: true,
+        storageKey: true,
+        contentType: true,
+        sizeBytes: true,
+        originalFileName: true,
+        createdAt: true,
+      },
+    });
+
+    if (!storageObject) {
+      res.status(404).json({
+        success: false,
+        message: "Storage object not found.",
+      });
+      return;
+    }
+
+    const command = new GetObjectCommand({
+      Bucket: storageObject.bucket,
+      Key: storageObject.storageKey,
+    });
+
+    const expiresIn = Math.max(
+      1,
+      Math.min(
+        Number.isFinite(b2Config.signedUrlTtl)
+          ? b2Config.signedUrlTtl
+          : 900,
+        86400,
+      ),
+    );
+
+    const url = await getSignedUrl(s3, command, {
+      expiresIn,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        url,
+        expiresIn,
+        storageKey: storageObject.storageKey,
+        contentType: storageObject.contentType,
+        sizeBytes: storageObject.sizeBytes.toString(),
+        originalFileName: storageObject.originalFileName,
+        createdAt: storageObject.createdAt,
+      },
+    });
+  } catch (error) {
+    console.error("Media URL generation failed:", error);
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to generate media URL.";
+
+    if (message === "AUTHENTICATION_REQUIRED") {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to generate media URL.",
+    });
+  }
+}
+
+export async function getEvidence(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const { company } = await getCompanyContext(req);
+
+    const awb = String(req.params.awb ?? "").trim();
+
+    if (!awb) {
+      res.status(400).json({
+        success: false,
+        message: "AWB is required.",
+      });
+      return;
+    }
+
+    const records = await prisma.evidenceMedia.findMany({
+      where: {
+        packingSession: {
+          shipment: {
+            awb,
+          },
+          order: {
+            companyId: company.id,
+          },
+        },
+      },
+      include: {
+        packingSession: {
+          select: {
+            id: true,
+            status: true,
+            startedAt: true,
+            completedAt: true,
+            orderId: true,
+            shipmentId: true,
+            warehouseId: true,
+            userId: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    res.json({
+      success: true,
+      data: jsonSafe(records),
+      count: records.length,
+    });
+  } catch (error) {
+    console.error("Evidence lookup failed:", error);
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to load evidence.";
+
+    if (message === "AUTHENTICATION_REQUIRED") {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to load evidence.",
+    });
+  }
+}
+
+export async function getStorageUsage(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const { company } = await getCompanyContext(req);
+
+    const [aggregate, grouped, objectCount] = await Promise.all([
+      prisma.storageObject.aggregate({
+        where: {
+          companyId: company.id,
+        },
+        _sum: {
+          sizeBytes: true,
+        },
+      }),
+
+      prisma.storageObject.groupBy({
+        by: ["objectType"],
+        where: {
+          companyId: company.id,
+        },
+        _count: {
+          _all: true,
+        },
+        _sum: {
+          sizeBytes: true,
+        },
+      }),
+
+      prisma.storageObject.count({
+        where: {
+          companyId: company.id,
+        },
+      }),
+    ]);
+
+    const totalBytes = aggregate._sum.sizeBytes ?? BigInt(0);
+
+    res.json({
+      success: true,
+      data: {
+        companyId: company.id,
+        totalObjects: objectCount,
+        totalBytes: totalBytes.toString(),
+        totalGB: Number(totalBytes) / 1024 / 1024 / 1024,
+        byType: grouped.map((item) => ({
+          objectType: item.objectType,
+          objectCount: item._count._all,
+          sizeBytes: (item._sum.sizeBytes ?? BigInt(0)).toString(),
+          sizeGB:
+            Number(item._sum.sizeBytes ?? BigInt(0)) /
+            1024 /
+            1024 /
+            1024,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error("Storage usage lookup failed:", error);
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to load storage usage.";
+
+    if (message === "AUTHENTICATION_REQUIRED") {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to load storage usage.",
+    });
+  }
+}
+
+
+
+
+
+
+============================================================
+FILE: src\routes\storage.routes.ts
+============================================================
+import { Router } from "express";
+import multer from "multer";
+
+import {
+  getEvidence,
+  getStorageUsage,
+  getMediaUrl,
+  uploadPhoto,
+  uploadRecording,
+} from "../controllers/storage/storage.controller.js";
+
+const router = Router();
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 1024 * 1024 * 1024,
+  },
+});
+
+router.post("/recording", upload.single("file"), uploadRecording);
+
+router.post("/photo", upload.single("file"), uploadPhoto);
+
+router.get("/url", getMediaUrl);
+
+router.get("/evidence/:awb", getEvidence);
+
+router.get("/usage", getStorageUsage);
+export default router;
+
+
+============================================================
+FILE: src\services\billing\billing.service.ts
+============================================================
+import crypto from "node:crypto";
+import { prisma } from "../../config/prisma.js";
+import { razorpayService } from "../razorpay/razorpay.service.js";
+import { planConfigurationService } from "./plan-configuration.service.js";
+import { scanWalletService } from "../scan-wallet/scan-wallet.service.js";
+import { invoiceService } from "../invoice/invoice.service.js";
+
+export interface CreatePlanOrderInput {
+  companyId: string;
+  planCode: string;
+  billingInterval?: "MONTHLY" | "YEARLY";
+}
+
+interface InvoicePaymentVerificationRow {
+  id: string;
+  invoiceNumber: string;
+  status: string;
+}
+
+interface BillingPaymentRow {
+  id: string;
+  companyId: string;
+  provider: string;
+  providerOrderId: string | null;
+  providerPaymentId: string | null;
+  status: string;
+  plan: string;
+  billingInterval: string;
+  currency: string;
+  amountPaise: bigint;
+  gstPaise: bigint;
+  totalPaise: bigint;
+  providerSignature: string | null;
+  metadata: unknown;
+  failureReason: string | null;
+  paidAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+function getPlanPricePaise(
+  planCode: string,
+  billingInterval: "MONTHLY" | "YEARLY",
+): number {
+  const plan = planCode.trim().toUpperCase();
+
+  const envName =
+    `RAZORPAY_${plan}_${billingInterval}_PRICE_PAISE`;
+
+  const raw = process.env[envName]?.trim();
+
+  if (!raw) {
+    throw new Error(`PLAN_PRICE_NOT_CONFIGURED:${plan}:${billingInterval}`);
+  }
+
+  const amount = Number(raw);
+
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new Error(`INVALID_PLAN_PRICE:${plan}:${billingInterval}`);
+  }
+
+  return amount;
+}
+
+function getGstPercent(): number {
+  const raw = process.env.RAZORPAY_GST_PERCENT?.trim();
+
+  if (!raw) {
+    return 0;
+  }
+
+  const value = Number(raw);
+
+  if (!Number.isFinite(value) || value < 0 || value > 100) {
+    throw new Error("INVALID_RAZORPAY_GST_PERCENT");
+  }
+
+  return value;
+}
+
+function normalizePlanCode(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function isSupportedPaidPlan(plan: string): boolean {
+  return (
+    plan === "starter" ||
+    plan === "growth" ||
+    plan === "enterprise" ||
+    plan === "professional"
+  );
+}
+
+async function getValidityMonths(
+  plan: string,
+  billingInterval: "MONTHLY" | "YEARLY",
+): Promise<number> {
+  const commercialPlan = await planConfigurationService.getActivePlan(plan);
+
+  if (commercialPlan) {
+    return commercialPlan.validityMonths;
+  }
+
+  /*
+   * Legacy professional plan.
+   *
+   * Preserve the existing MONTHLY/YEARLY behavior until
+   * the legacy plan is intentionally migrated.
+   */
+  return billingInterval === "YEARLY" ? 12 : 1;
+}
+
+export class BillingService {
+  async createPlanOrder(input: CreatePlanOrderInput) {
+    const plan = normalizePlanCode(input.planCode);
+
+    if (!isSupportedPaidPlan(plan)) {
+      throw new Error(`PLAN_NOT_AVAILABLE:${plan}`);
+    }
+
+    const billingInterval = input.billingInterval ?? "MONTHLY";
+
+    /*
+     * Commercial plans use fixed validity periods and fixed
+     * base prices. Legacy professional continues using the
+     * existing MONTHLY/YEARLY environment configuration.
+     */
+    const commercialPlan = await planConfigurationService.getActivePlan(plan);
+
+    const subtotalPaise: bigint = commercialPlan
+      ? commercialPlan.pricePaise
+      : BigInt(
+          await getPlanPricePaise(
+            plan,
+            billingInterval,
+          ),
+        );
+
+    const validityMonths = commercialPlan
+      ? commercialPlan.validityMonths
+      : await getValidityMonths(plan, billingInterval);
+
+    const gstPercent = commercialPlan
+      ? commercialPlan.gstPercent
+      : getGstPercent();
+
+    const gstPaise =
+      (subtotalPaise * BigInt(gstPercent)) / 100n;
+
+    const totalPaise: bigint = subtotalPaise + gstPaise;
+
+    const paymentId = crypto.randomUUID();
+
+    const metadata = {
+      planCode: plan,
+      billingInterval,
+      gstPercent,
+      validityMonths,
+      commercialPlan: Boolean(commercialPlan),
+
+      // Immutable purchase-time commercial snapshot.
+      planName: commercialPlan?.name ?? null,
+      planDescription: commercialPlan?.description ?? null,
+      pricePaise: commercialPlan?.pricePaise?.toString() ?? subtotalPaise.toString(),
+      currency: commercialPlan?.currency ?? "INR",
+      includedScans: commercialPlan?.includedScans ?? null,
+      retentionDays: commercialPlan?.retentionDays ?? null,
+      storageQuotaBytes: commercialPlan?.storageQuotaBytes?.toString() ?? null,
+      maxWarehouses: commercialPlan?.maxWarehouses ?? null,
+      maxOperators: commercialPlan?.maxOperators ?? null,
+
+    };
+
+    await prisma.$executeRawUnsafe(
+      `
+      INSERT INTO "BillingPayment" (
+        "id",
+        "companyId",
+        "provider",
+        "status",
+        "plan",
+        "billingInterval",
+        "currency",
+        "amountPaise",
+        "gstPaise",
+        "totalPaise",
+        "metadata",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        $1,
+        $2,
+        'RAZORPAY',
+        'PENDING',
+        $3,
+        $4,
+        'INR',
+        $5,
+        $6,
+        $7,
+        $8::jsonb,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+      )
+      `,
+      paymentId,
+      input.companyId,
+      plan,
+      billingInterval,
+      subtotalPaise,
+      gstPaise,
+      totalPaise,
+      JSON.stringify(metadata),
+    );
+
+    try {
+      const receipt = `ld_${paymentId}`.slice(0, 40);
+
+      const order = await razorpayService.createOrder({
+        amountPaise: Number(totalPaise),
+        receipt,
+        notes: {
+          paymentId,
+          companyId: input.companyId,
+          planCode: plan,
+          billingInterval,
+          validityMonths: String(validityMonths),
+        },
+      });
+
+      await prisma.$executeRawUnsafe(
+        `
+        UPDATE "BillingPayment"
+        SET
+          "providerOrderId" = $2,
+          "updatedAt" = CURRENT_TIMESTAMP
+        WHERE "id" = $1
+        `,
+        paymentId,
+        order.id,
+      );
+
+      const payment = await this.getPaymentById(paymentId);
+
+      return {
+        payment,
+        razorpay: {
+          keyId: razorpayService.getKeyId(),
+          orderId: order.id,
+          amount: order.amount,
+          currency: order.currency,
+        },
+        plan: {
+          code: plan,
+          billingInterval,
+          subtotalPaise,
+          gstPaise,
+          totalPaise,
+        },
+      };
+    } catch (error) {
+      await this.markPaymentFailed(
+        paymentId,
+        error instanceof Error
+          ? error.message
+          : "Razorpay order creation failed.",
+      );
+
+      throw error;
+    }
+  }
+
+  async verifyAndConfirmPayment(input: {
+    companyId: string;
+    paymentId: string;
+    razorpayPaymentId: string;
+    razorpayOrderId: string;
+    razorpaySignature: string;
+  }) {
+    const payment = await prisma.$queryRawUnsafe<
+      BillingPaymentRow[]
+    >(
+      `
+      SELECT *
+      FROM "BillingPayment"
+      WHERE
+        "id" = $1
+        AND "companyId" = $2
+        AND "provider" = 'RAZORPAY'
+      LIMIT 1
+      `,
+      input.paymentId,
+      input.companyId,
+    );
+
+    const current = payment[0];
+
+    if (!current) {
+      throw new Error("PAYMENT_NOT_FOUND");
+    }
+
+    if (!current.providerOrderId) {
+      throw new Error("PAYMENT_ORDER_NOT_FOUND");
+    }
+
+    if (current.providerOrderId !== input.razorpayOrderId) {
+      throw new Error("RAZORPAY_ORDER_MISMATCH");
+    }
+
+    const validSignature =
+      razorpayService.verifyPaymentSignature({
+        orderId: input.razorpayOrderId,
+        paymentId: input.razorpayPaymentId,
+        signature: input.razorpaySignature,
+      });
+
+    if (!validSignature) {
+      throw new Error("INVALID_RAZORPAY_SIGNATURE");
+    }
+
+    const razorpayPayment =
+      await razorpayService.fetchPayment(
+        input.razorpayPaymentId,
+      );
+
+    if (
+      String(razorpayPayment.order_id) !==
+      current.providerOrderId
+    ) {
+      throw new Error("RAZORPAY_ORDER_MISMATCH");
+    }
+
+    if (
+      Number(razorpayPayment.amount) !==
+      Number(current.totalPaise)
+    ) {
+      throw new Error("RAZORPAY_AMOUNT_MISMATCH");
+    }
+
+    if (
+      String(razorpayPayment.currency).toUpperCase() !==
+      "INR"
+    ) {
+      throw new Error("RAZORPAY_CURRENCY_MISMATCH");
+    }
+
+    const status = String(
+      razorpayPayment.status,
+    ).toLowerCase();
+
+    if (
+      status !== "captured" &&
+      status !== "authorized"
+    ) {
+      throw new Error(
+        `RAZORPAY_PAYMENT_NOT_SUCCESSFUL:${status}`,
+      );
+    }
+
+    return this.confirmRazorpayPayment({
+      paymentId: current.id,
+      razorpayPaymentId: input.razorpayPaymentId,
+      razorpaySignature: input.razorpaySignature,
+    });
+  }
+
+  async confirmRazorpayPayment(input: {
+    paymentId: string;
+    razorpayPaymentId: string;
+    razorpaySignature?: string;
+  }) {
+    return prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRawUnsafe<
+        BillingPaymentRow[]
+      >(
+        `
+        SELECT *
+        FROM "BillingPayment"
+        WHERE "id" = $1
+        LIMIT 1
+        `,
+        input.paymentId,
+      );
+
+      const payment = rows[0];
+
+      if (!payment) {
+        throw new Error("PAYMENT_NOT_FOUND");
+      }
+
+      if (payment.status === "SUCCESS") {
+        await invoiceService.createFromBillingPaymentInTransaction(
+          tx,
+          payment.companyId,
+          payment.id,
+        );
+
+        const existingInvoiceRows =
+          await tx.$queryRawUnsafe<InvoicePaymentVerificationRow[]>(
+            `
+            SELECT
+              "id",
+              "invoiceNumber",
+              "status"
+            FROM "invoices"
+            WHERE "companyId" = $1
+              AND "billingPaymentId" = $2
+            LIMIT 1
+            `,
+            payment.companyId,
+            payment.id,
+          );
+
+        if (existingInvoiceRows.length !== 1) {
+          throw new Error("INVOICE_CREATION_FAILED");
+        }
+
+        return payment;
+      }
+
+      if (
+        payment.status !== "PENDING" &&
+        payment.status !== "CREATED"
+      ) {
+        throw new Error(
+          `PAYMENT_STATE_INVALID:${payment.status}`,
+        );
+      }
+
+      const now = new Date();
+
+      /*
+       * Commercial plan validity is stored in payment.metadata.
+       * This keeps the purchased validity attached to the payment
+       * instead of deriving it later from a generic billing interval.
+       */
+      let validityMonths = 1;
+
+      if (
+        payment.metadata &&
+        typeof payment.metadata === "object" &&
+        "validityMonths" in payment.metadata
+      ) {
+        const rawValidity = Number(
+          (payment.metadata as { validityMonths?: unknown })
+            .validityMonths,
+        );
+
+        if (
+          Number.isInteger(rawValidity) &&
+          rawValidity > 0 &&
+          rawValidity <= 120
+        ) {
+          validityMonths = rawValidity;
+        }
+      }
+
+      const periodEnd = new Date(now);
+
+      periodEnd.setMonth(
+        periodEnd.getMonth() + validityMonths,
+      );
+
+      /*
+       * Activate the company plan in the LIVE database.
+       *
+       * Live Company.plan is an enum containing:
+       * free / starter / professional / enterprise
+       */
+      await tx.$executeRawUnsafe(
+        `
+        UPDATE "Company"
+        SET
+          "plan" = $2::"Plan",
+          "updatedAt" = CURRENT_TIMESTAMP
+        WHERE "id" = $1
+        `,
+        payment.companyId,
+        payment.plan,
+      );
+
+      /*
+       * Update the existing billing subscription when present.
+       *
+       * For an order-based first purchase there may be no subscription
+       * row yet. In that case create the local subscription record with
+       * no Razorpay Subscription ID because this payment uses a Razorpay
+       * Order + Payment flow.
+       *
+       * Existing Razorpay subscription IDs are preserved.
+       */
+      const existingSubscriptions = await tx.$queryRawUnsafe<
+        Array<{
+          id: string;
+        }>
+      >(
+        `
+        SELECT
+          "id"
+        FROM "BillingSubscription"
+        WHERE "companyId" = $1
+        LIMIT 1
+        `,
+        payment.companyId,
+      );
+
+      if (existingSubscriptions.length > 0) {
+        await tx.$executeRawUnsafe(
+          `
+          UPDATE "BillingSubscription"
+          SET
+            "plan" = $2,
+            "status" = 'active',
+            "currentPeriodStart" = $3,
+            "currentPeriodEnd" = $4,
+            "updatedAt" = CURRENT_TIMESTAMP
+          WHERE "companyId" = $1
+          `,
+          payment.companyId,
+          payment.plan,
+          now,
+          periodEnd,
+        );
+      } else {
+        await tx.$executeRawUnsafe(
+          `
+          INSERT INTO "BillingSubscription" (
+            "id",
+            "companyId",
+            "razorpaySubId",
+            "plan",
+            "status",
+            "currentPeriodStart",
+            "currentPeriodEnd",
+            "createdAt",
+            "updatedAt"
+          )
+          VALUES (
+            $1,
+            $2,
+            NULL,
+            $3::"Plan",
+            'active',
+            $4,
+            $5,
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP
+          )
+          `,
+          crypto.randomUUID(),
+          payment.companyId,
+          payment.plan,
+          now,
+          periodEnd,
+        );
+      }
+
+      /*
+       * Allocate the purchased commercial plan scan package.
+       *
+       * The allocation is performed inside the same database transaction
+       * as the payment/subscription confirmation.
+       *
+       * The BillingPayment ID is used as the idempotency key so repeated
+       * confirmation/webhook delivery cannot allocate the same package twice.
+       *
+       * Legacy "professional" remains supported by billing but does not
+       * receive a commercial scan allocation because it has no commercial
+       * plan definition.
+       */
+      const normalizedPaymentPlan = normalizePlanCode(payment.plan);
+      const commercialPlan = await planConfigurationService.getActivePlan(normalizedPaymentPlan);
+
+      if (commercialPlan) {
+        const metadata =
+          payment.metadata &&
+          typeof payment.metadata === "object"
+            ? (payment.metadata as {
+                includedScans?: unknown;
+              })
+            : null;
+
+        const metadataIncludedScans = Number(
+          metadata?.includedScans ?? commercialPlan.includedScans,
+        );
+
+        if (
+          !Number.isInteger(metadataIncludedScans) ||
+          metadataIncludedScans <= 0
+        ) {
+          throw new Error(
+            `INVALID_INCLUDED_SCANS:${normalizedPaymentPlan}`,
+          );
+        }
+
+        await scanWalletService.allocateScansInTransaction(tx, {
+          companyId: payment.companyId,
+          credits: metadataIncludedScans,
+          referenceType: "BILLING_PAYMENT",
+          referenceId: payment.id,
+          idempotencyKey: `billing-payment:${payment.id}:scan-allocation`,
+          description: `${normalizedPaymentPlan} plan scan allocation`,
+          type: "ALLOCATION",
+        });
+      }
+
+      const updatedRows = await tx.$queryRawUnsafe<
+        BillingPaymentRow[]
+      >(
+        `
+        UPDATE "BillingPayment"
+        SET
+          "providerPaymentId" = $2,
+          "providerSignature" = COALESCE($3, "providerSignature"),
+          "status" = 'SUCCESS',
+          "paidAt" = $4,
+          "failureReason" = NULL,
+          "updatedAt" = CURRENT_TIMESTAMP
+        WHERE "id" = $1
+        RETURNING *
+        `,
+        payment.id,
+        input.razorpayPaymentId,
+        input.razorpaySignature ?? null,
+        now,
+      );
+
+      if (updatedRows.length !== 1) {
+        throw new Error("PAYMENT_CONFIRMATION_FAILED");
+      }
+
+      await invoiceService.createFromBillingPaymentInTransaction(
+        tx,
+        payment.companyId,
+        payment.id,
+      );
+
+      const invoiceRows =
+        await tx.$queryRawUnsafe<InvoicePaymentVerificationRow[]>(
+          `
+          SELECT
+            "id",
+            "invoiceNumber",
+            "status"
+          FROM "invoices"
+          WHERE "companyId" = $1
+            AND "billingPaymentId" = $2
+          LIMIT 1
+          `,
+          payment.companyId,
+          payment.id,
+        );
+
+      if (invoiceRows.length !== 1) {
+        throw new Error("INVOICE_CREATION_FAILED");
+      }
+
+      return updatedRows[0];
+    });
+  }
+
+  async markPaymentFailed(
+    paymentId: string,
+    failureReason: string,
+  ) {
+    await prisma.$executeRawUnsafe(
+      `
+      UPDATE "BillingPayment"
+      SET
+        "status" = 'FAILED',
+        "failureReason" = $2,
+        "updatedAt" = CURRENT_TIMESTAMP
+      WHERE
+        "id" = $1
+        AND "status" IN ('PENDING', 'CREATED')
+      `,
+      paymentId,
+      failureReason,
+    );
+  }
+
+  async getPaymentById(
+    paymentId: string,
+  ): Promise<BillingPaymentRow | null> {
+    const rows = await prisma.$queryRawUnsafe<
+      BillingPaymentRow[]
+    >(
+      `
+      SELECT *
+      FROM "BillingPayment"
+      WHERE "id" = $1
+      LIMIT 1
+      `,
+      paymentId,
+    );
+
+    return rows[0] ?? null;
+  }
+}
+
+export const billingService = new BillingService();
+
+
+
+
+
+
+
+
+
+
+
+
+============================================================
+FILE: src\services\billing\razorpay.service.ts
+============================================================
+[FILE NOT FOUND]
+
+============================================================
+FILE: src\services\invoice\invoice.service.ts
+============================================================
+import { randomUUID } from "node:crypto";
+import { prisma } from "../../config/prisma.js";
+
+type BillingPaymentRow = {
+  id: string;
+  companyId: string;
+  provider: string;
+  providerOrderId: string;
+  providerPaymentId: string | null;
+  status: string;
+  plan: string;
+  billingInterval: string;
+  currency: string;
+  amountPaise: bigint;
+  gstPaise: bigint;
+  totalPaise: bigint;
+  paidAt: Date | null;
+};
+
+type CompanyRow = {
+  id: string;
+  companyName: string;
+  email: string | null;
+  phone: string | null;
+  gst: string | null;
+  pan: string | null;
+  address: unknown;
+  timezone: string | null;
+  currency: string | null;
+};
+
+type InvoiceTransactionClient = {
+  $queryRawUnsafe<T = unknown>(
+    query: TemplateStringsArray | string,
+    ...values: unknown[]
+  ): Promise<T>;
+  $executeRawUnsafe(
+    query: TemplateStringsArray | string,
+    ...values: unknown[]
+  ): Promise<number>;
+};
+type InvoiceRow = {
+  id: string;
+  companyId: string;
+  billingPaymentId: string | null;
+  invoiceNumber: string;
+  status: string;
+  currency: string;
+  customerLegalName: string;
+  customerDisplayName: string | null;
+  customerGstin: string | null;
+  customerPan: string | null;
+  billingEmail: string | null;
+  billingPhone: string | null;
+  subtotalPaise: bigint;
+  gstPaise: bigint;
+  totalPaise: bigint;
+  issuedAt: Date | null;
+  paidAt: Date | null;
+};
+
+function normalizeAddress(address: unknown): Record<string, string> {
+  if (!address || typeof address !== "object" || Array.isArray(address)) {
+    return {};
+  }
+
+  const source = address as Record<string, unknown>;
+  const result: Record<string, string> = {};
+
+  for (const key of ["line1", "line2", "city", "state", "postalCode", "pincode", "country"]) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) {
+      result[key] = value.trim();
+    }
+  }
+
+  return result;
+}
+
+function formatInvoiceNumber(year: number, sequence: number): string {
+  return `INV-${year}-${String(sequence).padStart(6, "0")}`;
+}
+
+export class InvoiceService {
+  async createFromBillingPayment(
+    companyId: string,
+    billingPaymentId: string,
+  ): Promise<InvoiceRow> {
+    if (!companyId || !billingPaymentId) {
+      throw new Error("companyId and billingPaymentId are required");
+    }
+
+    return prisma.$transaction((tx) =>
+      this.createFromBillingPaymentInTransaction(
+        tx,
+        companyId,
+        billingPaymentId,
+      ),
+    );
+  }
+
+  async createFromBillingPaymentInTransaction(
+    tx: InvoiceTransactionClient,
+    companyId: string,
+    billingPaymentId: string,
+  ): Promise<InvoiceRow> {
+    if (!companyId || !billingPaymentId) {
+      throw new Error("companyId and billingPaymentId are required");
+    }
+
+    const existingRows = await tx.$queryRawUnsafe<InvoiceRow[]>(
+      `
+      SELECT
+        i.*,
+        COALESCE(
+          jsonb_agg(
+            jsonb_build_object(
+              'id', ii."id",
+              'itemType', ii."itemType",
+              'description', ii."description",
+              'quantity', ii."quantity",
+              'unitPricePaise', ii."unitPricePaise",
+              'taxableAmountPaise', ii."taxableAmountPaise",
+              'gstPercent', ii."gstPercent",
+              'gstPaise', ii."gstPaise",
+              'totalPaise', ii."totalPaise",
+              'referenceType', ii."referenceType",
+              'referenceId', ii."referenceId",
+              'metadata', ii."metadata"
+            )
+            ORDER BY ii."createdAt"
+          ) FILTER (WHERE ii."id" IS NOT NULL),
+          '[]'::jsonb
+        ) AS "items"
+      FROM "invoices" i
+      LEFT JOIN "invoice_items" ii
+        ON ii."invoiceId" = i."id"
+      WHERE i."companyId" = $1
+        AND i."billingPaymentId" = $2
+      GROUP BY i."id"
+      LIMIT 1
+      `,
+      companyId,
+      billingPaymentId,
+    );
+
+    if (existingRows.length === 1) {
+      return existingRows[0];
+    }
+
+    const paymentRows = await tx.$queryRawUnsafe<any[]>(
+      `
+      SELECT *
+      FROM "BillingPayment"
+      WHERE "id" = $1
+        AND "companyId" = $2
+      FOR UPDATE
+      `,
+      billingPaymentId,
+      companyId,
+    );
+
+    if (paymentRows.length !== 1) {
+      throw new Error("BILLING_PAYMENT_NOT_FOUND");
+    }
+
+    const payment = paymentRows[0];
+
+    if (payment.status !== "SUCCESS") {
+      throw new Error("INVOICE_REQUIRES_SUCCESSFUL_PAYMENT");
+    }
+
+    const companyRows = await tx.$queryRawUnsafe<any[]>(
+      `
+      SELECT
+        "id",
+        "companyName",
+        "email",
+        "phone",
+        "gst",
+        "pan",
+        "address",
+        "currency"
+      FROM "Company"
+      WHERE "id" = $1
+      LIMIT 1
+      `,
+      companyId,
+    );
+
+    if (companyRows.length !== 1) {
+      throw new Error("COMPANY_NOT_FOUND");
+    }
+
+    const company = companyRows[0];
+    const now = new Date();
+    const year = now.getUTCFullYear();
+
+    const sequenceRows = await tx.$queryRawUnsafe<any[]>(
+      `
+      INSERT INTO "invoice_sequences" (
+        "id",
+        "year",
+        "nextValue",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        gen_random_uuid()::text,
+        $1,
+        2,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+      )
+      ON CONFLICT ("year")
+      DO UPDATE SET
+        "nextValue" = "invoice_sequences"."nextValue" + 1,
+        "updatedAt" = CURRENT_TIMESTAMP
+      RETURNING
+        ("nextValue" - 1) AS "sequenceValue"
+      `,
+      year,
+    );
+
+    if (sequenceRows.length !== 1) {
+      throw new Error("INVOICE_SEQUENCE_ALLOCATION_FAILED");
+    }
+
+    const sequenceValue = Number(sequenceRows[0].sequenceValue);
+    const invoiceNumber = `INV-${year}-${String(sequenceValue).padStart(6, "0")}`;
+
+    const subtotalPaise = BigInt(payment.amountPaise);
+    const gstPaise = BigInt(payment.gstPaise ?? 0);
+    const totalPaise = BigInt(payment.totalPaise);
+
+    const companyAddress =
+      company.address && typeof company.address === "object"
+        ? company.address
+        : {};
+
+    const customerLegalName =
+      company.companyName || "Loss Defender Pro Customer";
+
+    const invoiceRows = await tx.$queryRawUnsafe<InvoiceRow[]>(
+      `
+      INSERT INTO "invoices" (
+        "id",
+        "companyId",
+        "billingPaymentId",
+        "invoiceNumber",
+        "status",
+        "currency",
+        "customerLegalName",
+        "customerDisplayName",
+        "customerGstin",
+        "customerPan",
+        "customerAddressLine1",
+        "customerAddressLine2",
+        "customerCity",
+        "customerState",
+        "customerPostalCode",
+        "customerCountry",
+        "customerBillingEmail",
+        "customerBillingPhone",
+        "subtotalPaise",
+        "gstPaise",
+        "totalPaise",
+        "issuedAt",
+        "paidAt",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        gen_random_uuid()::text,
+        $1,
+        $2,
+        $3,
+        'PAID',
+        COALESCE($4, 'INR'),
+        $5,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10,
+        $11,
+        $12,
+        COALESCE($13, 'IN'),
+        $14,
+        $15,
+        $16,
+        $17,
+        $18,
+        $19,
+        $19,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+      )
+      RETURNING *
+      `,
+      companyId,
+      billingPaymentId,
+      invoiceNumber,
+      payment.currency ?? company.currency ?? "INR",
+      customerLegalName,
+      company.gst ?? null,
+      company.pan ?? null,
+      companyAddress.line1 ?? companyAddress.addressLine1 ?? null,
+      companyAddress.line2 ?? companyAddress.addressLine2 ?? null,
+      companyAddress.city ?? null,
+      companyAddress.state ?? null,
+      companyAddress.postalCode ?? companyAddress.pincode ?? null,
+      companyAddress.country ?? "IN",
+      company.email ?? null,
+      company.phone ?? null,
+      subtotalPaise,
+      gstPaise,
+      totalPaise,
+      now,
+    );
+
+    if (invoiceRows.length !== 1) {
+      throw new Error("INVOICE_CREATION_FAILED");
+    }
+
+    const invoice = invoiceRows[0];
+
+    await tx.$executeRawUnsafe(
+      `
+      INSERT INTO "invoice_items" (
+        "id",
+        "invoiceId",
+        "itemType",
+        "description",
+        "quantity",
+        "unitPricePaise",
+        "taxableAmountPaise",
+        "gstPercent",
+        "gstPaise",
+        "totalPaise",
+        "referenceType",
+        "referenceId",
+        "metadata",
+        "createdAt"
+      )
+      VALUES (
+        gen_random_uuid()::text,
+        $1,
+        'PLAN',
+        $2,
+        1,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        'BillingPayment',
+        $8,
+        $9::jsonb,
+        CURRENT_TIMESTAMP
+      )
+      `,
+      invoice.id,
+      `${String(payment.plan).toUpperCase()} plan - ${payment.billingInterval}`,
+      subtotalPaise,
+      subtotalPaise,
+      gstPaise > 0n && subtotalPaise > 0n
+        ? Number((gstPaise * 100n) / subtotalPaise)
+        : 0,
+      gstPaise,
+      totalPaise,
+      billingPaymentId,
+      JSON.stringify({
+        provider: payment.provider,
+        providerOrderId: payment.providerOrderId,
+        providerPaymentId: payment.providerPaymentId,
+      }),
+    );
+
+    return invoice;
+  }
+
+  async getById(companyId: string, invoiceId: string): Promise<InvoiceRow | null> {
+    const rows = await prisma.$queryRawUnsafe<InvoiceRow[]>(`
+      SELECT
+        "id",
+        "companyId",
+        "billingPaymentId",
+        "invoiceNumber",
+        "status",
+        "currency",
+        "customerLegalName",
+        "customerDisplayName",
+        "customerGstin",
+        "customerPan",
+        "customerBillingEmail",
+        "customerBillingPhone",
+        "subtotalPaise",
+        "gstPaise",
+        "totalPaise",
+        "issuedAt",
+        "paidAt"
+      FROM "invoices"
+      WHERE "id" = $1
+        AND "companyId" = $2
+      LIMIT 1
+    `, invoiceId, companyId);
+
+    return rows[0] ?? null;
+  }
+
+  async getByBillingPayment(
+    companyId: string,
+    billingPaymentId: string,
+  ): Promise<InvoiceRow | null> {
+    const rows = await prisma.$queryRawUnsafe<InvoiceRow[]>(`
+      SELECT
+        "id",
+        "companyId",
+        "billingPaymentId",
+        "invoiceNumber",
+        "status",
+        "currency",
+        "customerLegalName",
+        "customerDisplayName",
+        "customerGstin",
+        "customerPan",
+        "customerBillingEmail",
+        "customerBillingPhone",
+        "subtotalPaise",
+        "gstPaise",
+        "totalPaise",
+        "issuedAt",
+        "paidAt"
+      FROM "invoices"
+      WHERE "billingPaymentId" = $1
+        AND "companyId" = $2
+      LIMIT 1
+    `, billingPaymentId, companyId);
+
+    return rows[0] ?? null;
+  }
+}
+
+export const invoiceService = new InvoiceService();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+============================================================
+FILE: src\services\invoice\invoice-pdf.service.ts
+============================================================
+import { createHash } from "node:crypto";
+import PDFDocument from "pdfkit";
+import {
+  HeadObjectCommand,
+  PutObjectCommand,
+  GetObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
+import { prisma } from "../../config/prisma.js";
+import { b2Config } from "../../config/b2.config.js";
+
+const s3 = new S3Client({
+  region: b2Config.region,
+  endpoint: b2Config.endpoint,
+  credentials: {
+    accessKeyId: b2Config.keyId,
+    secretAccessKey: b2Config.applicationKey,
+  },
+});
+
+type InvoiceData = {
+  id: string;
+  companyId: string;
+  invoiceNumber: string;
+  status: string;
+  currency: string;
+  customerLegalName: string;
+  customerDisplayName: string | null;
+  customerGstin: string | null;
+  customerPan: string | null;
+  customerAddressLine1: string | null;
+  customerAddressLine2: string | null;
+  customerCity: string | null;
+  customerState: string | null;
+  customerPostalCode: string | null;
+  customerCountry: string;
+  customerBillingEmail: string | null;
+  customerBillingPhone: string | null;
+  subtotalPaise: bigint;
+  gstPaise: bigint;
+  totalPaise: bigint;
+  issuedAt: Date | null;
+  paidAt: Date | null;
+  pdfStorageKey: string | null;
+  pdfChecksum: string | null;
+  pdfSizeBytes: bigint | null;
+};
+
+type InvoiceItem = {
+  id: string;
+  itemType: string;
+  description: string;
+  quantity: number;
+  unitPricePaise: bigint;
+  taxableAmountPaise: bigint;
+  gstPercent: number;
+  gstPaise: bigint;
+  totalPaise: bigint;
+};
+
+type GeneratedPdf = {
+  storageKey: string;
+  checksum: string;
+  sizeBytes: number;
+  signedUrl: string;
+  expiresIn: number;
+};
+
+function money(paise: bigint, currency: string): string {
+  return `${currency} ${(Number(paise) / 100).toFixed(2)}`;
+}
+
+function safeText(value: string | null | undefined): string {
+  return String(value ?? "").trim();
+}
+
+function generatePdfBuffer(
+  invoice: InvoiceData,
+  items: InvoiceItem[],
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+
+    const doc = new PDFDocument({
+      size: "A4",
+      margin: 48,
+      info: {
+        Title: `Invoice ${invoice.invoiceNumber}`,
+        Author: "Loss Defender Pro",
+        Subject: "Tax Invoice",
+      },
+    });
+
+    doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    const pageWidth = 595.28;
+    const contentWidth = pageWidth - 96;
+
+    doc
+      .fontSize(20)
+      .font("Helvetica-Bold")
+      .text("LOSS DEFENDER PRO", 48, 48);
+
+    doc
+      .fontSize(9)
+      .font("Helvetica")
+      .text("Warehouse Intelligence Platform", 48, 73);
+
+    doc
+      .fontSize(18)
+      .font("Helvetica-Bold")
+      .text("TAX INVOICE", 360, 48, {
+        width: 187,
+        align: "right",
+      });
+
+    doc
+      .fontSize(9)
+      .font("Helvetica")
+      .text(`Invoice No: ${invoice.invoiceNumber}`, 360, 76, {
+        width: 187,
+        align: "right",
+      });
+
+    doc
+      .text(
+        `Invoice Date: ${
+          invoice.issuedAt
+            ? invoice.issuedAt.toISOString().slice(0, 10)
+            : new Date().toISOString().slice(0, 10)
+        }`,
+        360,
+        90,
+        {
+          width: 187,
+          align: "right",
+        },
+      );
+
+    doc
+      .moveTo(48, 122)
+      .lineTo(pageWidth - 48, 122)
+      .stroke();
+
+    doc
+      .fontSize(10)
+      .font("Helvetica-Bold")
+      .text("Bill To", 48, 143);
+
+    let customerY = 161;
+
+    doc
+      .fontSize(10)
+      .font("Helvetica-Bold")
+      .text(invoice.customerLegalName, 48, customerY);
+
+    customerY += 15;
+
+    if (invoice.customerDisplayName) {
+      doc
+        .font("Helvetica")
+        .text(invoice.customerDisplayName, 48, customerY);
+      customerY += 14;
+    }
+
+    const addressParts = [
+      invoice.customerAddressLine1,
+      invoice.customerAddressLine2,
+      [invoice.customerCity, invoice.customerState]
+        .filter(Boolean)
+        .join(", "),
+      invoice.customerPostalCode,
+      invoice.customerCountry,
+    ]
+      .map(safeText)
+      .filter(Boolean);
+
+    if (addressParts.length > 0) {
+      doc
+        .font("Helvetica")
+        .fontSize(9)
+        .text(addressParts.join("\n"), 48, customerY, {
+          width: 230,
+          lineGap: 2,
+        });
+
+      customerY += Math.max(30, addressParts.length * 13);
+    }
+
+    if (invoice.customerGstin) {
+      doc
+        .font("Helvetica")
+        .fontSize(9)
+        .text(`GSTIN: ${invoice.customerGstin}`, 48, customerY);
+      customerY += 13;
+    }
+
+    if (invoice.customerPan) {
+      doc
+        .text(`PAN: ${invoice.customerPan}`, 48, customerY);
+      customerY += 13;
+    }
+
+    if (invoice.customerBillingEmail) {
+      doc
+        .text(`Email: ${invoice.customerBillingEmail}`, 48, customerY);
+      customerY += 13;
+    }
+
+    if (invoice.customerBillingPhone) {
+      doc
+        .text(`Phone: ${invoice.customerBillingPhone}`, 48, customerY);
+    }
+
+    const tableTop = Math.max(customerY + 35, 270);
+
+    doc
+      .fontSize(9)
+      .font("Helvetica-Bold")
+      .text("Description", 48, tableTop);
+
+    doc.text("Qty", 330, tableTop, { width: 35, align: "right" });
+    doc.text("Taxable", 370, tableTop, { width: 70, align: "right" });
+    doc.text("GST", 445, tableTop, { width: 45, align: "right" });
+    doc.text("Total", 495, tableTop, { width: 52, align: "right" });
+
+    doc
+      .moveTo(48, tableTop + 17)
+      .lineTo(pageWidth - 48, tableTop + 17)
+      .stroke();
+
+    let rowY = tableTop + 29;
+
+    for (const item of items) {
+      doc
+        .font("Helvetica")
+        .fontSize(8.5)
+        .text(item.description, 48, rowY, {
+          width: 265,
+        });
+
+      doc.text(String(item.quantity), 330, rowY, {
+        width: 35,
+        align: "right",
+      });
+
+      doc.text(money(item.taxableAmountPaise, invoice.currency), 370, rowY, {
+        width: 70,
+        align: "right",
+      });
+
+      doc.text(
+        `${item.gstPercent}%`,
+        445,
+        rowY,
+        {
+          width: 45,
+          align: "right",
+        },
+      );
+
+      doc.text(money(item.totalPaise, invoice.currency), 495, rowY, {
+        width: 52,
+        align: "right",
+      });
+
+      rowY += 30;
+    }
+
+    if (items.length === 0) {
+      doc
+        .font("Helvetica")
+        .fontSize(9)
+        .text("No invoice line items found.", 48, rowY);
+
+      rowY += 30;
+    }
+
+    doc
+      .moveTo(48, rowY)
+      .lineTo(pageWidth - 48, rowY)
+      .stroke();
+
+    const summaryY = rowY + 22;
+
+    doc
+      .font("Helvetica")
+      .fontSize(10)
+      .text("Subtotal", 365, summaryY);
+
+    doc.text(money(invoice.subtotalPaise, invoice.currency), 475, summaryY, {
+      width: 72,
+      align: "right",
+    });
+
+    doc
+      .text("GST", 365, summaryY + 20);
+
+    doc.text(money(invoice.gstPaise, invoice.currency), 475, summaryY + 20, {
+      width: 72,
+      align: "right",
+    });
+
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(11)
+      .text("Grand Total", 365, summaryY + 47);
+
+    doc.text(money(invoice.totalPaise, invoice.currency), 475, summaryY + 47, {
+      width: 72,
+      align: "right",
+    });
+
+    doc
+      .font("Helvetica")
+      .fontSize(8)
+      .text(
+        "This is a system-generated invoice. Please retain this document for your records.",
+        48,
+        730,
+        {
+          width: contentWidth,
+          align: "center",
+        },
+      );
+
+    doc.end();
+  });
+}
+
+export class InvoicePdfService {
+  private async getInvoice(
+    companyId: string,
+    invoiceId: string,
+  ): Promise<{ invoice: InvoiceData; items: InvoiceItem[] }> {
+    const invoiceRows = await prisma.$queryRawUnsafe<InvoiceData[]>(
+      `
+        SELECT
+          "id",
+          "companyId",
+          "invoiceNumber",
+          "status",
+          "currency",
+          "customerLegalName",
+          "customerDisplayName",
+          "customerGstin",
+          "customerPan",
+          "customerAddressLine1",
+          "customerAddressLine2",
+          "customerCity",
+          "customerState",
+          "customerPostalCode",
+          "customerCountry",
+          "customerBillingEmail",
+          "customerBillingPhone",
+          "subtotalPaise",
+          "gstPaise",
+          "totalPaise",
+          "issuedAt",
+          "paidAt",
+          "pdfStorageKey",
+          "pdfChecksum",
+          "pdfSizeBytes"
+        FROM "invoices"
+        WHERE "id" = $1
+          AND "companyId" = $2
+        LIMIT 1
+      `,
+      invoiceId,
+      companyId,
+    );
+
+    if (invoiceRows.length !== 1) {
+      throw new Error("INVOICE_NOT_FOUND");
+    }
+
+    const itemRows = await prisma.$queryRawUnsafe<InvoiceItem[]>(
+      `
+        SELECT
+          "id",
+          "itemType",
+          "description",
+          "quantity",
+          "unitPricePaise",
+          "taxableAmountPaise",
+          "gstPercent",
+          "gstPaise",
+          "totalPaise"
+        FROM "invoice_items"
+        WHERE "invoiceId" = $1
+        ORDER BY "createdAt" ASC
+      `,
+      invoiceId,
+    );
+
+    return {
+      invoice: invoiceRows[0],
+      items: itemRows,
+    };
+  }
+
+  private async createSignedUrl(storageKey: string): Promise<{
+    signedUrl: string;
+    expiresIn: number;
+  }> {
+    const expiresIn = Math.max(
+      1,
+      Math.min(
+        Number.isFinite(b2Config.signedUrlTtl)
+          ? b2Config.signedUrlTtl
+          : 900,
+        86400,
+      ),
+    );
+
+    const signedUrl = await getSignedUrl(
+      s3,
+      new GetObjectCommand({
+        Bucket: b2Config.bucketName,
+        Key: storageKey,
+      }),
+      { expiresIn },
+    );
+
+    return { signedUrl, expiresIn };
+  }
+
+  async generateOrGet(
+    companyId: string,
+    invoiceId: string,
+  ): Promise<GeneratedPdf> {
+    const { invoice, items } = await this.getInvoice(companyId, invoiceId);
+
+    if (invoice.pdfStorageKey) {
+      try {
+        await s3.send(
+          new HeadObjectCommand({
+            Bucket: b2Config.bucketName,
+            Key: invoice.pdfStorageKey,
+          }),
+        );
+
+        const signed = await this.createSignedUrl(invoice.pdfStorageKey);
+
+        return {
+          storageKey: invoice.pdfStorageKey,
+          checksum: invoice.pdfChecksum ?? "",
+          sizeBytes: Number(invoice.pdfSizeBytes ?? 0n),
+          signedUrl: signed.signedUrl,
+          expiresIn: signed.expiresIn,
+        };
+      } catch {
+        // Metadata exists but the object is unavailable.
+        // Regenerate the PDF and repair the storage metadata.
+      }
+    }
+
+    const pdfBuffer = await generatePdfBuffer(invoice, items);
+    const checksum = createHash("sha256")
+      .update(pdfBuffer)
+      .digest("hex");
+
+    const year = invoice.issuedAt
+      ? invoice.issuedAt.getUTCFullYear()
+      : new Date().getUTCFullYear();
+
+    const storageKey = [
+      "companies",
+      companyId,
+      "invoices",
+      String(year),
+      `${invoice.invoiceNumber}.pdf`,
+    ].join("/");
+
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: b2Config.bucketName,
+        Key: storageKey,
+        Body: pdfBuffer,
+        ContentType: "application/pdf",
+        Metadata: {
+          companyId,
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          checksum,
+        },
+      }),
+    );
+
+    await prisma.$executeRawUnsafe(
+      `
+        UPDATE "invoices"
+        SET
+          "pdfStorageKey" = $1,
+          "pdfChecksum" = $2,
+          "pdfSizeBytes" = $3,
+          "updatedAt" = CURRENT_TIMESTAMP
+        WHERE "id" = $4
+          AND "companyId" = $5
+      `,
+      storageKey,
+      checksum,
+      BigInt(pdfBuffer.length),
+      invoice.id,
+      companyId,
+    );
+
+    const signed = await this.createSignedUrl(storageKey);
+
+    return {
+      storageKey,
+      checksum,
+      sizeBytes: pdfBuffer.length,
+      signedUrl: signed.signedUrl,
+      expiresIn: signed.expiresIn,
+    };
+  }
+}
+
+export const invoicePdfService = new InvoicePdfService();
+
+
+============================================================
+FILE: src\controllers\billing\billing.controller.ts
+============================================================
+import type { Response } from "express";
+import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
+import { companyContextService } from "../../services/identity/company-context.service.js";
+import { billingService } from "../../services/billing/billing.service.js";
+import { invoicePdfService } from "../../services/invoice/invoice-pdf.service.js";
+
+async function getCompany(req: AuthenticatedRequest) {
+  const uid = req.firebaseUser?.uid;
+
+  if (!uid) {
+    throw new Error("AUTHENTICATION_REQUIRED");
+  }
+
+  return companyContextService.getCompany(uid);
+}
+
+export async function createRazorpayOrder(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const { company } = await getCompany(req);
+
+    const planCode = String(req.body?.planCode ?? "").trim().toLowerCase();
+
+    const rawBillingInterval = String(
+      req.body?.billingInterval ?? "",
+    ).trim().toUpperCase();
+
+    const billingInterval =
+      rawBillingInterval === "YEARLY"
+        ? "YEARLY"
+        : "MONTHLY";
+
+    if (!planCode) {
+      res.status(400).json({
+        success: false,
+        message: "planCode is required.",
+      });
+      return;
+    }
+
+    const allowedPlans = new Set([
+      "starter",
+      "growth",
+      "enterprise",
+      "professional",
+    ]);
+
+    if (!allowedPlans.has(planCode)) {
+      res.status(400).json({
+        success: false,
+        message:
+          "planCode must be starter, growth, enterprise or professional.",
+      });
+      return;
+    }
+
+    const result = await billingService.createPlanOrder({
+      companyId: company.id,
+      planCode,
+      billingInterval,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error("Razorpay order creation failed:", error);
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to create Razorpay order.";
+
+    const status =
+      message === "PLAN_NOT_FOUND"
+        ? 404
+        : message === "AUTHENTICATION_REQUIRED"
+          ? 401
+          : 400;
+
+    res.status(status).json({
+      success: false,
+      message,
+    });
+  }
+}
+
+export async function verifyRazorpayPayment(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const { company } = await getCompany(req);
+
+    const paymentId = String(req.body?.paymentId ?? "").trim();
+
+    const razorpayPaymentId = String(
+      req.body?.razorpayPaymentId ?? "",
+    ).trim();
+
+    const razorpayOrderId = String(
+      req.body?.razorpayOrderId ?? "",
+    ).trim();
+
+    const razorpaySignature = String(
+      req.body?.razorpaySignature ?? "",
+    ).trim();
+
+    if (
+      !paymentId ||
+      !razorpayPaymentId ||
+      !razorpayOrderId ||
+      !razorpaySignature
+    ) {
+      res.status(400).json({
+        success: false,
+        message:
+          "paymentId, razorpayPaymentId, razorpayOrderId and razorpaySignature are required.",
+      });
+      return;
+    }
+
+    const result = await billingService.verifyAndConfirmPayment({
+      companyId: company.id,
+      paymentId,
+      razorpayPaymentId,
+      razorpayOrderId,
+      razorpaySignature,
+    });
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error("Razorpay payment verification failed:", error);
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to verify Razorpay payment.";
+
+    const status =
+      message === "PAYMENT_NOT_FOUND"
+        ? 404
+        : message === "AUTHENTICATION_REQUIRED"
+          ? 401
+          : 400;
+
+    res.status(status).json({
+      success: false,
+      message,
+    });
+  }
+}
+
+export async function getInvoicePdf(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const { company } = await getCompany(req);
+    const invoiceId = String(req.params.invoiceId ?? "").trim();
+
+    if (!invoiceId) {
+      res.status(400).json({
+        success: false,
+        message: "invoiceId is required.",
+      });
+      return;
+    }
+
+    const result = await invoicePdfService.generateOrGet(
+      company.id,
+      invoiceId,
+    );
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error("Invoice PDF generation failed:", error);
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to generate invoice PDF.";
+
+    const status =
+      message === "AUTHENTICATION_REQUIRED"
+        ? 401
+        : message === "INVOICE_NOT_FOUND"
+          ? 404
+          : 500;
+
+    res.status(status).json({
+      success: false,
+      message:
+        message === "INVOICE_NOT_FOUND"
+          ? "Invoice not found."
+          : status === 401
+            ? "Authentication required."
+            : "Unable to generate invoice PDF.",
+    });
+  }
+}
+
+
+============================================================
+FILE: src\controllers\billing\billing-webhook.controller.ts
+============================================================
+[FILE NOT FOUND]
+
+============================================================
+FILE: src\routes\billing.routes.ts
+============================================================
+import { Router } from "express";
+import {
+  createRazorpayOrder,
+  verifyRazorpayPayment,
+  getInvoicePdf,
+} from "../controllers/billing/billing.controller.js";
+
+const router = Router();
+
+router.post("/razorpay/order", createRazorpayOrder);
+router.post("/razorpay/verify", verifyRazorpayPayment);
+router.get("/invoices/:invoiceId/pdf", getInvoicePdf);
+
+export default router;
+
+
+
+============================================================
+FILE: src\routes\billing-webhook.routes.ts
+============================================================
+import { Router } from "express";
+import { razorpayWebhook } from "../controllers/billing/razorpay-webhook.controller.js";
+
+const router = Router();
+
+router.post("/razorpay", razorpayWebhook);
+
+export default router;
+
+
+============================================================
+FILE: src\config\b2.config.ts
+============================================================
+import "dotenv/config";
+
+function required(name: string): string {
+  const value = process.env[name];
+
+  if (!value || value.trim() === "") {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+
+  return value.trim();
+}
+
+export const b2Config = {
+  keyId: required("B2_KEY_ID"),
+  applicationKey: required("B2_APPLICATION_KEY"),
+  bucketName: required("B2_BUCKET_NAME"),
+  bucketId: required("B2_BUCKET_ID"),
+  region: required("B2_REGION"),
+  endpoint: required("B2_ENDPOINT"),
+  signedUrlTtl: Number(process.env.B2_SIGNED_URL_TTL ?? "900"),
+};
+
+
+============================================================
+FILE: src\services\identity\company-context.service.ts
+============================================================
+import { prisma } from "../../config/prisma.js";
+
+export class CompanyContextService {
+  async getUser(firebaseUid: string) {
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT
+        u.id,
+        u."clerkId" AS "firebaseUid",
+        u.email,
+        u.name,
+        u.phone,
+        u.role,
+        u.status,
+        u."companyId",
+        c."companyName" AS "companyName",
+        c.status AS "companyStatus"
+       FROM "User" u
+       LEFT JOIN "Company" c ON c.id = u."companyId"
+       WHERE u."clerkId" = $1
+       LIMIT 1`,
+      firebaseUid,
+    );
+
+    if (!rows.length) {
+      throw new Error("USER_NOT_FOUND");
+    }
+
+    const row = rows[0];
+
+    const warehouses = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT
+        w.id,
+        w."companyId",
+        w.name,
+        w.code,
+        w.address,
+        w.city,
+        w.state,
+        w.country,
+        w.timezone,
+        w.status,
+        w."createdAt"
+       FROM "Warehouse" w
+       WHERE w."companyId" = $1
+       ORDER BY w.name ASC`,
+      row.companyId,
+    );
+
+    return {
+      id: row.id,
+      firebaseUid: row.firebaseUid,
+      email: row.email,
+      name: row.name,
+      phone: row.phone,
+      role: row.role,
+      status: row.status,
+      isActive: String(row.status).toLowerCase() === "active",
+      companyId: row.companyId,
+      company: {
+        id: row.companyId,
+        name: row.companyName,
+        code: null,
+        isActive: String(row.companyStatus).toLowerCase() === "active",
+        warehouses,
+      },
+    };
+  }
+
+  async getCompany(firebaseUid: string) {
+    const user = await this.getUser(firebaseUid);
+    return {
+      user,
+      company: user.company,
+    };
+  }
+}
+
+export const companyContextService = new CompanyContextService();
+
+
+
+============================================================
+FILE: src\services\plans\entitlement.service.ts
+============================================================
+import { prisma } from "../../config/prisma.js";
+import {
+  planConfigurationService,
+  type PlanConfiguration,
+} from "../billing/plan-configuration.service.js";
+
+export interface PlanEntitlements {
+  plan: string;
+  includedScans: number;
+  maxWarehouses: number | null;
+  maxOperators: number | null;
+  normalRetentionDays: number;
+  storageQuotaBytes: bigint;
+}
+
+function toEntitlements(plan: PlanConfiguration): PlanEntitlements {
+  return {
+    plan: plan.code,
+    includedScans: plan.includedScans,
+    maxWarehouses: plan.maxWarehouses,
+    maxOperators: plan.maxOperators,
+    normalRetentionDays: plan.retentionDays,
+    storageQuotaBytes: plan.storageQuotaBytes,
+  };
+}
+
+export class EntitlementService {
+  async getEntitlements(plan: string): Promise<PlanEntitlements> {
+    const normalized = plan.trim().toLowerCase();
+
+    const configuration =
+      await planConfigurationService.getActivePlan(normalized);
+
+    if (!configuration) {
+      throw new Error(`Unsupported company plan: ${plan}`);
+    }
+
+    return toEntitlements(configuration);
+  }
+
+  async getCompanyEntitlements(
+    companyId: string,
+  ): Promise<PlanEntitlements> {
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{ plan: string }>
+    >(
+      `
+      SELECT plan::text AS plan
+      FROM "Company"
+      WHERE id = $1
+      LIMIT 1
+      `,
+      companyId,
+    );
+
+    if (!rows[0]) {
+      throw new Error(`Company not found: ${companyId}`);
+    }
+
+    return this.getEntitlements(rows[0].plan);
+  }
+
+  async assertWarehouseCapacity(companyId: string): Promise<void> {
+    const entitlements =
+      await this.getCompanyEntitlements(companyId);
+
+    if (entitlements.maxWarehouses === null) {
+      return;
+    }
+
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{ count: bigint }>
+    >(
+      `
+      SELECT COUNT(*)::bigint AS count
+      FROM "Warehouse"
+      WHERE "companyId" = $1
+        AND COALESCE("isActive", true) = true
+      `,
+      companyId,
+    );
+
+    const currentCount = Number(rows[0]?.count ?? 0);
+
+    if (currentCount >= entitlements.maxWarehouses) {
+      throw new Error(
+        `WAREHOUSE_LIMIT_REACHED:${entitlements.maxWarehouses}`,
+      );
+    }
+  }
+
+  async assertOperatorCapacity(companyId: string): Promise<void> {
+    const entitlements =
+      await this.getCompanyEntitlements(companyId);
+
+    if (entitlements.maxOperators === null) {
+      return;
+    }
+
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{ count: bigint }>
+    >(
+      `
+      SELECT COUNT(*)::bigint AS count
+      FROM "User"
+      WHERE "companyId" = $1
+        AND COALESCE("status"::text, 'active') = 'active'
+      `,
+      companyId,
+    );
+
+    const currentCount = Number(rows[0]?.count ?? 0);
+
+    if (currentCount >= entitlements.maxOperators) {
+      throw new Error(
+        `OPERATOR_LIMIT_REACHED:${entitlements.maxOperators}`,
+      );
+    }
+  }
+
+  async assertStorageCapacity(
+    companyId: string,
+    additionalBytes: number,
+  ): Promise<void> {
+    if (
+      !Number.isInteger(additionalBytes) ||
+      additionalBytes < 0
+    ) {
+      throw new Error(
+        "additionalBytes must be a non-negative integer.",
+      );
+    }
+
+    const entitlements =
+      await this.getCompanyEntitlements(companyId);
+
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{
+        storageUsed: bigint;
+        storageQuota: bigint;
+      }>
+    >(
+      `
+      SELECT
+        COALESCE("storageUsed", 0)::bigint AS "storageUsed",
+        COALESCE("storageQuota", 0)::bigint AS "storageQuota"
+      FROM "Company"
+      WHERE id = $1
+      LIMIT 1
+      `,
+      companyId,
+    );
+
+    if (!rows[0]) {
+      throw new Error(`Company not found: ${companyId}`);
+    }
+
+    const storageUsed = rows[0].storageUsed;
+    const storageQuota =
+      entitlements.storageQuotaBytes;
+
+    if (
+      storageQuota > 0n &&
+      storageUsed + BigInt(additionalBytes) > storageQuota
+    ) {
+      throw new Error(
+        `STORAGE_LIMIT_REACHED:${storageQuota.toString()}`,
+      );
+    }
+  }
+}
+
+export const entitlementService = new EntitlementService();
+
+
+============================================================
+FILE: package.json
+============================================================
+{
+    "name": "loss-defender-backend",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "tsx watch src/server.ts",
+        "build": "tsc",
+        "start": "node dist/server.js",
+        "typecheck": "tsc --noEmit",
+        "db:seed": "tsx prisma/seed.ts",
+        "test:phase5-6": "tsx scripts/phase5-6.integration.ts"
+    },
+    "dependencies": {
+        "@aws-sdk/client-s3": "^3.1137.0",
+        "@aws-sdk/s3-request-presigner": "^3.1137.0",
+        "@prisma/adapter-pg": "^7.10.0",
+        "@prisma/client": "^7.10.0",
+        "cors": "^2.8.5",
+        "dotenv": "^17.2.2",
+        "express": "^5.1.0",
+        "firebase-admin": "^14.5.0",
+        "helmet": "^8.1.0",
+        "multer": "^2.4.0",
+        "pdfkit": "^0.20.2",
+        "pg": "^8.23.0",
+        "puppeteer": "^25.12.0",
+        "razorpay": "^2.9.8",
+        "xlsx": "^0.18.5"
+    },
+    "devDependencies": {
+        "@types/cors": "^2.8.19",
+        "@types/express": "^5.0.3",
+        "@types/multer": "^2.2.0",
+        "@types/node": "^24.3.0",
+        "@types/pdfkit": "^0.17.6",
+        "@types/pg": "^8.23.1",
+        "prisma": "^7.10.0",
+        "tsx": "^4.20.5",
+        "typescript": "^5.9.2"
+    }
+}
+
+
+============================================================
+FILE: tsconfig.json
+============================================================
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rootDir": "src",
+    "outDir": "dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
+
+
+============================================================
+FILE: prisma.config.ts
+============================================================
+[FILE NOT FOUND]
+
+============================================================
+FILE: prisma7.config.ts
+============================================================
+// This file was generated by Prisma, and assumes you have installed the following:
+// npm install --save-dev prisma dotenv
+import "dotenv/config";
+import { defineConfig } from "prisma/config";
+
+export default defineConfig({
+  schema: "prisma/schema.prisma",
+  migrations: {
+    path: "prisma/migrations",
+  },
+  datasource: {
+    url: process.env["DATABASE_URL"],
+  },
+});
+
+
+============================================================
+FILE: .gitignore
+============================================================
+node_modules/
+dist/
+
+.env
+.env.*
+!.env.example
+
+uploads/*
+storage/*
+
+*.log
+npm-debug.log*
+firebase-service-account.json
+
+/src/generated/prisma
+
+

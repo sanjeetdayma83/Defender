@@ -349,10 +349,7 @@ export class BillingService {
       razorpayPayment.status,
     ).toLowerCase();
 
-    if (
-      status !== "captured" &&
-      status !== "authorized"
-    ) {
+    if (status !== "captured") {
       throw new Error(
         `RAZORPAY_PAYMENT_NOT_SUCCESSFUL:${status}`,
       );
@@ -378,7 +375,7 @@ export class BillingService {
         SELECT *
         FROM "BillingPayment"
         WHERE "id" = $1
-        LIMIT 1
+        FOR UPDATE
         `,
         input.paymentId,
       );
@@ -700,6 +697,10 @@ export class BillingService {
 }
 
 export const billingService = new BillingService();
+
+
+
+
 
 
 

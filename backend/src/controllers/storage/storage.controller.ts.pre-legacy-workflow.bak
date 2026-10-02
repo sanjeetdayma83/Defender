@@ -1,0 +1,596 @@
+﻿import type { Response } from "express";
+import { randomUUID, createHash } from "node:crypto";
+import {
+  DeleteObjectCommand,
+  PutObjectCommand,
+  S3Client,
+  GetObjectCommand,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
+import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
+import { companyContextService } from "../../services/identity/company-context.service.js";
+import { prisma } from "../../config/prisma.js";
+import { b2Config } from "../../config/b2.config.js";
+
+const s3 = new S3Client({
+  region: b2Config.region,
+  endpoint: b2Config.endpoint,
+  credentials: {
+    accessKeyId: b2Config.keyId,
+    secretAccessKey: b2Config.applicationKey,
+  },
+});
+
+function requireFirebaseUid(req: AuthenticatedRequest): string {
+  const uid = req.firebaseUser?.uid;
+
+  if (!uid) {
+    throw new Error("AUTHENTICATION_REQUIRED");
+  }
+
+  return uid;
+}
+
+function sanitizeFileName(fileName: string): string {
+  const normalized = fileName
+    .normalize("NFKD")
+    .replace(/[^\w.\-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return normalized || "file";
+}
+
+function getObjectType(
+  value: unknown,
+): "EVIDENCE" | "INVOICE" | "CREDIT_NOTE" | "EXPORT" | "OTHER" {
+  const normalized = String(value ?? "EVIDENCE").toUpperCase();
+
+  if (
+    normalized === "INVOICE" ||
+    normalized === "CREDIT_NOTE" ||
+    normalized === "EXPORT" ||
+    normalized === "OTHER"
+  ) {
+    return normalized;
+  }
+
+  return "EVIDENCE";
+}
+
+function jsonSafe<T>(value: T): T {
+  return JSON.parse(
+    JSON.stringify(value, (_key, currentValue) =>
+      typeof currentValue === "bigint"
+        ? currentValue.toString()
+        : currentValue,
+    ),
+  ) as T;
+}
+
+async function getCompanyContext(req: AuthenticatedRequest) {
+  const firebaseUid = requireFirebaseUid(req);
+  return companyContextService.getCompany(firebaseUid);
+}
+
+async function validatePackingSession(
+  packingSessionId: string,
+  companyId: string,
+) {
+  const session = await prisma.packingSession.findFirst({
+    where: {
+      id: packingSessionId,
+      order: {
+        companyId,
+      },
+    },
+    select: {
+      id: true,
+      orderId: true,
+      shipmentId: true,
+      warehouseId: true,
+      userId: true,
+    },
+  });
+
+  if (!session) {
+    throw new Error("PACKING_SESSION_NOT_FOUND");
+  }
+
+  return session;
+}
+
+async function uploadEvidence(
+  req: AuthenticatedRequest,
+  res: Response,
+  mediaType: "VIDEO" | "PHOTO",
+): Promise<void> {
+  let storageKey = "";
+
+  try {
+    const { company } = await getCompanyContext(req);
+
+    const file = req.file;
+
+    if (!file) {
+      res.status(400).json({
+        success: false,
+        message: "File is required. Use multipart/form-data field 'file'.",
+      });
+      return;
+    }
+
+    const packingSessionId = String(
+      req.body?.packingSessionId ?? "",
+    ).trim();
+
+    if (!packingSessionId) {
+      res.status(400).json({
+        success: false,
+        message: "packingSessionId is required.",
+      });
+      return;
+    }
+
+    const session = await validatePackingSession(
+      packingSessionId,
+      company.id,
+    );
+
+    const originalFileName = file.originalname || "file";
+    const safeFileName = sanitizeFileName(originalFileName);
+
+    const extension =
+      safeFileName.includes(".")
+        ? safeFileName.substring(safeFileName.lastIndexOf("."))
+        : "";
+
+    const date = new Date().toISOString().slice(0, 10);
+
+    storageKey = [
+      company.id,
+      "evidence",
+      mediaType.toLowerCase(),
+      date,
+      `${randomUUID()}${extension}`,
+    ].join("/");
+
+    const checksum = createHash("sha256")
+      .update(file.buffer)
+      .digest("hex");
+
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: b2Config.bucketName,
+        Key: storageKey,
+        Body: file.buffer,
+        ContentType: file.mimetype || "application/octet-stream",
+        Metadata: {
+          companyId: company.id,
+          packingSessionId: session.id,
+          mediaType,
+          originalFileName: safeFileName,
+          checksum,
+        },
+      }),
+    );
+
+    const idempotencyHeader =
+      req.headers["idempotency-key"] ??
+      req.headers["x-idempotency-key"];
+
+    const idempotencyKey = Array.isArray(idempotencyHeader)
+      ? idempotencyHeader[0]
+      : idempotencyHeader;
+
+    const result = await prisma.$transaction(async (tx) => {
+      const storageObject = await tx.storageObject.create({
+        data: {
+          companyId: company.id,
+          objectType: getObjectType("EVIDENCE"),
+          bucket: b2Config.bucketName,
+          storageKey,
+          contentType: file.mimetype || null,
+          sizeBytes: BigInt(file.size),
+          originalFileName: originalFileName,
+          checksum,
+          referenceType: "PACKING_SESSION",
+          referenceId: session.id,
+        },
+      });
+
+      await tx.storageUsageEvent.create({
+        data: {
+          companyId: company.id,
+          storageObjectId: storageObject.id,
+          eventType: "UPLOAD",
+          sizeBytes: BigInt(file.size),
+          reason: `Evidence ${mediaType.toLowerCase()} upload`,
+          idempotencyKey: idempotencyKey
+            ? String(idempotencyKey)
+            : undefined,
+        },
+      });
+
+      const evidence = await tx.evidenceMedia.create({
+        data: {
+          type: mediaType,
+          status: "READY",
+          fileName: originalFileName,
+          storageKey,
+          contentType: file.mimetype || null,
+          sizeBytes: BigInt(file.size),
+          packingSessionId: session.id,
+        },
+      });
+
+      return {
+        storageObject,
+        evidence,
+      };
+    });
+
+    res.status(201).json({
+      success: true,
+      data: jsonSafe({
+        id: result.evidence.id,
+        type: result.evidence.type,
+        status: result.evidence.status,
+        fileName: result.evidence.fileName,
+        storageKey: result.evidence.storageKey,
+        contentType: result.evidence.contentType,
+        sizeBytes: result.evidence.sizeBytes,
+        packingSessionId: result.evidence.packingSessionId,
+        storageObjectId: result.storageObject.id,
+      }),
+    });
+  } catch (error) {
+    console.error(
+      `${mediaType} storage upload failed:`,
+      error,
+    );
+
+    if (storageKey) {
+      try {
+        await s3.send(
+          new DeleteObjectCommand({
+            Bucket: b2Config.bucketName,
+            Key: storageKey,
+          }),
+        );
+      } catch (cleanupError) {
+        console.error(
+          "Failed to clean up uploaded B2 object:",
+          cleanupError,
+        );
+      }
+    }
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to upload file.";
+
+    if (message === "AUTHENTICATION_REQUIRED") {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+      return;
+    }
+
+    if (message === "USER_NOT_FOUND") {
+      res.status(404).json({
+        success: false,
+        message: "Authenticated user is not registered.",
+      });
+      return;
+    }
+
+    if (message === "USER_INACTIVE") {
+      res.status(403).json({
+        success: false,
+        message: "User account is inactive.",
+      });
+      return;
+    }
+
+    if (message === "COMPANY_INACTIVE") {
+      res.status(403).json({
+        success: false,
+        message: "Company account is inactive.",
+      });
+      return;
+    }
+
+    if (message === "PACKING_SESSION_NOT_FOUND") {
+      res.status(404).json({
+        success: false,
+        message: "Packing session not found for your company.",
+      });
+      return;
+    }
+
+    if (message.includes("Unique constraint")) {
+      res.status(409).json({
+        success: false,
+        message: "This upload has already been processed.",
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to upload file.",
+    });
+  }
+}
+
+export async function uploadRecording(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  await uploadEvidence(req, res, "VIDEO");
+}
+
+export async function uploadPhoto(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  await uploadEvidence(req, res, "PHOTO");
+}
+
+export async function getMediaUrl(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const { company } = await getCompanyContext(req);
+
+    const storageKey = String(
+      req.query.storageKey ?? "",
+    ).trim();
+
+    if (!storageKey) {
+      res.status(400).json({
+        success: false,
+        message: "storageKey is required.",
+      });
+      return;
+    }
+
+    const storageObject = await prisma.storageObject.findFirst({
+      where: {
+        companyId: company.id,
+        storageKey,
+      },
+      select: {
+        id: true,
+        bucket: true,
+        storageKey: true,
+        contentType: true,
+        sizeBytes: true,
+        originalFileName: true,
+        createdAt: true,
+      },
+    });
+
+    if (!storageObject) {
+      res.status(404).json({
+        success: false,
+        message: "Storage object not found.",
+      });
+      return;
+    }
+
+    const command = new GetObjectCommand({
+      Bucket: storageObject.bucket,
+      Key: storageObject.storageKey,
+    });
+
+    const expiresIn = Math.max(
+      1,
+      Math.min(
+        Number.isFinite(b2Config.signedUrlTtl)
+          ? b2Config.signedUrlTtl
+          : 900,
+        86400,
+      ),
+    );
+
+    const url = await getSignedUrl(s3, command, {
+      expiresIn,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        url,
+        expiresIn,
+        storageKey: storageObject.storageKey,
+        contentType: storageObject.contentType,
+        sizeBytes: storageObject.sizeBytes.toString(),
+        originalFileName: storageObject.originalFileName,
+        createdAt: storageObject.createdAt,
+      },
+    });
+  } catch (error) {
+    console.error("Media URL generation failed:", error);
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to generate media URL.";
+
+    if (message === "AUTHENTICATION_REQUIRED") {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to generate media URL.",
+    });
+  }
+}
+
+export async function getEvidence(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const { company } = await getCompanyContext(req);
+
+    const awb = String(req.params.awb ?? "").trim();
+
+    if (!awb) {
+      res.status(400).json({
+        success: false,
+        message: "AWB is required.",
+      });
+      return;
+    }
+
+    const records = await prisma.evidenceMedia.findMany({
+      where: {
+        packingSession: {
+          shipment: {
+            awb,
+          },
+          order: {
+            companyId: company.id,
+          },
+        },
+      },
+      include: {
+        packingSession: {
+          select: {
+            id: true,
+            status: true,
+            startedAt: true,
+            completedAt: true,
+            orderId: true,
+            shipmentId: true,
+            warehouseId: true,
+            userId: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    res.json({
+      success: true,
+      data: jsonSafe(records),
+      count: records.length,
+    });
+  } catch (error) {
+    console.error("Evidence lookup failed:", error);
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to load evidence.";
+
+    if (message === "AUTHENTICATION_REQUIRED") {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to load evidence.",
+    });
+  }
+}
+
+export async function getStorageUsage(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const { company } = await getCompanyContext(req);
+
+    const [aggregate, grouped, objectCount] = await Promise.all([
+      prisma.storageObject.aggregate({
+        where: {
+          companyId: company.id,
+        },
+        _sum: {
+          sizeBytes: true,
+        },
+      }),
+
+      prisma.storageObject.groupBy({
+        by: ["objectType"],
+        where: {
+          companyId: company.id,
+        },
+        _count: {
+          _all: true,
+        },
+        _sum: {
+          sizeBytes: true,
+        },
+      }),
+
+      prisma.storageObject.count({
+        where: {
+          companyId: company.id,
+        },
+      }),
+    ]);
+
+    const totalBytes = aggregate._sum.sizeBytes ?? BigInt(0);
+
+    res.json({
+      success: true,
+      data: {
+        companyId: company.id,
+        totalObjects: objectCount,
+        totalBytes: totalBytes.toString(),
+        totalGB: Number(totalBytes) / 1024 / 1024 / 1024,
+        byType: grouped.map((item) => ({
+          objectType: item.objectType,
+          objectCount: item._count._all,
+          sizeBytes: (item._sum.sizeBytes ?? BigInt(0)).toString(),
+          sizeGB:
+            Number(item._sum.sizeBytes ?? BigInt(0)) /
+            1024 /
+            1024 /
+            1024,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error("Storage usage lookup failed:", error);
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to load storage usage.";
+
+    if (message === "AUTHENTICATION_REQUIRED") {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Unable to load storage usage.",
+    });
+  }
+}
+

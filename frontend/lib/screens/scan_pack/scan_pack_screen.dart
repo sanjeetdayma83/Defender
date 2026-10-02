@@ -1,9 +1,10 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
 
 import '../../models/models.dart';
-import '../../services/api/media_upload_service.dart';
+import '';
+import '../../services/packing/packing_api_service.dart';
 import '../../services/camera/camera_recording_service.dart';
 import '../../services/orders/order_service.dart';
 import '../../services/scanner/barcode_input_service.dart';
@@ -1002,3 +1003,4 @@ class _ScanPackScreenState extends State<ScanPackScreen> {
     super.dispose();
   }
 }
+

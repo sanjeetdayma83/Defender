@@ -105,10 +105,34 @@ export async function razorpayWebhook(
      * ----------------------------------------------------------
      */
 
-    const existing =
+    const id = crypto.randomUUID();
+
+    const created =
       await prisma.$queryRawUnsafe<BillingWebhookEventRow[]>(
         `
-        SELECT
+        INSERT INTO "BillingWebhookEvent" (
+          "id",
+          "provider",
+          "eventId",
+          "eventType",
+          "payload",
+          "processed",
+          "createdAt",
+          "updatedAt"
+        )
+        VALUES (
+          $1,
+          'RAZORPAY',
+          $2,
+          $3,
+          $4::jsonb,
+          FALSE,
+          CURRENT_TIMESTAMP,
+          CURRENT_TIMESTAMP
+        )
+        ON CONFLICT ("provider", "eventId")
+        DO NOTHING
+        RETURNING
           "id",
           "provider",
           "eventId",
@@ -116,53 +140,20 @@ export async function razorpayWebhook(
           "processed",
           "processedAt",
           "failureReason"
-        FROM "BillingWebhookEvent"
-        WHERE
-          "provider" = 'RAZORPAY'
-          AND "eventId" = $1
-        LIMIT 1
         `,
+        id,
         eventId,
+        eventType,
+        JSON.stringify(payload),
       );
 
-    if (existing[0]?.processed) {
-      res.json({
-        success: true,
-        duplicate: true,
-        message: "Webhook already processed.",
-      });
-      return;
-    }
-
-    let webhookEvent = existing[0];
+    let webhookEvent = created[0];
 
     if (!webhookEvent) {
-      const id = crypto.randomUUID();
-
-      const created =
+      const existing =
         await prisma.$queryRawUnsafe<BillingWebhookEventRow[]>(
           `
-          INSERT INTO "BillingWebhookEvent" (
-            "id",
-            "provider",
-            "eventId",
-            "eventType",
-            "payload",
-            "processed",
-            "createdAt",
-            "updatedAt"
-          )
-          VALUES (
-            $1,
-            'RAZORPAY',
-            $2,
-            $3,
-            $4::jsonb,
-            FALSE,
-            CURRENT_TIMESTAMP,
-            CURRENT_TIMESTAMP
-          )
-          RETURNING
+          SELECT
             "id",
             "provider",
             "eventId",
@@ -170,19 +161,30 @@ export async function razorpayWebhook(
             "processed",
             "processedAt",
             "failureReason"
+          FROM "BillingWebhookEvent"
+          WHERE
+            "provider" = 'RAZORPAY'
+            AND "eventId" = $1
+          LIMIT 1
           `,
-          id,
           eventId,
-          eventType,
-          JSON.stringify(payload),
         );
 
-      webhookEvent = created[0];
+      webhookEvent = existing[0];
+
+      if (webhookEvent?.processed) {
+        res.json({
+          success: true,
+          duplicate: true,
+          message: "Webhook already processed.",
+        });
+        return;
+      }
     }
 
     if (!webhookEvent) {
       throw new Error(
-        "Unable to create Razorpay webhook event.",
+        "Unable to create or retrieve Razorpay webhook event.",
       );
     }
 
@@ -270,28 +272,55 @@ export async function razorpayWebhook(
 
       if (
         eventType === "payment.failed" &&
-        paymentId
+        (paymentId || orderId)
       ) {
-        const paymentRows =
-          await prisma.$queryRawUnsafe<
-            BillingPaymentLookup[]
-          >(
-            `
-            SELECT
-              "id",
-              "status",
-              "providerOrderId",
-              "providerPaymentId"
-            FROM "BillingPayment"
-            WHERE
-              "provider" = 'RAZORPAY'
-              AND "providerPaymentId" = $1
-            LIMIT 1
-            `,
-            paymentId,
-          );
+        let payment: BillingPaymentLookup | undefined;
 
-        const payment = paymentRows[0];
+        if (paymentId) {
+          const paymentRows =
+            await prisma.$queryRawUnsafe<
+              BillingPaymentLookup[]
+            >(
+              `
+              SELECT
+                "id",
+                "status",
+                "providerOrderId",
+                "providerPaymentId"
+              FROM "BillingPayment"
+              WHERE
+                "provider" = 'RAZORPAY'
+                AND "providerPaymentId" = $1
+              LIMIT 1
+              `,
+              paymentId,
+            );
+
+          payment = paymentRows[0];
+        }
+
+        if (!payment && orderId) {
+          const paymentRows =
+            await prisma.$queryRawUnsafe<
+              BillingPaymentLookup[]
+            >(
+              `
+              SELECT
+                "id",
+                "status",
+                "providerOrderId",
+                "providerPaymentId"
+              FROM "BillingPayment"
+              WHERE
+                "provider" = 'RAZORPAY'
+                AND "providerOrderId" = $1
+              LIMIT 1
+              `,
+              orderId,
+            );
+
+          payment = paymentRows[0];
+        }
 
         if (payment) {
           const reason =
@@ -375,3 +404,5 @@ export async function razorpayWebhook(
     });
   }
 }
+
+

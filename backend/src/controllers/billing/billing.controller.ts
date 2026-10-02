@@ -4,14 +4,34 @@ import { companyContextService } from "../../services/identity/company-context.s
 import { billingService } from "../../services/billing/billing.service.js";
 import { invoicePdfService } from "../../services/invoice/invoice-pdf.service.js";
 
-async function getCompany(req: AuthenticatedRequest) {
+async function getCompany(
+  req: AuthenticatedRequest,
+  requireBillingAdmin = false,
+) {
   const uid = req.firebaseUser?.uid;
 
   if (!uid) {
     throw new Error("AUTHENTICATION_REQUIRED");
   }
 
-  return companyContextService.getCompany(uid);
+  const context = await companyContextService.getCompany(uid);
+
+  if (!context.user.isActive) {
+    throw new Error("USER_INACTIVE");
+  }
+
+  if (!context.company.isActive) {
+    throw new Error("COMPANY_INACTIVE");
+  }
+
+  if (
+    requireBillingAdmin &&
+    String(context.user.role).toLowerCase() !== "company_admin"
+  ) {
+    throw new Error("BILLING_ADMIN_REQUIRED");
+  }
+
+  return context;
 }
 
 export async function createRazorpayOrder(
@@ -19,7 +39,7 @@ export async function createRazorpayOrder(
   res: Response,
 ): Promise<void> {
   try {
-    const { company } = await getCompany(req);
+    const { company } = await getCompany(req, true);
 
     const planCode = String(req.body?.planCode ?? "").trim().toLowerCase();
 
@@ -79,7 +99,11 @@ export async function createRazorpayOrder(
         ? 404
         : message === "AUTHENTICATION_REQUIRED"
           ? 401
-          : 400;
+          : message === "BILLING_ADMIN_REQUIRED"
+            ? 403
+            : message === "USER_INACTIVE" || message === "COMPANY_INACTIVE"
+              ? 403
+              : 400;
 
     res.status(status).json({
       success: false,
@@ -93,7 +117,7 @@ export async function verifyRazorpayPayment(
   res: Response,
 ): Promise<void> {
   try {
-    const { company } = await getCompany(req);
+    const { company } = await getCompany(req, true);
 
     const paymentId = String(req.body?.paymentId ?? "").trim();
 
@@ -148,7 +172,11 @@ export async function verifyRazorpayPayment(
         ? 404
         : message === "AUTHENTICATION_REQUIRED"
           ? 401
-          : 400;
+          : message === "BILLING_ADMIN_REQUIRED"
+            ? 403
+            : message === "USER_INACTIVE" || message === "COMPANY_INACTIVE"
+              ? 403
+              : 400;
 
     res.status(status).json({
       success: false,
@@ -162,7 +190,7 @@ export async function getInvoicePdf(
   res: Response,
 ): Promise<void> {
   try {
-    const { company } = await getCompany(req);
+    const { company } = await getCompany(req, true);
     const invoiceId = String(req.params.invoiceId ?? "").trim();
 
     if (!invoiceId) {
@@ -193,9 +221,13 @@ export async function getInvoicePdf(
     const status =
       message === "AUTHENTICATION_REQUIRED"
         ? 401
-        : message === "INVOICE_NOT_FOUND"
-          ? 404
-          : 500;
+        : message === "BILLING_ADMIN_REQUIRED"
+          ? 403
+          : message === "USER_INACTIVE" || message === "COMPANY_INACTIVE"
+            ? 403
+            : message === "INVOICE_NOT_FOUND"
+              ? 404
+              : 500;
 
     res.status(status).json({
       success: false,
@@ -208,3 +240,4 @@ export async function getInvoicePdf(
     });
   }
 }
+

@@ -1,10 +1,13 @@
-import 'dart:async';
+﻿import 'dart:async';
+import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/identity/current_user.dart';
 import '../services/identity/identity_service.dart';
+import '../services/api/api_client.dart';
+import '../services/api/api_config.dart';
 
 enum SessionStatus { signedOut, loading, authenticated, onboarding, error }
 
@@ -20,6 +23,7 @@ class SessionProvider extends ChangeNotifier {
 
   bool _initialised = false;
   bool _identityLoading = false;
+  bool _tenantE2eNegativeRan = false;
 
   StreamSubscription<User?>? _authSubscription;
 
@@ -134,6 +138,7 @@ class SessionProvider extends ChangeNotifier {
       }
 
       _applyUser(user);
+      await _runTenantIsolationHttpNegativeTest();
     } on FirebaseAuthException catch (error) {
       debugPrint('SESSION: Firebase error = $error');
 
@@ -152,6 +157,83 @@ class SessionProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> _runTenantIsolationHttpNegativeTest() async {
+    if (_tenantE2eNegativeRan) {
+      return;
+    }
+
+    _tenantE2eNegativeRan = true;
+
+    try {
+      final api = const ApiClient();
+
+      final response = await api.post(
+        Uri.parse('${ApiConfig.baseUrl}/scan/lookup'),
+        body: <String, String>{
+          'barcode': 'TESTAWB-LD-OTHER-001',
+        },
+      );
+
+      debugPrint(
+        'TENANT_HTTP_NEGATIVE_STATUS=${response.statusCode}',
+      );
+
+      try {
+        final safeStatusBody = jsonDecode(response.body);
+
+        if (safeStatusBody is Map<String, dynamic>) {
+          final safeMessage = safeStatusBody['message'];
+          final safeCode = safeStatusBody['code'];
+
+          if (safeCode != null) {
+            debugPrint(
+              'TENANT_HTTP_NEGATIVE_CODE=$safeCode',
+            );
+          }
+
+          if (safeMessage != null) {
+            debugPrint(
+              'TENANT_HTTP_NEGATIVE_MESSAGE=$safeMessage',
+            );
+          }
+        }
+      } catch (_) {
+        debugPrint(
+          'TENANT_HTTP_NEGATIVE_MESSAGE=UNPARSEABLE_RESPONSE',
+        );
+      }
+
+      try {
+        final decoded = jsonDecode(response.body);
+
+        if (decoded is Map<String, dynamic>) {
+          final data = decoded['data'];
+
+          final found = data is Map<String, dynamic>
+              ? data['found'] == true
+              : null;
+
+          debugPrint(
+            'TENANT_HTTP_NEGATIVE_FOUND=$found',
+          );
+
+          final passed =
+              response.statusCode == 200 && found == false;
+
+          debugPrint(
+            'TENANT_HTTP_NEGATIVE_RESULT=${passed ? "PASS" : "FAIL"}',
+          );
+        } else {
+          debugPrint('TENANT_HTTP_NEGATIVE_RESULT=FAIL');
+        }
+      } catch (_) {
+        debugPrint('TENANT_HTTP_NEGATIVE_RESULT=FAIL');
+      }
+    } catch (_) {
+      debugPrint('TENANT_HTTP_NEGATIVE_REQUEST=FAILED');
+      debugPrint('TENANT_HTTP_NEGATIVE_RESULT=FAIL');
+    }
+  }
   void _applyUser(CurrentUser user) {
     debugPrint(
       'SESSION: APPLY USER '
@@ -192,3 +274,5 @@ class SessionProvider extends ChangeNotifier {
     super.dispose();
   }
 }
+
+
