@@ -1,5 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 
+import '../orders/orders_screen.dart';
+
 import '../scan_pack/scan_pack_screen.dart';
 import '../../debug/scan_integration_test.dart';
 
@@ -138,7 +140,7 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
         case 'Warehouses':
           return const _WarehousePage();
         case 'Orders':
-          return const _SellerOrdersPage();
+          return const OrdersScreen();
         case 'Evidence':
           return const _SellerEvidencePage();
         case 'Integrations':
@@ -1579,54 +1581,6 @@ class _WarehousePage extends StatelessWidget {
               status: 'ACTIVE',
             ),
           ],
-        ),
-      ],
-    );
-  }
-}
-
-class _SellerOrdersPage extends StatelessWidget {
-  const _SellerOrdersPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return _Page(
-      title: 'Orders',
-      subtitle: 'Orders across your connected marketplaces.',
-      children: [
-        const _FilterBar(
-          search: 'Search AWB, order or SKU...',
-          filters: ['All', 'Ready', 'Packing', 'Packed', 'Exception'],
-        ),
-        const SizedBox(height: 16),
-        _SectionCard(
-          title: 'Today',
-          child: _DataTableCard(
-            columns: const ['Order', 'AWB', 'SKU', 'Marketplace', 'Status'],
-            rows: const [
-              [
-                '406-3151945-3281902',
-                '368275770371',
-                '97-U1YR-N3GW',
-                'Amazon',
-                'PACKING',
-              ],
-              [
-                '331724360573683072_1',
-                'FMPP3767030215',
-                'DG-LT-S',
-                'Flipkart',
-                'PACKED',
-              ],
-              [
-                '331724360573683072_2',
-                '1490841263428112',
-                'PC-TWISTER-001',
-                'Other',
-                'READY',
-              ],
-            ],
-          ),
         ),
       ],
     );
@@ -3244,4 +3198,6 @@ const _red = Color(0xFFDC2626);
 const _bg = Color(0xFFF8FAFC);
 const _border = Color(0xFFE2E8F0);
 const _muted = Color(0xFF64748B);
+
+
 

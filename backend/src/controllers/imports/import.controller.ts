@@ -1,7 +1,8 @@
-import type { Response } from "express";
+﻿import type { Response } from "express";
 import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
 import { companyContextService } from "../../services/identity/company-context.service.js";
 import { orderImportService } from "../../services/imports/order-import.service.js";
+import { orderImportLiveService } from "../../services/imports/order-import-live.service.js";
 
 export async function previewOrdersImport(
   req: AuthenticatedRequest,
@@ -87,10 +88,10 @@ export async function importOrders(
       return;
     }
 
-    const result = await orderImportService.import(
+    const result = await orderImportLiveService.import(
       company.id,
       warehouseId,
-      parsed,
+      parsed as any,
     );
 
     res.status(201).json({

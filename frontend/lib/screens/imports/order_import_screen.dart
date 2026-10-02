@@ -2,6 +2,9 @@
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../providers/session_provider.dart';
 import 'package:http/http.dart' as http;
 
 import '../../services/api/api_client.dart';
@@ -52,25 +55,49 @@ class _OrderImportScreenState extends State<OrderImportScreen> {
 
   Future<void> _loadWarehouses() async {
     try {
+      final session = context.read<SessionProvider>();
+      final sessionList = session.user?.warehouses ?? [];
+
+      if (sessionList.isNotEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _warehouses = sessionList
+              .map((w) => <String, dynamic>{
+                    'id': w.id,
+                    'name': w.name,
+                    'code': w.code,
+                  })
+              .toList();
+          _warehouseId = sessionList.first.id;
+          _error = null;
+        });
+        return;
+      }
+
       final status = await _onboarding.getStatus();
       final items = status['warehouses'];
-
       if (items is List) {
         final warehouses = items
             .whereType<Map>()
             .map((item) => Map<String, dynamic>.from(item))
             .toList();
-
         if (!mounted) return;
-
         setState(() {
           _warehouses = warehouses;
-          _warehouseId = warehouses.isEmpty
-              ? null
-              : warehouses.first['id']?.toString();
+          _warehouseId =
+              warehouses.isEmpty ? null : warehouses.first['id']?.toString();
+          if (warehouses.isEmpty) {
+            _error =
+                'No warehouse found. Open Warehouses and create one, or finish onboarding.';
+          }
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
   }
 
   Future<http.StreamedResponse> _send(
@@ -337,4 +364,5 @@ class _OrderImportScreenState extends State<OrderImportScreen> {
     );
   }
 }
+
 

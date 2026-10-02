@@ -1,9 +1,11 @@
 ﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/models.dart';
-import '';
+import '../../providers/session_provider.dart';
+import '../../services/api/media_upload_service.dart';
 import '../../services/packing/packing_api_service.dart';
 import '../../services/camera/camera_recording_service.dart';
 import '../../services/orders/order_service.dart';
@@ -24,6 +26,9 @@ class _ScanPackScreenState extends State<ScanPackScreen> {
   final CameraRecordingService _cameraService = CameraRecordingService();
 
   final MediaUploadService _mediaUploadService = const MediaUploadService();
+  final PackingApiService _packingApi = PackingApiService();
+  String? _activeRecordingId;
+  bool _startingPacking = false;
 
   final TextEditingController _scanController = TextEditingController();
 
@@ -340,61 +345,112 @@ class _ScanPackScreenState extends State<ScanPackScreen> {
     await _uploadRecording(result, order);
   }
 
+
+  String? _resolveWarehouseId() {
+    final session = context.read<SessionProvider>();
+    final id = session.user?.warehouse?.id.trim();
+    if (id == null || id.isEmpty) {
+      return null;
+    }
+    return id;
+  }
   Future<void> _startRecording() async {
-    if (_recording) {
+    if (_recording || _startingPacking) {
       return;
     }
 
     final order = _currentOrder;
-
     if (order == null) {
+      return;
+    }
+
+    final warehouseId = _resolveWarehouseId();
+    if (warehouseId == null) {
+      setState(() {
+        _scanError =
+            'No warehouse assigned. Complete onboarding or ask admin to assign a warehouse.';
+      });
       return;
     }
 
     if (_cameraService.stream == null) {
       setState(() {
         _cameraError =
-            'Camera is not ready. '
-            'Please select a camera.';
+            'Camera is not ready. Please select a camera.';
       });
       return;
     }
 
-    final started = await _cameraService.startRecording();
+    setState(() {
+      _startingPacking = true;
+      _scanError = null;
+      _uploadError = null;
+    });
 
-    if (!started) {
+    try {
+      final session = await _packingApi.startPacking(
+        awb: order.awb,
+        warehouseId: warehouseId,
+      );
+
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _cameraError = 'Unable to start video recording.';
+        _activeRecordingId = session.id;
+        _startingPacking = false;
       });
 
-      return;
-    }
+      final started = await _cameraService.startRecording();
+      if (!started) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _cameraError = 'Unable to start video recording.';
+        });
+        return;
+      }
 
-    _timer?.cancel();
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _recording = true;
-      _recordingDuration = Duration.zero;
-      _uploadError = null;
-    });
-
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted || !_recording) {
+      _timer?.cancel();
+      if (!mounted) {
         return;
       }
 
       setState(() {
-        _recordingDuration += const Duration(seconds: 1);
+        _recording = true;
+        _recordingDuration = Duration.zero;
+        _uploadError = null;
       });
-    });
+
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted || !_recording) {
+          return;
+        }
+        setState(() {
+          _recordingDuration += const Duration(seconds: 1);
+        });
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final msg = error.toString().replaceFirst('Exception: ', '');
+      setState(() {
+        _startingPacking = false;
+        _activeRecordingId = null;
+        if (msg.contains('INSUFFICIENT') || msg.toLowerCase().contains('credit')) {
+          _scanError =
+              'Insufficient scan credits. Ask owner to buy a plan or scan pack.';
+        } else if (msg.toLowerCase().contains('plan') ||
+            msg.toLowerCase().contains('expired')) {
+          _scanError = 'Plan expired. Owner must renew billing.';
+        } else {
+          _scanError = msg;
+        }
+      });
+    }
   }
 
   Future<void> _stopRecording() async {
@@ -416,6 +472,16 @@ class _ScanPackScreenState extends State<ScanPackScreen> {
       return;
     }
 
+    final recordingId = _activeRecordingId;
+    if (recordingId == null || recordingId.isEmpty) {
+      setState(() {
+        _uploading = false;
+        _uploadError =
+            'No active packing session. Scan order again to start packing.';
+      });
+      return;
+    }
+
     setState(() {
       _uploading = true;
       _uploadError = null;
@@ -424,8 +490,7 @@ class _ScanPackScreenState extends State<ScanPackScreen> {
     try {
       final response = await _mediaUploadService.uploadRecording(
         recording: recording,
-        awb: order.awb,
-        sku: order.product.sku,
+        recordingId: recordingId,
       );
 
       if (!mounted) {
@@ -437,15 +502,24 @@ class _ScanPackScreenState extends State<ScanPackScreen> {
       }
 
       setState(() {
+      });
+
+      await _packingApi.completePacking(sessionId: recordingId);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
         _uploading = false;
         _uploadError = null;
+        _activeRecordingId = null;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Uploaded to B2: '
-            '${recording.filename}',
+            'Packing complete · evidence uploaded: ${recording.filename}',
           ),
           behavior: SnackBarBehavior.floating,
         ),
@@ -462,7 +536,7 @@ class _ScanPackScreenState extends State<ScanPackScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Cloud upload failed.'),
+          content: const Text('Cloud upload / complete failed.'),
           behavior: SnackBarBehavior.floating,
           action: SnackBarAction(label: 'RETRY', onPressed: _retryUpload),
         ),
@@ -495,6 +569,7 @@ class _ScanPackScreenState extends State<ScanPackScreen> {
       _lastRecording = null;
       _lastScannedBarcode = null;
       _recordingDuration = Duration.zero;
+      _activeRecordingId = null;
     });
   }
 
@@ -1003,4 +1078,6 @@ class _ScanPackScreenState extends State<ScanPackScreen> {
     super.dispose();
   }
 }
+
+
 

@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -11,11 +11,17 @@ import 'media_models.dart';
 class MediaUploadService {
   const MediaUploadService();
 
+  /// Upload a video segment for an active packing/recording session.
+  /// Backend requires [recordingId] from POST /packing. Sequence is server-side.
   Future<MediaUploadResponse> uploadRecording({
     required RecordingResult recording,
-    required String awb,
-    required String sku,
+    required String recordingId,
   }) async {
+    final id = recordingId.trim();
+    if (id.isEmpty) {
+      throw Exception('recordingId is required before upload.');
+    }
+
     final bytes = await _downloadObjectBytes(recording.objectUrl);
 
     final request = http.MultipartRequest(
@@ -23,29 +29,27 @@ class MediaUploadService {
       Uri.parse('${ApiConfig.storageBaseUrl}/recording'),
     );
 
-    request.fields['awb'] = awb;
-    request.fields['sku'] = sku;
+    request.fields['recordingId'] = id;
 
     request.files.add(
-      http.MultipartFile.fromBytes('file', bytes, filename: recording.filename),
+      http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: recording.filename,
+      ),
     );
 
     const apiClient = ApiClient();
-
     final streamedResponse = await apiClient.sendMultipart(request);
-
     final response = await http.Response.fromStream(streamedResponse);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
-        'Upload failed '
-        '(${response.statusCode}): '
-        '${response.body}',
+        'Upload failed (${response.statusCode}): ${response.body}',
       );
     }
 
     final decoded = jsonDecode(response.body);
-
     if (decoded is! Map<String, dynamic>) {
       throw Exception('Invalid JSON response from storage API.');
     }
@@ -55,14 +59,11 @@ class MediaUploadService {
 
   Future<Uint8List> _downloadObjectBytes(String objectUrl) async {
     final response = await http.get(Uri.parse(objectUrl));
-
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
-        'Unable to read recorded video '
-        'from browser memory.',
+        'Unable to read recorded video from browser memory.',
       );
     }
-
     return response.bodyBytes;
   }
 }

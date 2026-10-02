@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 
 import '../../models/models.dart';
 import '../api/api_client.dart';
@@ -52,6 +52,15 @@ class OrderService {
 
     final data = decoded['data'];
     if (data is! Map<String, dynamic>) {
+      return null;
+    }
+
+    // Backend returns HTTP 200 even when not found
+    if (data['found'] == false) {
+      final msg = data['message']?.toString();
+      if (msg != null && msg.isNotEmpty) {
+        throw Exception(msg);
+      }
       return null;
     }
 
@@ -200,3 +209,4 @@ class OrderService {
     );
   }
 }
+
