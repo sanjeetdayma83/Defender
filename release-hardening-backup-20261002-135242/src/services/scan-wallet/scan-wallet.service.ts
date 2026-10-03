@@ -1,0 +1,758 @@
+﻿import crypto from "node:crypto";
+import { prisma } from "../../config/prisma.js";
+
+export type ScanTransactionType =
+  | "ALLOCATION"
+  | "CONSUMPTION"
+  | "TOPUP"
+  | "REFUND"
+  | "ADJUSTMENT"
+  | "EXPIRATION";
+
+export interface ScanWallet {
+  id: string;
+  companyId: string;
+  balance: number;
+  lifetimeAllocated: number;
+  lifetimeConsumed: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ScanTransaction {
+  id: string;
+  walletId: string;
+  companyId: string;
+  type: ScanTransactionType;
+  credits: number;
+  balanceAfter: number;
+  referenceType: string | null;
+  referenceId: string | null;
+  idempotencyKey: string | null;
+  description: string | null;
+  createdAt: Date;
+}
+
+export interface AllocateScansInput {
+  companyId: string;
+  credits: number;
+  referenceType?: string;
+  referenceId?: string;
+  idempotencyKey?: string;
+  description?: string;
+  type?: "ALLOCATION" | "TOPUP" | "REFUND" | "ADJUSTMENT";
+}
+
+export interface ConsumeScansInput {
+  companyId: string;
+  credits?: number;
+  referenceType?: string;
+  referenceId?: string;
+  idempotencyKey?: string;
+  description?: string;
+}
+
+type TransactionClient = Parameters<
+  Parameters<typeof prisma.$transaction>[0]
+>[0];
+
+export class ScanWalletService {
+  private generateId(): string {
+    return crypto.randomUUID();
+  }
+
+  private assertCompanyId(companyId: string): void {
+    if (!companyId?.trim()) {
+      throw new Error("Company ID is required.");
+    }
+  }
+
+  private assertPositiveCredits(credits: number): void {
+    if (!Number.isInteger(credits) || credits <= 0) {
+      throw new Error("Scan credits must be a positive integer.");
+    }
+  }
+
+  async getOrCreateWallet(companyId: string): Promise<ScanWallet> {
+    this.assertCompanyId(companyId);
+
+    const existing = await prisma.$queryRawUnsafe<ScanWallet[]>(
+      `
+      SELECT
+        id,
+        "companyId",
+        balance,
+        "lifetimeAllocated",
+        "lifetimeConsumed",
+        "createdAt",
+        "updatedAt"
+      FROM scan_wallets
+      WHERE "companyId" = $1
+      LIMIT 1
+      `,
+      companyId,
+    );
+
+    if (existing.length > 0) {
+      return existing[0];
+    }
+
+    const walletId = this.generateId();
+
+    const created = await prisma.$queryRawUnsafe<ScanWallet[]>(
+      `
+      INSERT INTO scan_wallets (
+        id,
+        "companyId"
+      )
+      VALUES ($1, $2)
+      ON CONFLICT ("companyId")
+      DO UPDATE SET
+        "updatedAt" = CURRENT_TIMESTAMP
+      RETURNING
+        id,
+        "companyId",
+        balance,
+        "lifetimeAllocated",
+        "lifetimeConsumed",
+        "createdAt",
+        "updatedAt"
+      `,
+      walletId,
+      companyId,
+    );
+
+    return created[0];
+  }
+
+  async getWallet(companyId: string): Promise<ScanWallet> {
+    this.assertCompanyId(companyId);
+
+    const wallet = await prisma.$queryRawUnsafe<ScanWallet[]>(
+      `
+      SELECT
+        id,
+        "companyId",
+        balance,
+        "lifetimeAllocated",
+        "lifetimeConsumed",
+        "createdAt",
+        "updatedAt"
+      FROM scan_wallets
+      WHERE "companyId" = $1
+      LIMIT 1
+      `,
+      companyId,
+    );
+
+    if (wallet.length === 0) {
+      throw new Error("Scan wallet not found.");
+    }
+
+    return wallet[0];
+  }
+
+  async getBalance(companyId: string): Promise<number> {
+    const wallet = await this.getWallet(companyId);
+    return wallet.balance;
+  }
+
+  async allocateScans(
+    input: AllocateScansInput,
+  ): Promise<{
+    wallet: ScanWallet;
+    transaction: ScanTransaction;
+    alreadyProcessed: boolean;
+  }> {
+    this.assertCompanyId(input.companyId);
+    this.assertPositiveCredits(input.credits);
+
+    return prisma.$transaction(async (tx) => {
+      return this.allocateScansInTransaction(tx, input);
+    });
+  }
+
+  async allocateScansInTransaction(
+    tx: TransactionClient,
+    input: AllocateScansInput,
+  ): Promise<{
+    wallet: ScanWallet;
+    transaction: ScanTransaction;
+    alreadyProcessed: boolean;
+  }> {
+    this.assertCompanyId(input.companyId);
+    this.assertPositiveCredits(input.credits);
+
+    if (input.idempotencyKey?.trim()) {
+      const existing = await tx.$queryRawUnsafe<ScanTransaction[]>(
+        `
+        SELECT
+          id,
+          "walletId",
+          "companyId",
+          type,
+          credits,
+          "balanceAfter",
+          "referenceType",
+          "referenceId",
+          "idempotencyKey",
+          description,
+          "createdAt"
+        FROM scan_transactions
+        WHERE "idempotencyKey" = $1
+        LIMIT 1
+        `,
+        input.idempotencyKey.trim(),
+      );
+
+      if (existing.length > 0) {
+        const wallet = await tx.$queryRawUnsafe<ScanWallet[]>(
+          `
+          SELECT
+            id,
+            "companyId",
+            balance,
+            "lifetimeAllocated",
+            "lifetimeConsumed",
+            "createdAt",
+            "updatedAt"
+          FROM scan_wallets
+          WHERE id = $1
+          LIMIT 1
+          `,
+          existing[0].walletId,
+        );
+
+        if (wallet.length === 0) {
+          throw new Error(
+            "Existing scan transaction references a missing wallet.",
+          );
+        }
+
+        return {
+          wallet: wallet[0],
+          transaction: existing[0],
+          alreadyProcessed: true,
+        };
+      }
+    }
+
+    const walletId = this.generateId();
+
+    await tx.$executeRawUnsafe(
+      `
+      INSERT INTO scan_wallets (
+        id,
+        "companyId"
+      )
+      VALUES ($1, $2)
+      ON CONFLICT ("companyId")
+      DO NOTHING
+      `,
+      walletId,
+      input.companyId,
+    );
+
+    const walletRows = await tx.$queryRawUnsafe<ScanWallet[]>(
+      `
+      SELECT
+        id,
+        "companyId",
+        balance,
+        "lifetimeAllocated",
+        "lifetimeConsumed",
+        "createdAt",
+        "updatedAt"
+      FROM scan_wallets
+      WHERE "companyId" = $1
+      FOR UPDATE
+      `,
+      input.companyId,
+    );
+
+    if (walletRows.length === 0) {
+      throw new Error("Unable to create or load scan wallet.");
+    }
+
+    const wallet = walletRows[0];
+    const newBalance = wallet.balance + input.credits;
+
+    const updatedWalletRows = await tx.$queryRawUnsafe<ScanWallet[]>(
+      `
+      UPDATE scan_wallets
+      SET
+        balance = $1,
+        "lifetimeAllocated" = "lifetimeAllocated" + $2,
+        "updatedAt" = CURRENT_TIMESTAMP
+      WHERE id = $3
+      RETURNING
+        id,
+        "companyId",
+        balance,
+        "lifetimeAllocated",
+        "lifetimeConsumed",
+        "createdAt",
+        "updatedAt"
+      `,
+      newBalance,
+      input.credits,
+      wallet.id,
+    );
+
+    const transactionId = this.generateId();
+
+    const transactionRows = await tx.$queryRawUnsafe<ScanTransaction[]>(
+      `
+      INSERT INTO scan_transactions (
+        id,
+        "walletId",
+        "companyId",
+        type,
+        credits,
+        "balanceAfter",
+        "referenceType",
+        "referenceId",
+        "idempotencyKey",
+        description
+      )
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10
+      )
+      RETURNING
+        id,
+        "walletId",
+        "companyId",
+        type,
+        credits,
+        "balanceAfter",
+        "referenceType",
+        "referenceId",
+        "idempotencyKey",
+        description,
+        "createdAt"
+      `,
+      transactionId,
+      wallet.id,
+      input.companyId,
+      input.type ?? "ALLOCATION",
+      input.credits,
+      newBalance,
+      input.referenceType ?? null,
+      input.referenceId ?? null,
+      input.idempotencyKey?.trim() || null,
+      input.description ?? null,
+    );
+
+    return {
+      wallet: updatedWalletRows[0],
+      transaction: transactionRows[0],
+      alreadyProcessed: false,
+    };
+  }
+
+  async consumeScans(
+    input: ConsumeScansInput,
+  ): Promise<{
+    wallet: ScanWallet;
+    transaction: ScanTransaction;
+    alreadyProcessed: boolean;
+  }> {
+    this.assertCompanyId(input.companyId);
+
+    const credits = input.credits ?? 1;
+    this.assertPositiveCredits(credits);
+
+    return prisma.$transaction(async (tx) => {
+      if (input.idempotencyKey?.trim()) {
+        const existing = await tx.$queryRawUnsafe<ScanTransaction[]>(
+          `
+          SELECT
+            id,
+            "walletId",
+            "companyId",
+            type,
+            credits,
+            "balanceAfter",
+            "referenceType",
+            "referenceId",
+            "idempotencyKey",
+            description,
+            "createdAt"
+          FROM scan_transactions
+          WHERE "idempotencyKey" = $1
+          LIMIT 1
+          `,
+          input.idempotencyKey.trim(),
+        );
+
+        if (existing.length > 0) {
+          const wallet = await tx.$queryRawUnsafe<ScanWallet[]>(
+            `
+            SELECT
+              id,
+              "companyId",
+              balance,
+              "lifetimeAllocated",
+              "lifetimeConsumed",
+              "createdAt",
+              "updatedAt"
+            FROM scan_wallets
+            WHERE id = $1
+            LIMIT 1
+            `,
+            existing[0].walletId,
+          );
+
+          if (wallet.length === 0) {
+            throw new Error(
+              "Existing scan transaction references a missing wallet.",
+            );
+          }
+
+          return {
+            wallet: wallet[0],
+            transaction: existing[0],
+            alreadyProcessed: true,
+          };
+        }
+      }
+
+      const walletRows = await tx.$queryRawUnsafe<ScanWallet[]>(
+        `
+        SELECT
+          id,
+          "companyId",
+          balance,
+          "lifetimeAllocated",
+          "lifetimeConsumed",
+          "createdAt",
+          "updatedAt"
+        FROM scan_wallets
+        WHERE "companyId" = $1
+        FOR UPDATE
+        `,
+        input.companyId,
+      );
+
+      if (walletRows.length === 0) {
+        throw new Error(
+          "Scan wallet not found. Allocate scan credits before consuming.",
+        );
+      }
+
+      const wallet = walletRows[0];
+
+      if (wallet.balance < credits) {
+        throw new Error(
+          `Insufficient scan credits. Required: ${credits}. Available: ${wallet.balance}.`,
+        );
+      }
+
+      const newBalance = wallet.balance - credits;
+
+      const updatedWalletRows = await tx.$queryRawUnsafe<ScanWallet[]>(
+        `
+        UPDATE scan_wallets
+        SET
+          balance = $1,
+          "lifetimeConsumed" = "lifetimeConsumed" + $2,
+          "updatedAt" = CURRENT_TIMESTAMP
+        WHERE id = $3
+        RETURNING
+          id,
+          "companyId",
+          balance,
+          "lifetimeAllocated",
+          "lifetimeConsumed",
+          "createdAt",
+          "updatedAt"
+        `,
+        newBalance,
+        credits,
+        wallet.id,
+      );
+
+      const transactionId = this.generateId();
+
+      const transactionRows = await tx.$queryRawUnsafe<ScanTransaction[]>(
+        `
+        INSERT INTO scan_transactions (
+          id,
+          "walletId",
+          "companyId",
+          type,
+          credits,
+          "balanceAfter",
+          "referenceType",
+          "referenceId",
+          "idempotencyKey",
+          description
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          'CONSUMPTION',
+          $4,
+          $5,
+          $6,
+          $7,
+          $8,
+          $9
+        )
+        RETURNING
+          id,
+          "walletId",
+          "companyId",
+          type,
+          credits,
+          "balanceAfter",
+          "referenceType",
+          "referenceId",
+          "idempotencyKey",
+          description,
+          "createdAt"
+        `,
+        transactionId,
+        wallet.id,
+        input.companyId,
+        -credits,
+        newBalance,
+        input.referenceType ?? null,
+        input.referenceId ?? null,
+        input.idempotencyKey?.trim() || null,
+        input.description ?? null,
+      );
+
+      return {
+        wallet: updatedWalletRows[0],
+        transaction: transactionRows[0],
+        alreadyProcessed: false,
+      };
+    });
+  }
+
+    async consumeScansInTransaction(
+    tx: TransactionClient,
+    input: ConsumeScansInput,
+  ): Promise<{
+    wallet: ScanWallet;
+    transaction: ScanTransaction;
+    alreadyProcessed: boolean;
+  }> {
+    this.assertCompanyId(input.companyId);
+
+    const credits = input.credits ?? 1;
+    this.assertPositiveCredits(credits);
+
+    if (input.idempotencyKey?.trim()) {
+      const existing = await tx.$queryRawUnsafe<ScanTransaction[]>(
+        `
+        SELECT
+          id,
+          "walletId",
+          "companyId",
+          type,
+          credits,
+          "balanceAfter",
+          "referenceType",
+          "referenceId",
+          "idempotencyKey",
+          description,
+          "createdAt"
+        FROM scan_transactions
+        WHERE "idempotencyKey" = $1
+        LIMIT 1
+        `,
+        input.idempotencyKey.trim(),
+      );
+
+      if (existing.length > 0) {
+        const wallet = await tx.$queryRawUnsafe<ScanWallet[]>(
+          `
+          SELECT
+            id,
+            "companyId",
+            balance,
+            "lifetimeAllocated",
+            "lifetimeConsumed",
+            "createdAt",
+            "updatedAt"
+          FROM scan_wallets
+          WHERE id = $1
+          LIMIT 1
+          `,
+          existing[0].walletId,
+        );
+
+        if (wallet.length === 0) {
+          throw new Error(
+            "Existing scan transaction references a missing wallet.",
+          );
+        }
+
+        return {
+          wallet: wallet[0],
+          transaction: existing[0],
+          alreadyProcessed: true,
+        };
+      }
+    }
+
+    const walletRows = await tx.$queryRawUnsafe<ScanWallet[]>(
+      `
+      SELECT
+        id,
+        "companyId",
+        balance,
+        "lifetimeAllocated",
+        "lifetimeConsumed",
+        "createdAt",
+        "updatedAt"
+      FROM scan_wallets
+      WHERE "companyId" = $1
+      FOR UPDATE
+      `,
+      input.companyId,
+    );
+
+    if (walletRows.length === 0) {
+      throw new Error(
+        "Scan wallet not found. Allocate scan credits before consuming.",
+      );
+    }
+
+    const wallet = walletRows[0];
+
+    if (wallet.balance < credits) {
+      throw new Error(
+        `Insufficient scan credits. Required: ${credits}. Available: ${wallet.balance}.`,
+      );
+    }
+
+    const newBalance = wallet.balance - credits;
+
+    const updatedWalletRows = await tx.$queryRawUnsafe<ScanWallet[]>(
+      `
+      UPDATE scan_wallets
+      SET
+        balance = $1,
+        "lifetimeConsumed" = "lifetimeConsumed" + $2,
+        "updatedAt" = CURRENT_TIMESTAMP
+      WHERE id = $3
+      RETURNING
+        id,
+        "companyId",
+        balance,
+        "lifetimeAllocated",
+        "lifetimeConsumed",
+        "createdAt",
+        "updatedAt"
+      `,
+      newBalance,
+      credits,
+      wallet.id,
+    );
+
+    const transactionId = this.generateId();
+
+    const transactionRows = await tx.$queryRawUnsafe<ScanTransaction[]>(
+      `
+      INSERT INTO scan_transactions (
+        id,
+        "walletId",
+        "companyId",
+        type,
+        credits,
+        "balanceAfter",
+        "referenceType",
+        "referenceId",
+        "idempotencyKey",
+        description
+      )
+      VALUES (
+        $1,
+        $2,
+        $3,
+        'CONSUMPTION',
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9
+      )
+      RETURNING
+        id,
+        "walletId",
+        "companyId",
+        type,
+        credits,
+        "balanceAfter",
+        "referenceType",
+        "referenceId",
+        "idempotencyKey",
+        description,
+        "createdAt"
+      `,
+      transactionId,
+      wallet.id,
+      input.companyId,
+      -credits,
+      newBalance,
+      input.referenceType ?? null,
+      input.referenceId ?? null,
+      input.idempotencyKey?.trim() || null,
+      input.description ?? null,
+    );
+
+    return {
+      wallet: updatedWalletRows[0],
+      transaction: transactionRows[0],
+      alreadyProcessed: false,
+    };
+  }
+
+  async getTransactions(
+    companyId: string,
+    limit = 50,
+  ): Promise<ScanTransaction[]> {
+    this.assertCompanyId(companyId);
+
+    const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 500);
+
+    return prisma.$queryRawUnsafe<ScanTransaction[]>(
+      `
+      SELECT
+        id,
+        "walletId",
+        "companyId",
+        type,
+        credits,
+        "balanceAfter",
+        "referenceType",
+        "referenceId",
+        "idempotencyKey",
+        description,
+        "createdAt"
+      FROM scan_transactions
+      WHERE "companyId" = $1
+      ORDER BY "createdAt" DESC
+      LIMIT $2
+      `,
+      companyId,
+      safeLimit,
+    );
+  }
+}
+
+export const scanWalletService = new ScanWalletService();

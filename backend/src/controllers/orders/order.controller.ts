@@ -9,110 +9,118 @@ export async function listOrders(
   req: AuthenticatedRequest,
   res: Response,
 ): Promise<void> {
-  const firebaseUid = req.firebaseUser?.uid;
+  try {
+    const firebaseUid = req.firebaseUser?.uid;
 
-  if (!firebaseUid) {
-    res.status(401).json({
-      success: false,
-      message: "Authentication required.",
+    if (!firebaseUid) {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+      return;
+    }
+
+    const { company } = await companyContextService.getCompany(firebaseUid);
+
+    const search = String(req.query.search ?? "").trim() || undefined;
+    const status = String(req.query.status ?? "").trim() || undefined;
+
+    const orders = await databaseOrderService.list(company.id, search, status);
+
+    res.json({
+      success: true,
+      data: orders,
     });
-    return;
+  } catch (error) {
+    console.error("listOrders failed:", error);
+    res.status(500).json({
+      success: false,
+      message:
+        error instanceof Error ? error.message : "Unable to load orders.",
+    });
   }
-
-  const { company } = await companyContextService.getCompany(firebaseUid);
-
-  const search = String(req.query.search ?? "").trim() || undefined;
-
-  const status = String(req.query.status ?? "").trim() || undefined;
-
-  const orders = await databaseOrderService.list(company.id, search, status);
-
-  res.json({
-    success: true,
-    data: orders,
-  });
 }
 
 export async function getOrder(
   req: AuthenticatedRequest,
   res: Response,
 ): Promise<void> {
-  const firebaseUid = req.firebaseUser?.uid;
+  try {
+    const firebaseUid = req.firebaseUser?.uid;
 
-  if (!firebaseUid) {
-    res.status(401).json({
-      success: false,
-      message: "Authentication required.",
+    if (!firebaseUid) {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+      return;
+    }
+
+    const { company } = await companyContextService.getCompany(firebaseUid);
+    const id = String(req.params.id ?? "").trim();
+
+    const order = await databaseOrderService.get(company.id, id);
+
+    if (!order) {
+      res.status(404).json({
+        success: false,
+        message: "Order not found.",
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: order,
     });
-    return;
-  }
-
-  const { company } = await companyContextService.getCompany(firebaseUid);
-
-  const order = await databaseOrderService.get(
-    company.id,
-    String(req.params.id),
-  );
-
-  if (!order) {
-    res.status(404).json({
+  } catch (error) {
+    console.error("getOrder failed:", error);
+    res.status(500).json({
       success: false,
-      message: "Order not found.",
+      message:
+        error instanceof Error ? error.message : "Unable to load order.",
     });
-    return;
   }
-
-  res.json({
-    success: true,
-    data: order,
-  });
 }
 
 export async function lookupOrder(
   req: AuthenticatedRequest,
   res: Response,
 ): Promise<void> {
-  const firebaseUid = req.firebaseUser?.uid;
-
-  if (!firebaseUid) {
-    res.status(401).json({
-      success: false,
-      message: "Authentication required.",
-    });
-    return;
-  }
-
-  const value = String(req.query.barcode ?? req.query.identifier ?? "").trim();
-
-  if (!value) {
-    res.status(400).json({
-      success: false,
-      message: "barcode or identifier is required.",
-    });
-    return;
-  }
-
-  const { company } = await companyContextService.getCompany(firebaseUid);
-
   try {
-    const result = await scanService.lookup(company.id, value);
+    const firebaseUid = req.firebaseUser?.uid;
+
+    if (!firebaseUid) {
+      res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+      return;
+    }
+
+    const barcode = String(req.query.barcode ?? req.query.q ?? "").trim();
+
+    if (!barcode) {
+      res.status(400).json({
+        success: false,
+        message: "barcode is required.",
+      });
+      return;
+    }
+
+    const { company } = await companyContextService.getCompany(firebaseUid);
+    const result = await scanService.lookup(company.id, barcode);
 
     res.json({
       success: true,
       data: result,
     });
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Barcode, AWB, order ID or SKU was not found.";
-
-    const status = message.toLowerCase().includes("ambiguous") ? 409 : 404;
-
-    res.status(status).json({
+    console.error("lookupOrder failed:", error);
+    res.status(500).json({
       success: false,
-      code: status === 409 ? "AMBIGUOUS_SCAN" : "ORDER_NOT_FOUND",
-      message,
+      message:
+        error instanceof Error ? error.message : "Unable to lookup order.",
     });
   }
 }

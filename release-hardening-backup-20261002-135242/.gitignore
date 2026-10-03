@@ -1,0 +1,15 @@
+﻿node_modules/
+dist/
+
+.env
+.env.*
+!.env.example
+
+uploads/*
+storage/*
+
+*.log
+npm-debug.log*
+firebase-service-account.json
+
+/src/generated/prisma

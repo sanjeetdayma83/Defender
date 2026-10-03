@@ -1,5 +1,4 @@
 ﻿import type { Response } from "express";
-
 import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
 import { IdentityService } from "../../services/identity/identity.service.js";
 
@@ -17,15 +16,20 @@ export async function getCurrentUser(req: AuthenticatedRequest, res: Response) {
       return;
     }
 
-    const user = await identityService.getByFirebaseUid(firebaseUid);
-
-    if (!user) {
-      res.status(404).json({
-        success: false,
-        code: "USER_NOT_REGISTERED",
-        message: "User profile has not been created in Loss Defender.",
-      });
-      return;
+    let user;
+    try {
+      user = await identityService.getByFirebaseUid(firebaseUid);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg === "USER_NOT_FOUND") {
+        res.status(404).json({
+          success: false,
+          code: "USER_NOT_REGISTERED",
+          message: "User profile has not been created in Loss Defender.",
+        });
+        return;
+      }
+      throw e;
     }
 
     if (!user.isActive || !user.company.isActive) {
@@ -61,6 +65,7 @@ export async function getCurrentUser(req: AuthenticatedRequest, res: Response) {
     res.status(500).json({
       success: false,
       message: "Unable to load current user.",
+      detail: error instanceof Error ? error.message : String(error),
     });
   }
 }
@@ -114,10 +119,21 @@ export async function bootstrapCurrentUser(
     });
   } catch (error) {
     console.error("User bootstrap failed:", error);
+    const msg = error instanceof Error ? error.message : String(error);
+
+    if (msg === "USER_NOT_REGISTERED") {
+      res.status(404).json({
+        success: false,
+        code: "USER_NOT_REGISTERED",
+        message: "User profile has not been created in Loss Defender.",
+      });
+      return;
+    }
 
     res.status(500).json({
       success: false,
       message: "Unable to create Loss Defender profile.",
+      detail: msg,
     });
   }
 }

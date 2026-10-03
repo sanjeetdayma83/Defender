@@ -1,0 +1,156 @@
+﻿import { prisma } from "../../config/prisma.js";
+
+export type LiveRole =
+  | "PLATFORM_ADMIN"
+  | "OWNER"
+  | "ADMIN"
+  | "MANAGER"
+  | "OPERATOR"
+  | "VIEWER"
+  | "company_admin"
+  | "warehouse_manager"
+  | "operator"
+  | "viewer";
+
+export class IdentityService {
+  private mapUser(user: {
+    id: string;
+    firebaseUid: string;
+    email: string;
+    name: string | null;
+    phone: string | null;
+    role: string;
+    isActive: boolean;
+    companyId: string;
+    company: {
+      id: string;
+      name: string;
+      code: string | null;
+      isActive: boolean;
+      warehouses: Array<{
+        id: string;
+        companyId: string;
+        name: string;
+        code: string;
+        address: string | null;
+        city: string | null;
+        state: string | null;
+        country: string;
+        isActive: boolean;
+        createdAt: Date;
+      }>;
+    };
+  }) {
+    return {
+      id: user.id,
+      firebaseUid: user.firebaseUid,
+      email: user.email,
+      name: user.name,
+      phone: user.phone,
+      role: user.role,
+      isActive: user.isActive,
+      status: user.isActive ? "active" : "inactive",
+      companyId: user.companyId,
+      company: {
+        id: user.company.id,
+        name: user.company.name,
+        code: user.company.code,
+        isActive: user.company.isActive,
+        warehouses: user.company.warehouses,
+      },
+    };
+  }
+
+  private async getUserByFirebaseUid(firebaseUid: string) {
+    const user = await prisma.user.findUnique({
+      where: { firebaseUid },
+      include: {
+        company: {
+          include: {
+            warehouses: {
+              orderBy: { name: "asc" },
+            },
+          },
+        },
+      },
+    });
+
+    if (!user) return null;
+    return this.mapUser(user);
+  }
+
+  async getByFirebaseUid(firebaseUid: string) {
+    const user = await this.getUserByFirebaseUid(firebaseUid);
+
+    if (!user) {
+      // Controller expects null-style handling; throw only if you prefer 500.
+      // Return null via throw code path — controller checks !user after catch-free call.
+      const err = new Error("USER_NOT_FOUND");
+      (err as Error & { code?: string }).code = "USER_NOT_FOUND";
+      throw err;
+    }
+
+    return user;
+  }
+
+  /** Non-throwing lookup for controllers that want 404 */
+  async findByFirebaseUid(firebaseUid: string) {
+    return this.getUserByFirebaseUid(firebaseUid);
+  }
+
+  async bootstrapUser(input: {
+    firebaseUid: string;
+    email: string;
+    name?: string;
+  }) {
+    const existing = await this.getUserByFirebaseUid(input.firebaseUid);
+    if (existing) return existing;
+
+    const email = input.email.trim().toLowerCase();
+
+    const byEmail = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: "insensitive" } },
+      include: {
+        company: {
+          include: {
+            warehouses: { orderBy: { name: "asc" } },
+          },
+        },
+      },
+    });
+
+    if (byEmail) {
+      const linked = await prisma.user.update({
+        where: { id: byEmail.id },
+        data: { firebaseUid: input.firebaseUid },
+        include: {
+          company: {
+            include: {
+              warehouses: { orderBy: { name: "asc" } },
+            },
+          },
+        },
+      });
+      return this.mapUser(linked);
+    }
+
+    const err = new Error("USER_NOT_REGISTERED");
+    (err as Error & { code?: string }).code = "USER_NOT_REGISTERED";
+    throw err;
+  }
+
+  async updateProfile(
+    firebaseUid: string,
+    input: { name?: string },
+  ) {
+    if (input.name !== undefined) {
+      await prisma.user.update({
+        where: { firebaseUid },
+        data: { name: input.name.trim() },
+      });
+    }
+    return this.getUserByFirebaseUid(firebaseUid);
+  }
+}
+
+export const identityService = new IdentityService();

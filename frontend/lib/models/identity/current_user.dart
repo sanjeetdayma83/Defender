@@ -1,4 +1,4 @@
-class CurrentUser {
+﻿class CurrentUser {
   final String id;
   final String firebaseUid;
   final String email;
@@ -22,7 +22,10 @@ class CurrentUser {
   WarehouseInfo? get primaryWarehouse =>
       warehouses.isEmpty ? null : warehouses.first;
 
-  bool get isPlatformAdmin => role == 'PLATFORM_ADMIN';
+  bool get isPlatformAdmin {
+    final r = role.trim().toUpperCase().replaceAll('-', '_');
+    return r == 'PLATFORM_ADMIN' || r == 'SUPER_ADMIN';
+  }
   bool get isOwner => role == 'OWNER';
   bool get isAdmin => role == 'ADMIN';
   bool get isManager => role == 'MANAGER';
@@ -107,3 +110,4 @@ class WarehouseInfo {
     );
   }
 }
+

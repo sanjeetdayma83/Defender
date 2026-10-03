@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/session_provider.dart';
@@ -26,17 +26,28 @@ class _LDSessionGateState extends State<LDSessionGate> {
   }
 
   SaaSRole _roleForUser(String? role) {
-    switch (role) {
+    final r = (role ?? '').trim().toUpperCase().replaceAll('-', '_');
+    switch (r) {
       case 'PLATFORM_ADMIN':
+      case 'SUPER_ADMIN':
+      case 'super_admin':
+      case 'SUPER_ADMIN':
+      case 'super_admin':
         return SaaSRole.platformAdmin;
       case 'OWNER':
       case 'ADMIN':
       case 'MANAGER':
+      case 'COMPANY_ADMIN':
         return SaaSRole.companyAdmin;
       case 'OPERATOR':
-      case 'VIEWER':
-      default:
+      case 'PACKING_OPERATOR':
         return SaaSRole.operator;
+      case 'VIEWER':
+        // Viewers use company shell but screens must hide mutations.
+        return SaaSRole.companyAdmin;
+      default:
+        // Unknown → least privilege company shell; APIs still enforce.
+        return SaaSRole.companyAdmin;
     }
   }
 
@@ -185,3 +196,6 @@ class _SessionError extends StatelessWidget {
     );
   }
 }
+
+
+

@@ -19,6 +19,7 @@ import authRoutes from "./routes/auth.routes.js";
 import { firebaseAuthMiddleware } from "./middleware/firebase-auth.middleware.js";
 import identityRoutes from "./routes/identity.routes.js";
 import liveDashboardRoutes from "./routes/live-dashboard.routes.js";
+import platformCompaniesRoutes from "./routes/platform-companies.routes.js";
 import warehouseRoutes from "./routes/warehouse.routes.js";
 
 import billingRoutes from "./routes/billing.routes.js";
@@ -87,6 +88,7 @@ app.get("/", (_req, res) => {
 app.use("/api/v1/onboarding", firebaseAuthMiddleware, onboardingRoutes);
 app.use("/api/v1/identity", firebaseAuthMiddleware, identityRoutes);
 app.use("/api/v1/dashboard", firebaseAuthMiddleware, liveDashboardRoutes);
+app.use("/api/v1/platform/companies", firebaseAuthMiddleware, platformCompaniesRoutes);
 app.use("/api/v1/warehouses", firebaseAuthMiddleware, warehouseRoutes);
 
 app.use("/api/v1/scan", firebaseAuthMiddleware, scanRouter);
@@ -106,6 +108,7 @@ app.use(
     });
   },
 );
+
 
 
 

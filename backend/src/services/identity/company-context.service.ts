@@ -5,7 +5,7 @@ export class CompanyContextService {
     const rows = await prisma.$queryRawUnsafe<any[]>(
       `SELECT
         u.id,
-        u."clerkId" AS "firebaseUid",
+        u."firebaseUid" AS "firebaseUid",
         u.email,
         u.name,
         u.phone,
@@ -16,7 +16,7 @@ export class CompanyContextService {
         c.status AS "companyStatus"
        FROM "User" u
        LEFT JOIN "Company" c ON c.id = u."companyId"
-       WHERE u."clerkId" = $1
+       WHERE u."firebaseUid" = $1
        LIMIT 1`,
       firebaseUid,
     );
@@ -76,4 +76,5 @@ export class CompanyContextService {
 }
 
 export const companyContextService = new CompanyContextService();
+
 

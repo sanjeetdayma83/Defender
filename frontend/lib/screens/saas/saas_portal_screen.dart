@@ -1,10 +1,17 @@
 ﻿import 'package:flutter/material.dart';
+import '../platform/platform_dashboard_screen.dart';
+import '../platform/platform_companies_screen.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/session_provider.dart';
 import '../orders/orders_screen.dart';
-
+import '../warehouse/warehouse_screen.dart';
 import '../scan_pack/scan_pack_screen.dart';
+import '../team/team_screen.dart';
+import '../evidence/evidence_screen.dart';
+import '../onboarding/onboarding_screen.dart';
+import '../profile/profile_screen.dart';
 import '../../debug/scan_integration_test.dart';
-
 enum SaaSRole { platformAdmin, companyAdmin, operator }
 
 class SaaSPortalScreen extends StatefulWidget {
@@ -29,6 +36,26 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
   void initState() {
     super.initState();
     _role = widget.initialRole;
+    // Real role wins over preview (security + UX)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final session = context.read<SessionProvider>();
+      final mapped = _mapSessionRole(session.user?.role);
+      if (mapped != null && mapped != _role) {
+        setState(() {
+          _role = mapped;
+          _index = 0;
+        });
+      }
+    });
+  }
+
+  SaaSRole? _mapSessionRole(String? role) {
+    final r = (role ?? '').trim().toUpperCase().replaceAll('-', '_');
+    if (((r == 'PLATFORM_ADMIN' || r == 'SUPER_ADMIN') || r == 'SUPER_ADMIN')) return SaaSRole.platformAdmin;
+    if (r == 'OPERATOR' || r == 'PACKING_OPERATOR') return SaaSRole.operator;
+    if (r.isEmpty) return null;
+    return SaaSRole.companyAdmin;
   }
 
   String get _roleLabel {
@@ -52,14 +79,12 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
           _NavItem(Icons.credit_card_outlined, 'Subscriptions'),
           _NavItem(Icons.layers_outlined, 'Plans'),
           _NavItem(Icons.add_card_outlined, 'Scan Top-Ups'),
-          _NavItem(Icons.verified_outlined, 'Evidence'),
           _NavItem(Icons.cloud_outlined, 'Storage'),
           _NavItem(Icons.analytics_outlined, 'Analytics'),
           _NavItem(Icons.history_outlined, 'Audit Logs'),
           _NavItem(Icons.settings_outlined, 'Settings'),
           _NavItem(Icons.person_outline, 'Profile'),
-          _NavItem(Icons.help_outline, 'Help'),
-        ];
+          ];
 
       case SaaSRole.companyAdmin:
         return const [
@@ -97,9 +122,15 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
     if (_role == SaaSRole.platformAdmin) {
       switch (label) {
         case 'Dashboard':
-          return const _AdminDashboardPage();
+          return PlatformDashboardScreen(
+            onOpenSection: (label) {
+              final items = _navigation;
+              final i = items.indexWhere((e) => e.label == label);
+              if (i >= 0) setState(() => _index = i);
+            },
+          );
         case 'Companies':
-          return const _CompaniesPage();
+          return const PlatformCompaniesScreen();
         case 'Users':
           return const _UsersPage();
         case 'Subscriptions':
@@ -108,8 +139,6 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
           return const _PlansPage();
         case 'Scan Top-Ups':
           return const _TopUpsPage();
-        case 'Evidence':
-          return const _AdminEvidencePage();
         case 'Storage':
           return const _StoragePage();
         case 'Analytics':
@@ -119,10 +148,7 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
         case 'Settings':
           return const _PlatformSettingsPage();
         case 'Profile':
-          return const _ProfilePage();
-        case 'Help':
-          return const _HelpPage();
-      }
+          return const ProfileScreen();}
     }
 
     if (_role == SaaSRole.companyAdmin) {
@@ -136,19 +162,19 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
         case 'Billing':
           return const _BillingPage();
         case 'Team':
-          return const _TeamPage();
+          return const TeamScreen();
         case 'Warehouses':
-          return const _WarehousePage();
+          return const WarehouseScreen();
         case 'Orders':
           return const OrdersScreen();
         case 'Evidence':
-          return const _SellerEvidencePage();
+          return const EvidenceScreen();
         case 'Integrations':
           return const _IntegrationsPage();
         case 'Onboarding':
-          return const _OnboardingPage();
+          return const OnboardingScreen();
         case 'Profile':
-          return const _ProfilePage();
+          return const ProfileScreen();
         case 'Settings':
           return const _CompanySettingsPage();
         case 'Help':
@@ -160,7 +186,7 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
       case 'Dashboard':
         return const _OperatorDashboardPage();
       case 'Scan & Pack':
-        return const ScanPackScreen();
+          return const ScanPackScreen();
       case 'My Sessions':
         return const _SessionsPage();
       case 'Recordings':
@@ -168,7 +194,7 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
       case 'Evidence':
         return const _OperatorEvidencePage();
       case 'Profile':
-        return const _ProfilePage();
+          return const ProfileScreen();
       case 'Help':
         return const _HelpPage();
     }
@@ -263,7 +289,30 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
                 ],
               ),
             ),
-            _roleSwitcher(),
+            // Role switcher disabled — real PLATFORM_ADMIN session
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Container(
+                padding: const EdgeInsets.all(11),
+                decoration: BoxDecoration(
+                  color: Colors.white.withAlpha(12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withAlpha(15)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.admin_panel_settings_outlined, color: Colors.white70, size: 19),
+                    SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        'Platform Admin',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 12),
             Expanded(
               child: ListView.builder(
@@ -669,63 +718,6 @@ class _AdminDashboardPage extends StatelessWidget {
   }
 }
 
-class _CompaniesPage extends StatelessWidget {
-  const _CompaniesPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return _Page(
-      title: 'Companies',
-      subtitle: 'Manage every seller and organization using Loss Defender.',
-      action: _PrimaryButton(
-        label: 'Add Company',
-        icon: Icons.add_business_outlined,
-        onPressed: () {},
-      ),
-      children: [
-        const _FilterBar(
-          search: 'Search companies...',
-          filters: ['All', 'Active', 'Trial', 'Expired'],
-        ),
-        const SizedBox(height: 16),
-        _SectionCard(
-          title: '248 Companies',
-          child: _DataTableCard(
-            columns: const [
-              'Company',
-              'Plan',
-              'Users',
-              'Scans',
-              'Storage',
-              'Status',
-            ],
-            rows: const [
-              ['ABC Traders', 'Business', '18', '42,184', '86.4 GB', 'ACTIVE'],
-              ['Nova Retail', 'Starter', '5', '7,428', '12.8 GB', 'ACTIVE'],
-              [
-                'Prime Distribution',
-                'Enterprise',
-                '64',
-                '184,921',
-                '482 GB',
-                'ACTIVE',
-              ],
-              [
-                'XYZ Enterprises',
-                'Business',
-                '12',
-                '31,802',
-                '58.2 GB',
-                'TRIAL',
-              ],
-              ['Metro Commerce', 'Starter', '3', '2,194', '4.2 GB', 'EXPIRED'],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 class _UsersPage extends StatelessWidget {
   const _UsersPage();
@@ -1518,143 +1510,8 @@ class _BillingPage extends StatelessWidget {
   }
 }
 
-class _TeamPage extends StatelessWidget {
-  const _TeamPage();
 
-  @override
-  Widget build(BuildContext context) {
-    return _Page(
-      title: 'Packing Team',
-      subtitle: 'Manage operators and warehouse access.',
-      action: _PrimaryButton(
-        label: 'Invite Operator',
-        icon: Icons.person_add_alt_1_outlined,
-        onPressed: () {},
-      ),
-      children: [
-        _SectionCard(
-          title: '12 Team Members',
-          child: _DataTableCard(
-            columns: const ['Member', 'Role', 'Warehouse', 'Scans', 'Status'],
-            rows: const [
-              ['Sanjeet Dayma', 'Admin', 'All', '6,482', 'ACTIVE'],
-              ['Rahul Kumar', 'Operator', 'Main Warehouse', '1,238', 'ACTIVE'],
-              ['Amit Sharma', 'Operator', 'Main Warehouse', '842', 'ACTIVE'],
-              ['Vikas Yadav', 'Operator', 'Second Warehouse', '614', 'ACTIVE'],
-              ['Neeraj Singh', 'Operator', 'Main Warehouse', '428', 'INVITED'],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
 
-class _WarehousePage extends StatelessWidget {
-  const _WarehousePage();
-
-  @override
-  Widget build(BuildContext context) {
-    return _Page(
-      title: 'Warehouses',
-      subtitle: 'Manage packing locations and operator assignments.',
-      action: _PrimaryButton(
-        label: 'Add Warehouse',
-        icon: Icons.add_business_outlined,
-        onPressed: () {},
-      ),
-      children: [
-        _ResponsiveGrid(
-          children: const [
-            _WarehouseCard(
-              name: 'Main Warehouse',
-              code: 'MAIN',
-              operators: '8 operators',
-              orders: '428 today',
-              status: 'ACTIVE',
-            ),
-            _WarehouseCard(
-              name: 'Second Warehouse',
-              code: 'WH-02',
-              operators: '4 operators',
-              orders: '182 today',
-              status: 'ACTIVE',
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _SellerEvidencePage extends StatelessWidget {
-  const _SellerEvidencePage();
-
-  @override
-  Widget build(BuildContext context) {
-    return _Page(
-      title: 'Evidence',
-      subtitle: 'Packing proof generated by your team.',
-      children: [
-        _ResponsiveGrid(
-          children: const [
-            _MetricCard(
-              title: 'Evidence',
-              value: '6,492',
-              change: 'This month',
-              icon: Icons.verified_outlined,
-              color: _green,
-            ),
-            _MetricCard(
-              title: 'Videos',
-              value: '5,982',
-              change: '28.4 GB',
-              icon: Icons.videocam_outlined,
-              color: _blue,
-            ),
-            _MetricCard(
-              title: 'Photos',
-              value: '510',
-              change: '7.6 GB',
-              icon: Icons.photo_outlined,
-              color: _cyan,
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        _SectionCard(
-          title: 'Latest Evidence',
-          child: _DataTableCard(
-            columns: const ['AWB', 'Order', 'Operator', 'Created', 'Status'],
-            rows: const [
-              [
-                '368275770371',
-                '406-3151945-3281902',
-                'Rahul',
-                '12:48',
-                'VERIFIED',
-              ],
-              [
-                'FMPP3767030215',
-                '331724360573683072_1',
-                'Amit',
-                '12:42',
-                'VERIFIED',
-              ],
-              [
-                '1490841263428112',
-                '331724360573683072_2',
-                'Vikas',
-                '12:37',
-                'READY',
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 class _IntegrationsPage extends StatelessWidget {
   const _IntegrationsPage();
@@ -1693,49 +1550,6 @@ class _IntegrationsPage extends StatelessWidget {
   }
 }
 
-class _OnboardingPage extends StatelessWidget {
-  const _OnboardingPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return _Page(
-      title: 'Company Setup',
-      subtitle: 'Complete the steps required to start packing.',
-      children: const [
-        _OnboardingStep(
-          number: '01',
-          title: 'Company Profile',
-          subtitle: 'Business details and GST information',
-          complete: true,
-        ),
-        _OnboardingStep(
-          number: '02',
-          title: 'Subscription',
-          subtitle: 'Business plan selected and active',
-          complete: true,
-        ),
-        _OnboardingStep(
-          number: '03',
-          title: 'Warehouse',
-          subtitle: 'Main Warehouse configured',
-          complete: true,
-        ),
-        _OnboardingStep(
-          number: '04',
-          title: 'Packing Team',
-          subtitle: 'Invite operators and assign warehouses',
-          complete: false,
-        ),
-        _OnboardingStep(
-          number: '05',
-          title: 'Marketplace',
-          subtitle: 'Connect Amazon, Flipkart or API',
-          complete: false,
-        ),
-      ],
-    );
-  }
-}
 
 class _OperatorDashboardPage extends StatelessWidget {
   const _OperatorDashboardPage();
@@ -1937,96 +1751,6 @@ class _OperatorEvidencePage extends StatelessWidget {
   }
 }
 
-class _ProfilePage extends StatelessWidget {
-  const _ProfilePage();
-
-  @override
-  Widget build(BuildContext context) {
-    return _Page(
-      title: 'Profile',
-      subtitle: 'Your Loss Defender account and work profile.',
-      action: _PrimaryButton(
-        label: 'Edit Profile',
-        icon: Icons.edit_outlined,
-        onPressed: () {},
-      ),
-      children: [
-        _SectionCard(
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 32,
-                backgroundColor: _navy,
-                child: const Text(
-                  'S',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 25,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Sanjeet Dayma',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Administrator • Loss Defender',
-                      style: TextStyle(color: _muted),
-                    ),
-                  ],
-                ),
-              ),
-              _StatusBadge(text: 'ACTIVE', color: _green),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        _ResponsiveGrid(
-          children: const [
-            _InfoCard(
-              title: 'Personal Information',
-              items: [
-                'Name: Sanjeet Dayma',
-                'Email: Account email',
-                'Role: Administrator',
-              ],
-            ),
-            _InfoCard(
-              title: 'Work Information',
-              items: [
-                'Company: Loss Defender',
-                'Warehouse: Main Warehouse',
-                'Access: Full operational access',
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        _SectionCard(
-          title: 'Security',
-          child: ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.lock_outline, color: _blue),
-            title: const Text('Password & authentication'),
-            subtitle: const Text('Manage sign-in methods and active sessions.'),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () {},
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 class _PlatformSettingsPage extends StatelessWidget {
   const _PlatformSettingsPage();
@@ -2600,66 +2324,6 @@ class _TopUpCard extends StatelessWidget {
   }
 }
 
-class _WarehouseCard extends StatelessWidget {
-  final String name;
-  final String code;
-  final String operators;
-  final String orders;
-  final String status;
-
-  const _WarehouseCard({
-    required this.name,
-    required this.code,
-    required this.operators,
-    required this.orders,
-    required this.status,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return _SectionCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: _blue.withAlpha(18),
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                child: const Icon(Icons.warehouse_outlined, color: _blue),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-              _StatusBadge(text: status, color: _green),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Text(
-            'Code: $code',
-            style: const TextStyle(color: _muted, fontSize: 12),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            '$operators • $orders',
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _IntegrationCard extends StatelessWidget {
   final String name;
@@ -2722,71 +2386,6 @@ class _IntegrationCard extends StatelessWidget {
   }
 }
 
-class _OnboardingStep extends StatelessWidget {
-  final String number;
-  final String title;
-  final String subtitle;
-  final bool complete;
-
-  const _OnboardingStep({
-    required this.number,
-    required this.title,
-    required this.subtitle,
-    required this.complete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: _SectionCard(
-        child: Row(
-          children: [
-            Container(
-              width: 45,
-              height: 45,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: complete ? _green.withAlpha(18) : _blue.withAlpha(18),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: complete
-                  ? const Icon(Icons.check_rounded, color: _green)
-                  : Text(
-                      number,
-                      style: const TextStyle(
-                        color: _blue,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(color: _muted, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            OutlinedButton(
-              onPressed: () {},
-              child: Text(complete ? 'Review' : 'Continue'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _ChartCard extends StatelessWidget {
   final String title;
@@ -2994,36 +2593,6 @@ class _AuditRow extends StatelessWidget {
   }
 }
 
-class _InfoCard extends StatelessWidget {
-  final String title;
-  final List<String> items;
-
-  const _InfoCard({required this.title, required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    return _SectionCard(
-      title: title,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: items
-            .map(
-              (item) => Padding(
-                padding: const EdgeInsets.only(bottom: 9),
-                child: Text(
-                  item,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            )
-            .toList(),
-      ),
-    );
-  }
-}
 
 class _SettingTile extends StatelessWidget {
   final IconData icon;
@@ -3198,6 +2767,19 @@ const _red = Color(0xFFDC2626);
 const _bg = Color(0xFFF8FAFC);
 const _border = Color(0xFFE2E8F0);
 const _muted = Color(0xFF64748B);
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

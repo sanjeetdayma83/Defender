@@ -88,7 +88,8 @@ export async function getPlatformDashboard(
 
     const user = await identityService.getByFirebaseUid(firebaseUid);
 
-    if (!user || user.role !== "PLATFORM_ADMIN") {
+    const roleNorm = String(user?.role ?? "").toUpperCase().replace(/-/g, "_");
+    if (!user || (roleNorm !== "PLATFORM_ADMIN" && roleNorm !== "SUPER_ADMIN")) {
       res.status(403).json({
         success: false,
         code: "FORBIDDEN",
@@ -112,7 +113,7 @@ export async function getPlatformDashboard(
       },
     });
   } catch (error) {
-    console.error("Platform dashboard failed:", error);
+    console.error("Platform dashboard failed:", error instanceof Error ? error.stack : error);
 
     res.status(500).json({
       success: false,
@@ -120,3 +121,5 @@ export async function getPlatformDashboard(
     });
   }
 }
+
+

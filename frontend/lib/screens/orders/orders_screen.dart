@@ -1,4 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../providers/session_provider.dart';
 
 import '../../models/models.dart';
 import '../../services/orders/order_service.dart';
@@ -68,6 +71,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
         .where((o) => o.status.toUpperCase() == 'PACKED')
         .length;
 
+    final session = context.watch<SessionProvider>();
+    final role = (session.user?.role ?? '').toUpperCase().replaceAll('-', '_');
+    final canImport = role == 'OWNER' ||
+        role == 'ADMIN' ||
+        role == 'MANAGER' ||
+        role == 'COMPANY_ADMIN' ||
+        role == 'PLATFORM_ADMIN';
+
     return LDPage(
       title: 'Orders',
       subtitle: 'Live orders from the Loss Defender database.',
@@ -80,7 +91,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
             label: const Text('Refresh'),
           ),
           FilledButton.icon(
-            onPressed: () async {
+            onPressed: !canImport
+                ? null
+                : () async {
               await Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const OrderImportScreen()),
               );
@@ -248,3 +261,4 @@ class _OrdersScreenState extends State<OrdersScreen> {
     super.dispose();
   }
 }
+

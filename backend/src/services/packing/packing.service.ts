@@ -132,7 +132,7 @@ export class PackingService {
           ON w.id = $2
         JOIN "Order" o
           ON o.awb = $3
-        WHERE u."clerkId" = $1
+        WHERE u."firebaseUid" = $1
         LIMIT 1
       `,
       input.firebaseUid.trim(),
@@ -158,7 +158,7 @@ export class PackingService {
             status::text AS status,
             "warehouseId"
           FROM "User"
-          WHERE "clerkId" = $1
+          WHERE "firebaseUid" = $1
           LIMIT 1
         `,
         input.firebaseUid.trim(),
@@ -602,5 +602,6 @@ export class PackingService {
 }
 
 export const packingService = new PackingService();
+
 
 

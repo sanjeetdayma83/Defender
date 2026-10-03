@@ -1,0 +1,106 @@
+﻿import { prisma } from "../../config/prisma.js";
+
+export class IdentityService {
+  async getByFirebaseUid(firebaseUid: string) {
+    const user = await prisma.user.findUnique({
+      where: { firebaseUid },
+      select: {
+        id: true,
+        firebaseUid: true,
+        email: true,
+        name: true,
+        phone: true,
+        role: true,
+        isActive: true,
+        companyId: true,
+        company: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            isActive: true,
+            warehouses: {
+              select: {
+                id: true,
+                companyId: true,
+                name: true,
+                code: true,
+                address: true,
+                city: true,
+                state: true,
+                country: true,
+                isActive: true,
+                createdAt: true,
+              },
+              orderBy: { name: "asc" },
+            },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      const err = new Error("USER_NOT_FOUND");
+      throw err;
+    }
+
+    return {
+      id: user.id,
+      firebaseUid: user.firebaseUid,
+      email: user.email,
+      name: user.name,
+      phone: user.phone,
+      role: user.role,
+      isActive: user.isActive,
+      status: user.isActive ? "active" : "inactive",
+      companyId: user.companyId,
+      company: {
+        id: user.company.id,
+        name: user.company.name,
+        code: user.company.code,
+        isActive: user.company.isActive,
+        warehouses: user.company.warehouses,
+      },
+    };
+  }
+
+  async bootstrapUser(input: {
+    firebaseUid: string;
+    email: string;
+    name?: string;
+  }) {
+    try {
+      return await this.getByFirebaseUid(input.firebaseUid);
+    } catch {
+      // continue
+    }
+
+    const email = input.email.trim().toLowerCase();
+    const byEmail = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: "insensitive" } },
+      select: { id: true },
+    });
+
+    if (byEmail) {
+      await prisma.user.update({
+        where: { id: byEmail.id },
+        data: { firebaseUid: input.firebaseUid },
+      });
+      return this.getByFirebaseUid(input.firebaseUid);
+    }
+
+    throw new Error("USER_NOT_REGISTERED");
+  }
+
+  async updateProfile(firebaseUid: string, input: { name?: string }) {
+    if (input.name !== undefined) {
+      await prisma.user.update({
+        where: { firebaseUid },
+        data: { name: input.name.trim() },
+      });
+    }
+    return this.getByFirebaseUid(firebaseUid);
+  }
+}
+
+export const identityService = new IdentityService();
