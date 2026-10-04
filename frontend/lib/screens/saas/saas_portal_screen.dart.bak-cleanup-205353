@@ -211,6 +211,13 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
     _scaffoldKey.currentState?.closeDrawer();
   }
 
+  void _changeRole(SaaSRole role) {
+    setState(() {
+      _role = role;
+      _index = 0;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -315,36 +322,34 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
               child: ListView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 itemCount: _navigation.length,
-                                itemBuilder: (context, index) {
+                itemBuilder: (context, index) {
                   final item = _navigation[index];
                   final selected = index == _index;
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 3),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: ListTile(
-                        dense: true,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(11),
-                        ),
-                        selected: selected,
-                        leading: Icon(
-                          item.icon,
-                          size: 20,
-                          color: selected ? Colors.white : Colors.white60,
-                        ),
-                        title: Text(
-                          item.label,
-                          style: TextStyle(
-                            color: selected ? Colors.white : Colors.white70,
-                            fontWeight: selected
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                          ),
-                        ),
-                        onTap: () => _select(index),
+                    child: ListTile(
+                      dense: true,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(11),
                       ),
+                      selected: selected,
+                      selectedTileColor: Colors.white.withAlpha(18),
+                      leading: Icon(
+                        item.icon,
+                        size: 20,
+                        color: selected ? Colors.white : Colors.white60,
+                      ),
+                      title: Text(
+                        item.label,
+                        style: TextStyle(
+                          color: selected ? Colors.white : Colors.white70,
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                        ),
+                      ),
+                      onTap: () => _select(index),
                     ),
                   );
                 },
@@ -511,37 +516,23 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
             Expanded(
               child: ListView.builder(
                 itemCount: _navigation.length,
-                                itemBuilder: (context, index) {
+                itemBuilder: (context, index) {
                   final item = _navigation[index];
-                  final selected = index == _index;
 
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 3),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: ListTile(
-                        dense: true,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(11),
-                        ),
-                        selected: selected,
-                        leading: Icon(
-                          item.icon,
-                          size: 20,
-                          color: selected ? Colors.white : Colors.white60,
-                        ),
-                        title: Text(
-                          item.label,
-                          style: TextStyle(
-                            color: selected ? Colors.white : Colors.white70,
-                            fontWeight: selected
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                          ),
-                        ),
-                        onTap: () => _select(index),
+                  return ListTile(
+                    selected: index == _index,
+                    selectedTileColor: Colors.white.withAlpha(18),
+                    leading: Icon(
+                      item.icon,
+                      color: index == _index ? Colors.white : Colors.white60,
+                    ),
+                    title: Text(
+                      item.label,
+                      style: TextStyle(
+                        color: index == _index ? Colors.white : Colors.white70,
                       ),
                     ),
+                    onTap: () => _select(index),
                   );
                 },
               ),
@@ -1544,6 +1535,50 @@ class _DataTableCard extends StatelessWidget {
   }
 }
 
+class _FilterBar extends StatelessWidget {
+  final String search;
+  final List<String> filters;
+
+  const _FilterBar({required this.search, required this.filters});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        SizedBox(
+          width: 300,
+          height: 42,
+          child: TextField(
+            decoration: InputDecoration(
+              hintText: search,
+              prefixIcon: const Icon(Icons.search_rounded),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(11),
+                borderSide: const BorderSide(color: _border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(11),
+                borderSide: const BorderSide(color: _border),
+              ),
+            ),
+          ),
+        ),
+        ...filters.map(
+          (filter) => OutlinedButton.icon(
+            onPressed: () {},
+            icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 17),
+            label: Text(filter),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _PrimaryButton extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -1597,6 +1632,101 @@ class _StatusBadge extends StatelessWidget {
     );
   }
 }
+
+class _PlanCard extends StatelessWidget {
+  final String name;
+  final String price;
+  final String scans;
+  final String users;
+  final String storage;
+  final Color color;
+  final bool popular;
+
+  const _PlanCard({
+    required this.name,
+    required this.price,
+    required this.scans,
+    required this.users,
+    required this.storage,
+    required this.color,
+    this.popular = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                name,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const Spacer(),
+              if (popular) const _StatusBadge(text: 'POPULAR', color: _blue),
+            ],
+          ),
+          const SizedBox(height: 15),
+          Text(
+            price,
+            style: TextStyle(
+              fontSize: 30,
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _Bullet(text: scans),
+          _Bullet(text: users),
+          _Bullet(text: storage),
+          const SizedBox(height: 18),
+          OutlinedButton(onPressed: () {}, child: const Text('Edit Plan')),
+        ],
+      ),
+    );
+  }
+}
+
+class _TopUpCard extends StatelessWidget {
+  final String scans;
+  final String price;
+
+  const _TopUpCard({required this.scans, required this.price});
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.add_card_outlined, color: _blue),
+          const SizedBox(height: 14),
+          Text(
+            '$scans scans',
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            price,
+            style: const TextStyle(
+              color: _blue,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 15),
+          OutlinedButton(onPressed: () {}, child: const Text('Edit')),
+        ],
+      ),
+    );
+  }
+}
+
 
 class _IntegrationCard extends StatelessWidget {
   final String name;
@@ -1832,6 +1962,41 @@ class _ActivityRow extends StatelessWidget {
   }
 }
 
+class _AuditRow extends StatelessWidget {
+  final String actor;
+  final String action;
+  final String target;
+  final String time;
+
+  const _AuditRow({
+    required this.actor,
+    required this.action,
+    required this.target,
+    required this.time,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const CircleAvatar(
+        backgroundColor: Color(0xFFEFF6FF),
+        child: Icon(Icons.security_outlined, color: _blue, size: 19),
+      ),
+      title: Text(
+        '$actor • $action',
+        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+      ),
+      subtitle: Text(
+        target,
+        style: const TextStyle(color: _muted, fontSize: 11),
+      ),
+      trailing: Text(time, style: const TextStyle(color: _muted, fontSize: 10)),
+    );
+  }
+}
+
+
 class _SettingTile extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -1938,6 +2103,29 @@ class _FaqRow extends StatelessWidget {
   }
 }
 
+class _Bullet extends StatelessWidget {
+  final String text;
+
+  const _Bullet({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Row(
+        children: [
+          const Icon(Icons.check_circle_outline, size: 17, color: _green),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _NavItem {
   final IconData icon;
   final String label;
@@ -1982,13 +2170,6 @@ const _red = Color(0xFFDC2626);
 const _bg = Color(0xFFF8FAFC);
 const _border = Color(0xFFE2E8F0);
 const _muted = Color(0xFF64748B);
-
-
-
-
-
-
-
 
 
 

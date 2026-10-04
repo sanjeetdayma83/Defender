@@ -1,10 +1,10 @@
 ﻿import type { Response } from "express";
 import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
 import { IdentityService } from "../../services/identity/identity.service.js";
-import { PlatformCompaniesService } from "../../services/platform/platform-companies.service.js";
+import { PlatformUsersService } from "../../services/platform/platform-users.service.js";
 
 const identityService = new IdentityService();
-const companiesService = new PlatformCompaniesService();
+const usersService = new PlatformUsersService();
 
 function isPlatformAdmin(role: unknown): boolean {
   const r = String(role ?? "").toUpperCase().replace(/-/g, "_");
@@ -29,7 +29,7 @@ async function requirePlatformAdmin(req: AuthenticatedRequest, res: Response) {
   return user;
 }
 
-export async function listPlatformCompanies(
+export async function listPlatformUsers(
   req: AuthenticatedRequest,
   res: Response,
 ) {
@@ -42,27 +42,24 @@ export async function listPlatformCompanies(
       typeof req.query.status === "string" ? req.query.status : "all";
     const status =
       statusRaw === "active" || statusRaw === "inactive" ? statusRaw : "all";
-    const limit = Number(req.query.limit ?? 50);
+    const role = typeof req.query.role === "string" ? req.query.role : "";
+    const limit = Number(req.query.limit ?? 100);
 
-    const result = await companiesService.list({ search, status, limit });
-
-    res.json({
-      success: true,
-      data: result,
-    });
+    const result = await usersService.list({ search, status, role, limit });
+    res.json({ success: true, data: result });
   } catch (error) {
     console.error(
-      "listPlatformCompanies failed:",
+      "listPlatformUsers failed:",
       error instanceof Error ? error.stack : error,
     );
     res.status(500).json({
       success: false,
-      message: "Unable to load companies.",
+      message: "Unable to load users.",
     });
   }
 }
 
-export async function setCompanyActive(
+export async function setUserStatus(
   req: AuthenticatedRequest,
   res: Response,
 ) {
@@ -70,25 +67,33 @@ export async function setCompanyActive(
     const admin = await requirePlatformAdmin(req, res);
     if (!admin) return;
 
-    const companyId = req.params.id;
+    const userId = req.params.id;
     const isActive = Boolean(req.body?.isActive);
 
-    if (!companyId) {
-      res.status(400).json({ success: false, message: "Company id required." });
+    if (!userId) {
+      res.status(400).json({ success: false, message: "User id required." });
       return;
     }
 
-    const updated = await companiesService.setActive(companyId, isActive);
+    // Prevent self-lockout
+    if (admin.id === userId && !isActive) {
+      res.status(400).json({
+        success: false,
+        message: "Cannot suspend your own account.",
+      });
+      return;
+    }
+
+    const updated = await usersService.setStatus(userId, isActive);
     res.json({ success: true, data: updated });
   } catch (error) {
     console.error(
-      "setCompanyActive failed:",
+      "setUserStatus failed:",
       error instanceof Error ? error.stack : error,
     );
     res.status(500).json({
       success: false,
-      message: "Unable to update company.",
+      message: "Unable to update user.",
     });
   }
 }
-
