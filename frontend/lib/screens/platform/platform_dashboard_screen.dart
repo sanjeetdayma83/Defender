@@ -7,527 +7,502 @@ import '../../services/dashboard/platform_dashboard_service.dart';
 class PlatformDashboardScreen extends StatefulWidget {
   final ValueChanged<String>? onOpenSection;
 
-  const PlatformDashboardScreen({super.key, this.onOpenSection});
+  const PlatformDashboardScreen({
+    super.key,
+    this.onOpenSection,
+  });
 
   @override
   State<PlatformDashboardScreen> createState() =>
       _PlatformDashboardScreenState();
 }
 
-class _PlatformDashboardScreenState extends State<PlatformDashboardScreen> {
-  final _service = const PlatformDashboardService();
+class _PlatformDashboardScreenState
+    extends State<PlatformDashboardScreen> {
+  final PlatformDashboardService _service =
+      const PlatformDashboardService();
 
-  Future<PlatformDashboardData>? _future;
+  PlatformDashboardData? _data;
 
-  static const _navy = Color(0xFF0F172A);
-  static const _blue = Color(0xFF2563EB);
-  static const _blueLight = Color(0xFFEFF6FF);
-  static const _green = Color(0xFF059669);
-  static const _greenLight = Color(0xFFECFDF5);
-  static const _orange = Color(0xFFF59E0B);
-  static const _orangeLight = Color(0xFFFFF7ED);
-  static const _violet = Color(0xFF7C3AED);
-  static const _violetLight = Color(0xFFF5F3FF);
-  static const _cyan = Color(0xFF0891B2);
-  static const _cyanLight = Color(0xFFECFEFF);
-  static const _text = Color(0xFF172554);
-  static const _muted = Color(0xFF64748B);
-  static const _border = Color(0xFFE2E8F0);
-  static const _surface = Colors.white;
-  static const _background = Color(0xFFF8FAFC);
+  bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _reload();
+    _load();
   }
 
-  void _reload() {
+  Future<void> _load() async {
     setState(() {
-      _future = _service.fetch();
+      _loading = true;
+      _error = null;
     });
-  }
 
-  void _open(String section) {
-    widget.onOpenSection?.call(section);
+    try {
+      final result = await _service.fetch();
+
+      if (!mounted) return;
+
+      setState(() {
+        _data = result;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<PlatformDashboardData>(
-      future: _future,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const _DashboardLoading();
-        }
+    if (_loading) {
+      return const _DashboardLoading();
+    }
 
-        if (snapshot.hasError) {
-          return _DashboardError(
-            message: snapshot.error.toString().replaceFirst('Exception: ', ''),
-            onRetry: _reload,
-          );
-        }
+    if (_error != null) {
+      return _DashboardError(
+        message: _error!,
+        onRetry: _load,
+      );
+    }
 
-        final data = snapshot.data ?? PlatformDashboardData.empty();
+    final data = _data ?? PlatformDashboardData.empty();
 
-        return Container(
-          color: _background,
-          child: RefreshIndicator(
-            onRefresh: () async {
-              _reload();
-              await _future;
-            },
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final width = constraints.maxWidth;
-
-                return ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: EdgeInsets.fromLTRB(
-                    width < 700 ? 16 : 24,
-                    width < 700 ? 16 : 22,
-                    width < 700 ? 16 : 24,
-                    32,
-                  ),
+    return Container(
+      color: _DashboardColors.background,
+      child: RefreshIndicator(
+        onRefresh: _load,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _PageHeader(
-                      data: data,
-                      onExport: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Export action will be connected to the reporting API.',
-                            ),
-                          ),
-                        );
-                      },
+                    _DashboardHeader(
+                      onExport: () {},
                     ),
-                    const SizedBox(height: 16),
-                    _DashboardTabs(selected: 'Overview', onSelected: _open),
+
+                    const SizedBox(height: 14),
+
+                    _DashboardTabs(),
+
                     const SizedBox(height: 18),
-                    _KpiSection(data: data),
-                    const SizedBox(height: 18),
-                    _PrimaryAnalytics(data: data, wide: width >= 1100),
-                    const SizedBox(height: 18),
-                    _UsageSection(data: data, wide: width >= 900),
-                    const SizedBox(height: 18),
-                    _LowerDashboard(data: data, wide: width >= 1050),
-                    const SizedBox(height: 18),
-                    _AlertsSection(data: data),
+
+                    _KpiGrid(data: data),
+
+                    const SizedBox(height: 14),
+
+                    _ChartsRow(data: data),
+
+                    const SizedBox(height: 14),
+
+                    _UsageAndActivityRow(data: data),
+
+                    const SizedBox(height: 14),
+
+                    _CompaniesAndSubscriptionsRow(
+                      data: data,
+                      onOpenSection: widget.onOpenSection,
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    _HealthAndAlertsRow(
+                      data: data,
+                      onOpenSection: widget.onOpenSection,
+                    ),
                   ],
-                );
-              },
-            ),
-          ),
-        );
-      },
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }
 
-class _PageHeader extends StatelessWidget {
-  final PlatformDashboardData data;
+/* -------------------------------------------------------------------------- */
+/* COLORS                                                                     */
+/* -------------------------------------------------------------------------- */
+
+abstract final class _DashboardColors {
+  static const background = Color(0xFFF7F9FC);
+  static const navy = Color(0xFF0A1B55);
+  static const blue = Color(0xFF1769FF);
+  static const blueSoft = Color(0xFFEAF2FF);
+
+  static const green = Color(0xFF0DBB78);
+  static const greenSoft = Color(0xFFE8FBF3);
+
+  static const orange = Color(0xFFFF9819);
+  static const orangeSoft = Color(0xFFFFF3E3);
+
+  static const purple = Color(0xFF8A35F5);
+  static const red = Color(0xFFF23D4F);
+
+  static const text = Color(0xFF10235E);
+  static const muted = Color(0xFF6F7D9E);
+
+  static const border = Color(0xFFE1E7F0);
+  static const grid = Color(0xFFE8EDF5);
+}
+
+/* -------------------------------------------------------------------------- */
+/* HEADER                                                                     */
+/* -------------------------------------------------------------------------- */
+
+class _DashboardHeader extends StatelessWidget {
   final VoidCallback onExport;
 
-  const _PageHeader({required this.data, required this.onExport});
+  const _DashboardHeader({
+    required this.onExport,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final adminName = data.adminName.trim().isEmpty
-        ? 'Platform Admin'
-        : data.adminName;
-
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Expanded(
+        const Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Dashboard',
                 style: TextStyle(
-                  color: _PlatformDashboardScreenState._navy,
-                  fontSize: 28,
+                  fontSize: 27,
                   fontWeight: FontWeight.w800,
-                  letterSpacing: -0.6,
+                  color: _DashboardColors.navy,
+                  height: 1.05,
                 ),
               ),
-              const SizedBox(height: 4),
-              const Text(
+              SizedBox(height: 5),
+              Text(
                 'Overview of your Loss Defender platform',
                 style: TextStyle(
-                  color: _PlatformDashboardScreenState._muted,
+                  color: _DashboardColors.muted,
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.verified_user_outlined,
-                    size: 14,
-                    color: _PlatformDashboardScreenState._green,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    adminName,
-                    style: const TextStyle(
-                      color: _PlatformDashboardScreenState._muted,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (data.adminEmail.trim().isNotEmpty) ...[
-                    const SizedBox(width: 8),
-                    const Text(
-                      '•',
-                      style: TextStyle(
-                        color: _PlatformDashboardScreenState._border,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        data.adminEmail,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _PlatformDashboardScreenState._muted,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
             ],
           ),
         ),
-        const SizedBox(width: 16),
-        if (MediaQuery.sizeOf(context).width >= 650)
-          Row(
-            children: [
-              _OutlineAction(
-                label: 'Last 30 Days',
-                icon: Icons.calendar_today_outlined,
-                onTap: () {},
-              ),
-              const SizedBox(width: 10),
-              _PrimaryAction(
-                label: 'Export Report',
-                icon: Icons.download_outlined,
-                onTap: onExport,
-              ),
-            ],
-          ),
+        _OutlinedButton(
+          icon: Icons.calendar_month_outlined,
+          label: 'Last 30 Days',
+          onPressed: () {},
+        ),
+        const SizedBox(width: 10),
+        _PrimaryButton(
+          icon: Icons.download_outlined,
+          label: 'Export Report',
+          onPressed: onExport,
+        ),
       ],
     );
   }
 }
 
 class _DashboardTabs extends StatelessWidget {
-  final String selected;
-  final ValueChanged<String> onSelected;
+  @override
+  Widget build(BuildContext context) {
+    const tabs = [
+      'Overview',
+      'Revenue',
+      'Companies',
+      'Subscriptions',
+      'Usage',
+      'System Health',
+    ];
 
-  const _DashboardTabs({required this.selected, required this.onSelected});
+    return Container(
+      height: 42,
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: _DashboardColors.border,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          for (int i = 0; i < tabs.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(right: 28),
+              child: _TabItem(
+                label: tabs[i],
+                selected: i == 0,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
 
-  static const items = [
-    ('Overview', Icons.dashboard_outlined),
-    ('Revenue', Icons.payments_outlined),
-    ('Companies', Icons.business_outlined),
-    ('Subscriptions', Icons.workspace_premium_outlined),
-    ('Usage', Icons.bar_chart_rounded),
-    ('System Health', Icons.monitor_heart_outlined),
-  ];
+class _TabItem extends StatelessWidget {
+  final String label;
+  final bool selected;
+
+  const _TabItem({
+    required this.label,
+    required this.selected,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 48,
-      decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: _PlatformDashboardScreenState._border),
-        ),
+      height: 42,
+      decoration: BoxDecoration(
+        border: selected
+            ? const Border(
+                bottom: BorderSide(
+                  color: _DashboardColors.blue,
+                  width: 3,
+                ),
+              )
+            : null,
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            for (final item in items)
-              _DashboardTab(
-                label: item.$1,
-                icon: item.$2,
-                selected: selected == item.$1,
-                onTap: () => onSelected(item.$1),
-              ),
-          ],
+      alignment: Alignment.center,
+      child: Text(
+        label,
+        style: TextStyle(
+          color: selected
+              ? _DashboardColors.blue
+              : _DashboardColors.text,
+          fontSize: 12,
+          fontWeight: selected
+              ? FontWeight.w800
+              : FontWeight.w500,
         ),
       ),
     );
   }
 }
 
-class _DashboardTab extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
+/* -------------------------------------------------------------------------- */
+/* KPI GRID                                                                   */
+/* -------------------------------------------------------------------------- */
 
-  const _DashboardTab({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
+class _KpiGrid extends StatelessWidget {
+  final PlatformDashboardData data;
+
+  const _KpiGrid({
+    required this.data,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        margin: const EdgeInsets.only(right: 28),
-        padding: const EdgeInsets.fromLTRB(2, 0, 2, 12),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: selected
-                  ? _PlatformDashboardScreenState._blue
-                  : Colors.transparent,
-              width: 2,
-            ),
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: selected
-                  ? _PlatformDashboardScreenState._blue
-                  : _PlatformDashboardScreenState._muted,
-            ),
-            const SizedBox(width: 7),
-            Text(
-              label,
-              style: TextStyle(
-                color: selected
-                    ? _PlatformDashboardScreenState._blue
-                    : _PlatformDashboardScreenState._muted,
-                fontSize: 12,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
+    final m = data.metrics;
+
+    final cards = [
+      _KpiItem(
+        title: 'Total Companies',
+        value: _formatInt(m.totalCompanies),
+        subtitle:
+            '${data.activeCompanies} active • ${data.inactiveCompanies} inactive',
+        icon: Icons.business_rounded,
+        color: _DashboardColors.blue,
+        background: _DashboardColors.blueSoft,
       ),
-    );
-  }
-}
+      _KpiItem(
+        title: 'Total Revenue',
+        value: _formatMoney(m.totalRevenuePaise),
+        subtitle:
+            '${data.revenuePaidPaymentCount} paid payments',
+        icon: Icons.currency_rupee_rounded,
+        color: _DashboardColors.green,
+        background: _DashboardColors.greenSoft,
+      ),
+      _KpiItem(
+        title: 'Active Subscriptions',
+        value: _formatInt(m.activeSubscriptions),
+        subtitle:
+            '${m.totalCompanies} companies',
+        icon: Icons.workspace_premium_rounded,
+        color: _DashboardColors.orange,
+        background: _DashboardColors.orangeSoft,
+      ),
+      _KpiItem(
+        title: 'Total Users',
+        value: _formatInt(m.totalUsers),
+        subtitle:
+            '${data.activeUsers} active • ${data.inactiveUsers} inactive',
+        icon: Icons.people_alt_rounded,
+        color: _DashboardColors.blue,
+        background: _DashboardColors.blueSoft,
+      ),
+      _KpiItem(
+        title: 'Total Warehouses',
+        value: _formatInt(m.totalWarehouses),
+        subtitle: 'Across all companies',
+        icon: Icons.warehouse_rounded,
+        color: _DashboardColors.blue,
+        background: _DashboardColors.blueSoft,
+      ),
+      _KpiItem(
+        title: 'Total Storage Used',
+        value: _formatBytes(m.totalStorageUsedBytes),
+        subtitle: _storageSubtitle(m),
+        icon: Icons.storage_rounded,
+        color: _DashboardColors.blue,
+        background: _DashboardColors.blueSoft,
+      ),
+    ];
 
-class _KpiSection extends StatelessWidget {
-  final PlatformDashboardData data;
-
-  const _KpiSection({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = constraints.maxWidth >= 1250
             ? 6
-            : constraints.maxWidth >= 900
-            ? 3
-            : constraints.maxWidth >= 560
-            ? 2
-            : 1;
+            : constraints.maxWidth >= 850
+                ? 3
+                : constraints.maxWidth >= 560
+                    ? 2
+                    : 1;
 
-        final gap = 12.0;
-        final cardWidth =
-            (constraints.maxWidth - gap * (columns - 1)) / columns;
-
-        final cards = [
-          _KpiCard(
-            title: 'Total Companies',
-            value: _number(data.totalCompanies),
-            subtitle:
-                '${_number(data.activeCompanies)} active  •  ${_number(data.inactiveCompanies)} inactive',
-            icon: Icons.business_outlined,
-            iconColor: _PlatformDashboardScreenState._blue,
-            iconBackground: _PlatformDashboardScreenState._blueLight,
-            positive: data.newCompaniesThisMonth > 0,
-            trend: data.newCompaniesThisMonth > 0
-                ? '+${_number(data.newCompaniesThisMonth)}'
-                : 'Live',
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: cards.length,
+          gridDelegate:
+              SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            mainAxisExtent: 92,
           ),
-          _KpiCard(
-            title: 'Total Revenue',
-            value: _money(data.revenueTotalPaise),
-            subtitle: '${_number(data.revenuePaidPaymentCount)} paid payments',
-            icon: Icons.currency_rupee_rounded,
-            iconColor: _PlatformDashboardScreenState._green,
-            iconBackground: _PlatformDashboardScreenState._greenLight,
-            positive: data.revenueTotalPaise > 0,
-            trend: 'Live',
-          ),
-          _KpiCard(
-            title: 'Active Subscriptions',
-            value: _number(data.activeSubscriptions),
-            subtitle: '${_number(data.totalCompanies)} companies',
-            icon: Icons.workspace_premium_outlined,
-            iconColor: _PlatformDashboardScreenState._orange,
-            iconBackground: _PlatformDashboardScreenState._orangeLight,
-            positive: data.activeSubscriptions > 0,
-            trend: 'Live',
-          ),
-          _KpiCard(
-            title: 'Total Users',
-            value: _number(data.totalUsers),
-            subtitle:
-                '${_number(data.activeUsers)} active  •  ${_number(data.inactiveUsers)} inactive',
-            icon: Icons.people_outline_rounded,
-            iconColor: _PlatformDashboardScreenState._blue,
-            iconBackground: _PlatformDashboardScreenState._blueLight,
-            positive: data.activeUsers > 0,
-            trend: 'Live',
-          ),
-          _KpiCard(
-            title: 'Storage Used',
-            value: _bytes(data.storageUsedBytes),
-            subtitle:
-                '${_percent(data.storageUsedBytes, data.storageQuotaBytes)}% of quota',
-            icon: Icons.storage_outlined,
-            iconColor: _PlatformDashboardScreenState._violet,
-            iconBackground: _PlatformDashboardScreenState._violetLight,
-            positive: data.storageQuotaBytes == 0 || _storagePercent(data) < 80,
-            trend:
-                '${_percent(data.storageUsedBytes, data.storageQuotaBytes)}%',
-          ),
-          _KpiCard(
-            title: 'Evidence Media',
-            value: _number(
-              data.evidenceStatus.fold<int>(0, (sum, item) => sum + item.count),
-            ),
-            subtitle:
-                '${_number(data.recordingStatus.fold<int>(0, (sum, item) => sum + item.count))} recordings',
-            icon: Icons.video_library_outlined,
-            iconColor: _PlatformDashboardScreenState._cyan,
-            iconBackground: _PlatformDashboardScreenState._cyanLight,
-            positive: true,
-            trend: 'Live',
-          ),
-        ];
-
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: [
-            for (final card in cards)
-              SizedBox(
-                width: columns == 1 ? constraints.maxWidth : cardWidth,
-                child: card,
-              ),
-          ],
+          itemBuilder: (_, index) {
+            return _KpiCard(item: cards[index]);
+          },
         );
       },
     );
   }
+
+  String _storageSubtitle(PlatformDashboardMetrics m) {
+    if (m.totalStorageQuotaBytes <= 0) {
+      return 'Quota not configured';
+    }
+
+    final percentage =
+        m.totalStorageUsedBytes /
+        m.totalStorageQuotaBytes *
+        100;
+
+    return '${_formatBytes(m.totalStorageQuotaBytes)} quota '
+        '(${percentage.toStringAsFixed(1)}%)';
+  }
 }
 
-class _KpiCard extends StatelessWidget {
+class _KpiItem {
   final String title;
   final String value;
   final String subtitle;
   final IconData icon;
-  final Color iconColor;
-  final Color iconBackground;
-  final bool positive;
-  final String trend;
+  final Color color;
+  final Color background;
 
-  const _KpiCard({
+  const _KpiItem({
     required this.title,
     required this.value,
     required this.subtitle,
     required this.icon,
-    required this.iconColor,
-    required this.iconBackground,
-    required this.positive,
-    required this.trend,
+    required this.color,
+    required this.background,
+  });
+}
+
+class _KpiCard extends StatelessWidget {
+  final _KpiItem item;
+
+  const _KpiCard({
+    required this.item,
   });
 
   @override
   Widget build(BuildContext context) {
-    return _SurfaceCard(
-      padding: const EdgeInsets.all(15),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 13, 12, 11),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(
+          color: _DashboardColors.border,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x080B2450),
+            blurRadius: 14,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: iconBackground,
-                  borderRadius: BorderRadius.circular(11),
+          Container(
+            width: 47,
+            height: 47,
+            decoration: BoxDecoration(
+              color: item.background,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              item.icon,
+              color: item.color,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _DashboardColors.muted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                child: Icon(icon, color: iconColor, size: 20),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                decoration: BoxDecoration(
-                  color: positive
-                      ? _PlatformDashboardScreenState._greenLight
-                      : _PlatformDashboardScreenState._orangeLight,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  trend,
-                  style: TextStyle(
-                    color: positive
-                        ? _PlatformDashboardScreenState._green
-                        : _PlatformDashboardScreenState._orange,
-                    fontSize: 9.5,
+                const SizedBox(height: 4),
+                Text(
+                  item.value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _DashboardColors.navy,
+                    fontSize: 20,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 13),
-          Text(
-            title,
-            style: const TextStyle(
-              color: _PlatformDashboardScreenState._muted,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 3),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: _PlatformDashboardScreenState._navy,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.4,
-              ),
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: _PlatformDashboardScreenState._muted,
-              fontSize: 9.5,
-              fontWeight: FontWeight.w500,
+                const SizedBox(height: 2),
+                Text(
+                  item.subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _DashboardColors.muted,
+                    fontSize: 9,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -536,59 +511,1273 @@ class _KpiCard extends StatelessWidget {
   }
 }
 
-class _PrimaryAnalytics extends StatelessWidget {
-  final PlatformDashboardData data;
-  final bool wide;
+/* -------------------------------------------------------------------------- */
+/* CHARTS                                                                     */
+/* -------------------------------------------------------------------------- */
 
-  const _PrimaryAnalytics({required this.data, required this.wide});
+class _ChartsRow extends StatelessWidget {
+  final PlatformDashboardData data;
+
+  const _ChartsRow({
+    required this.data,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final revenue = _DashboardCard(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 1050;
+
+        if (!wide) {
+          return Column(
+            children: [
+              _RevenueCard(data: data),
+              const SizedBox(height: 10),
+              _GrowthCard(data: data),
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 3,
+              child: _RevenueCard(data: data),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 3,
+              child: _GrowthCard(data: data),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 2,
+              child: _SubscriptionDistribution(data: data),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _RevenueCard extends StatelessWidget {
+  final PlatformDashboardData data;
+
+  const _RevenueCard({
+    required this.data,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final points = data.revenueMonthly;
+
+    return _Panel(
       title: 'Revenue Trend',
       icon: Icons.bar_chart_rounded,
-      trailing: _CompactDropdown(label: 'Last 6 Months', onTap: () {}),
-      child: SizedBox(
-        height: 280,
-        child: _RevenueChart(revenue: data.revenueMonthly),
+      child: Column(
+        children: [
+          Align(
+            alignment: Alignment.topRight,
+            child: _SmallSelector(
+              label: 'Last 6 Months',
+            ),
+          ),
+          const SizedBox(height: 3),
+          SizedBox(
+            height: 155,
+            child: points.isEmpty
+                ? const _EmptyChart(
+                    message: 'No revenue data available',
+                  )
+                : _RevenueChart(
+                    points: points,
+                  ),
+          ),
+          const SizedBox(height: 6),
+          if (points.isNotEmpty)
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _LegendDot(
+                  color: _DashboardColors.blue,
+                  label: 'Revenue',
+                ),
+                SizedBox(width: 18),
+                _LegendDot(
+                  color: _DashboardColors.orange,
+                  label: 'Payments',
+                ),
+              ],
+            ),
+        ],
       ),
     );
+  }
+}
 
-    final growth = _DashboardCard(
-      title: 'Users & Subscriptions Growth',
-      icon: Icons.trending_up_rounded,
-      trailing: _CompactDropdown(label: 'Last 6 Months', onTap: () {}),
+class _RevenueChart extends StatelessWidget {
+  final List<PlatformRevenuePoint> points;
+
+  const _RevenueChart({
+    required this.points,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final maxValue = points
+        .map((e) => e.revenuePaise)
+        .fold<int>(
+          0,
+          (a, b) => math.max(a, b),
+        );
+
+    return CustomPaint(
+      painter: _LineChartPainter(
+        values: points
+            .map((e) => e.revenuePaise.toDouble())
+            .toList(),
+        maxValue: maxValue.toDouble(),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          for (final point in points)
+            Expanded(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 1),
+                  child: Text(
+                    point.month,
+                    style: const TextStyle(
+                      color: _DashboardColors.muted,
+                      fontSize: 8,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GrowthCard extends StatelessWidget {
+  final PlatformDashboardData data;
+
+  const _GrowthCard({
+    required this.data,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final users = data.monthlyUsers;
+    final subscriptions = data.monthlySubscriptions;
+
+    final maxValue = [
+      ...users.map((e) => e.value),
+      ...subscriptions.map((e) => e.value),
+    ].fold<int>(0, math.max);
+
+    return _Panel(
+      title: 'Companies Growth',
+      icon: Icons.bar_chart_rounded,
+      child: Column(
+        children: [
+          Align(
+            alignment: Alignment.topRight,
+            child: _SmallSelector(
+              label: 'Last 6 Months',
+            ),
+          ),
+          const SizedBox(height: 3),
+          SizedBox(
+            height: 155,
+            child: users.isEmpty &&
+                    subscriptions.isEmpty
+                ? const _EmptyChart(
+                    message: 'No growth data available',
+                  )
+                : _GrowthChart(
+                    users: users,
+                    subscriptions: subscriptions,
+                    maxValue: maxValue,
+                  ),
+          ),
+          const SizedBox(height: 6),
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _LegendDot(
+                color: _DashboardColors.blue,
+                label: 'Users',
+              ),
+              SizedBox(width: 18),
+              _LegendDot(
+                color: _DashboardColors.purple,
+                label: 'Subscriptions',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GrowthChart extends StatelessWidget {
+  final List<PlatformGrowthPoint> users;
+  final List<PlatformGrowthPoint> subscriptions;
+  final int maxValue;
+
+  const _GrowthChart({
+    required this.users,
+    required this.subscriptions,
+    required this.maxValue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final count = math.max(
+      users.length,
+      subscriptions.length,
+    );
+
+    return CustomPaint(
+      painter: _MultiLineChartPainter(
+        first: users.map((e) => e.value.toDouble()).toList(),
+        second: subscriptions
+            .map((e) => e.value.toDouble())
+            .toList(),
+        maxValue: maxValue.toDouble(),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          for (int i = 0; i < count; i++)
+            Expanded(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Text(
+                  i < users.length
+                      ? users[i].month
+                      : i < subscriptions.length
+                          ? subscriptions[i].month
+                          : '',
+                  style: const TextStyle(
+                    color: _DashboardColors.muted,
+                    fontSize: 8,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SubscriptionDistribution extends StatelessWidget {
+  final PlatformDashboardData data;
+
+  const _SubscriptionDistribution({
+    required this.data,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final items = data.subscriptionStatus;
+
+    return _Panel(
+      title: 'Subscription Status',
+      icon: Icons.donut_large_rounded,
       child: SizedBox(
-        height: 280,
-        child: _GrowthChart(
-          users: data.monthlyUsers,
-          subscriptions: data.monthlySubscriptions,
+        height: 210,
+        child: items.isEmpty
+            ? const _EmptyChart(
+                message: 'No subscription data available',
+              )
+            : Row(
+                children: [
+                  SizedBox(
+                    width: 125,
+                    height: 125,
+                    child: CustomPaint(
+                      painter: _DonutPainter(
+                        values: items
+                            .map((e) => e.count.toDouble())
+                            .toList(),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${data.metrics.totalCompanies}',
+                          style: const TextStyle(
+                            color: _DashboardColors.navy,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ListView.separated(
+                      physics:
+                          const NeverScrollableScrollPhysics(),
+                      shrinkWrap: true,
+                      itemCount: math.min(items.length, 5),
+                      separatorBuilder: (_, _) =>
+                          const SizedBox(height: 7),
+                      itemBuilder: (_, index) {
+                        final item = items[index];
+
+                        return Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: _statusColor(index),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 7),
+                            Expanded(
+                              child: Text(
+                                _prettyStatus(item.status),
+                                style: const TextStyle(
+                                  color:
+                                      _DashboardColors.text,
+                                  fontSize: 9,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              '${item.count}',
+                              style: const TextStyle(
+                                color:
+                                    _DashboardColors.navy,
+                                fontSize: 9,
+                                fontWeight:
+                                    FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* USAGE + ACTIVITY                                                           */
+/* -------------------------------------------------------------------------- */
+
+class _UsageAndActivityRow extends StatelessWidget {
+  final PlatformDashboardData data;
+
+  const _UsageAndActivityRow({
+    required this.data,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 1050;
+
+        final usage = _UsageCard(data: data);
+        final activity = _ActivityCard(data: data);
+
+        if (!wide) {
+          return Column(
+            children: [
+              usage,
+              const SizedBox(height: 10),
+              activity,
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 7,
+              child: usage,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 3,
+              child: activity,
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _UsageCard extends StatelessWidget {
+  final PlatformDashboardData data;
+
+  const _UsageCard({
+    required this.data,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final storagePercentage =
+        data.storageQuotaBytes <= 0
+            ? 0.0
+            : (data.storageUsedBytes /
+                    data.storageQuotaBytes)
+                .clamp(0.0, 1.0);
+
+    return _Panel(
+      title: 'Platform Usage Overview',
+      icon: Icons.dashboard_customize_outlined,
+      child: Row(
+        children: [
+          Expanded(
+            child: _UsageMetric(
+              icon: Icons.storage_rounded,
+              title: 'Storage Usage',
+              value:
+                  '${_formatBytes(data.storageUsedBytes)}'
+                  ' / '
+                  '${_formatBytes(data.storageQuotaBytes)}',
+              progress: storagePercentage,
+            ),
+          ),
+          Expanded(
+            child: _UsageMetric(
+              icon: Icons.inventory_2_outlined,
+              title: 'Total Orders',
+              value: _formatInt(
+                data.metrics.totalOrders,
+              ),
+              progress: null,
+            ),
+          ),
+          Expanded(
+            child: _UsageMetric(
+              icon: Icons.qr_code_scanner_rounded,
+              title: 'Scan Credits',
+              value: _formatInt(
+                data.walletConsumed,
+              ),
+              progress: null,
+            ),
+          ),
+          Expanded(
+            child: _UsageMetric(
+              icon: Icons.people_alt_outlined,
+              title: 'Active Users',
+              value:
+                  '${data.activeUsers} / ${data.totalUsers}',
+              progress: data.totalUsers <= 0
+                  ? 0
+                  : data.activeUsers /
+                      data.totalUsers,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UsageMetric extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String value;
+  final double? progress;
+
+  const _UsageMetric({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.progress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBFCFE),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: _DashboardColors.border,
         ),
       ),
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                icon,
+                size: 17,
+                color: _DashboardColors.blue,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _DashboardColors.muted,
+                    fontSize: 8,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: _DashboardColors.navy,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          if (progress != null) ...[
+            const SizedBox(height: 7),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 6,
+                backgroundColor:
+                    const Color(0xFFE8EEF8),
+                valueColor:
+                    const AlwaysStoppedAnimation(
+                  _DashboardColors.blue,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
+  }
+}
 
-    if (!wide) {
-      return Column(children: [revenue, const SizedBox(height: 14), growth]);
-    }
+class _ActivityCard extends StatelessWidget {
+  final PlatformDashboardData data;
 
+  const _ActivityCard({
+    required this.data,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final activities = <_Activity>[
+      ...data.recentUsers.take(4).map(
+            (user) => _Activity(
+              icon: Icons.person_add_alt_1_rounded,
+              color: _DashboardColors.purple,
+              title: 'User added',
+              subtitle: user.name,
+              time: _relativeTime(user.createdAt),
+            ),
+          ),
+      ...data.recentPayments.take(4).map(
+            (payment) => _Activity(
+              icon: Icons.payments_rounded,
+              color: _DashboardColors.green,
+              title: 'Payment',
+              subtitle:
+                  '${payment.companyName} • '
+                  '${_formatMoney(payment.totalPaise)}',
+              time: _relativeTime(payment.createdAt),
+            ),
+          ),
+      ...data.recentTopups.take(4).map(
+            (topup) => _Activity(
+              icon: Icons.shopping_cart_rounded,
+              color: _DashboardColors.orange,
+              title: 'Credit transaction',
+              subtitle:
+                  '${topup.companyName} • '
+                  '${_formatInt(topup.credits)} credits',
+              time: _relativeTime(topup.createdAt),
+            ),
+          ),
+    ];
+
+    return _Panel(
+      title: 'Recent Activity',
+      icon: Icons.event_note_outlined,
+      trailing: TextButton(
+        onPressed: () {},
+        child: const Text('View All'),
+      ),
+      child: activities.isEmpty
+          ? const SizedBox(
+              height: 180,
+              child: Center(
+                child: Text(
+                  'No recent activity',
+                  style: TextStyle(
+                    color: _DashboardColors.muted,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            )
+          : Column(
+              children: [
+                for (final activity
+                    in activities.take(7))
+                  Padding(
+                    padding:
+                        const EdgeInsets.only(bottom: 8),
+                    child: _ActivityTile(
+                      item: activity,
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+class _Activity {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final String time;
+
+  const _Activity({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    required this.time,
+  });
+}
+
+class _ActivityTile extends StatelessWidget {
+  final _Activity item;
+
+  const _ActivityTile({
+    required this.item,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(flex: 3, child: revenue),
-        const SizedBox(width: 14),
-        Expanded(flex: 2, child: growth),
+        Container(
+          width: 29,
+          height: 29,
+          decoration: BoxDecoration(
+            color: item.color.withAlpha(20),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            item.icon,
+            size: 15,
+            color: item.color,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.title,
+                style: const TextStyle(
+                  color: _DashboardColors.text,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                item.subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _DashboardColors.muted,
+                  fontSize: 8,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Text(
+          item.time,
+          style: const TextStyle(
+            color: _DashboardColors.muted,
+            fontSize: 7,
+          ),
+        ),
       ],
     );
   }
 }
 
-class _DashboardCard extends StatelessWidget {
+/* -------------------------------------------------------------------------- */
+/* COMPANIES + STATUS                                                         */
+/* -------------------------------------------------------------------------- */
+
+class _CompaniesAndSubscriptionsRow
+    extends StatelessWidget {
+  final PlatformDashboardData data;
+  final ValueChanged<String>? onOpenSection;
+
+  const _CompaniesAndSubscriptionsRow({
+    required this.data,
+    required this.onOpenSection,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 1050;
+
+        final companies = _TopCompaniesPanel(
+          data: data,
+          onOpen: () =>
+              onOpenSection?.call('Companies'),
+        );
+
+        final status = _SubscriptionStatusPanel(
+          data: data,
+        );
+
+        if (!wide) {
+          return Column(
+            children: [
+              companies,
+              const SizedBox(height: 10),
+              status,
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 7,
+              child: companies,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 3,
+              child: status,
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _TopCompaniesPanel extends StatelessWidget {
+  final PlatformDashboardData data;
+  final VoidCallback onOpen;
+
+  const _TopCompaniesPanel({
+    required this.data,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      title: 'Top Companies by Revenue',
+      icon: Icons.business_center_outlined,
+      trailing: TextButton(
+        onPressed: onOpen,
+        child: const Text('View All'),
+      ),
+      child: Column(
+        children: [
+          _tableHeader(),
+          const Divider(
+            height: 1,
+            color: _DashboardColors.border,
+          ),
+          if (data.recentPayments.isEmpty)
+            const SizedBox(
+              height: 100,
+              child: Center(
+                child: Text(
+                  'No payment data available',
+                  style: TextStyle(
+                    color: _DashboardColors.muted,
+                    fontSize: 10,
+                  ),
+                ),
+              ),
+            )
+          else
+            for (int i = 0;
+                i < data.recentPayments.length &&
+                    i < 5;
+                i++)
+              _paymentRow(
+                i + 1,
+                data.recentPayments[i],
+              ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tableHeader() {
+    return const Row(
+      children: [
+        SizedBox(
+          width: 25,
+          child: Text(
+            '#',
+            style: _tableHeaderStyle,
+          ),
+        ),
+        Expanded(
+          flex: 3,
+          child: Text(
+            'COMPANY',
+            style: _tableHeaderStyle,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            'PLAN',
+            style: _tableHeaderStyle,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            'REVENUE',
+            style: _tableHeaderStyle,
+          ),
+        ),
+        SizedBox(
+          width: 55,
+          child: Text(
+            'STATUS',
+            style: _tableHeaderStyle,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _paymentRow(
+    int index,
+    PlatformRecentPayment payment,
+  ) {
+    final success =
+        payment.status.toLowerCase() == 'success';
+
+    return Container(
+      height: 32,
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: Color(0xFFF0F3F8),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 25,
+            child: Text(
+              '$index',
+              style: _tableCellStyle,
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              payment.companyName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _DashboardColors.blue,
+                fontSize: 9,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              payment.plan.isEmpty
+                  ? '—'
+                  : payment.plan,
+              style: _tableCellStyle,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              _formatMoney(payment.totalPaise),
+              style: _tableCellStyle,
+            ),
+          ),
+          SizedBox(
+            width: 55,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(
+                horizontal: 5,
+                vertical: 3,
+              ),
+              decoration: BoxDecoration(
+                color: success
+                    ? _DashboardColors.greenSoft
+                    : const Color(0xFFFFECEF),
+                borderRadius:
+                    BorderRadius.circular(10),
+              ),
+              child: Text(
+                success ? 'Active' : payment.status,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: success
+                      ? _DashboardColors.green
+                      : _DashboardColors.red,
+                  fontSize: 7,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SubscriptionStatusPanel extends StatelessWidget {
+  final PlatformDashboardData data;
+
+  const _SubscriptionStatusPanel({
+    required this.data,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      title: 'Subscription Status',
+      icon: Icons.card_membership_outlined,
+      child: SizedBox(
+        height: 220,
+        child: data.subscriptionStatus.isEmpty
+            ? const Center(
+                child: Text(
+                  'No subscription data available',
+                  style: TextStyle(
+                    color: _DashboardColors.muted,
+                    fontSize: 10,
+                  ),
+                ),
+              )
+            : Column(
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 125,
+                          height: 125,
+                          child: CustomPaint(
+                            painter: _DonutPainter(
+                              values: data
+                                  .subscriptionStatus
+                                  .map(
+                                    (e) =>
+                                        e.count.toDouble(),
+                                  )
+                                  .toList(),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${data.activeSubscriptions}',
+                                style: const TextStyle(
+                                  color:
+                                      _DashboardColors.navy,
+                                  fontSize: 18,
+                                  fontWeight:
+                                      FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment:
+                                MainAxisAlignment.center,
+                            children: [
+                              for (int i = 0;
+                                  i <
+                                      data
+                                          .subscriptionStatus
+                                          .length &&
+                                      i < 5;
+                                  i++)
+                                Padding(
+                                  padding:
+                                      const EdgeInsets
+                                          .only(bottom: 9),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration:
+                                            BoxDecoration(
+                                          color:
+                                              _statusColor(
+                                                  i),
+                                          shape: BoxShape
+                                              .circle,
+                                        ),
+                                      ),
+                                      const SizedBox(
+                                        width: 7,
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          _prettyStatus(
+                                            data
+                                                .subscriptionStatus[
+                                                    i]
+                                                .status,
+                                          ),
+                                          style:
+                                              const TextStyle(
+                                            color:
+                                                _DashboardColors
+                                                    .text,
+                                            fontSize: 9,
+                                          ),
+                                        ),
+                                      ),
+                                      Text(
+                                        '${data.subscriptionStatus[i].count}',
+                                        style:
+                                            const TextStyle(
+                                          color:
+                                              _DashboardColors
+                                                  .navy,
+                                          fontSize: 9,
+                                          fontWeight:
+                                              FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* HEALTH + ALERTS                                                            */
+/* -------------------------------------------------------------------------- */
+
+class _HealthAndAlertsRow extends StatelessWidget {
+  final PlatformDashboardData data;
+  final ValueChanged<String>? onOpenSection;
+
+  const _HealthAndAlertsRow({
+    required this.data,
+    required this.onOpenSection,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 1050;
+
+        final health = _SystemHealthPanel(
+          data: data,
+          onOpen: () =>
+              onOpenSection?.call('System Health'),
+        );
+
+        final alerts = const _AlertsPanel();
+
+        if (!wide) {
+          return Column(
+            children: [
+              health,
+              const SizedBox(height: 10),
+              alerts,
+            ],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 7,
+              child: health,
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              flex: 3,
+              child: _AlertsPanel(),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SystemHealthPanel extends StatelessWidget {
+  final PlatformDashboardData data;
+  final VoidCallback onOpen;
+
+  const _SystemHealthPanel({
+    required this.data,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    /*
+     * IMPORTANT:
+     *
+     * Current dashboard API does not yet expose actual
+     * service health checks.
+     *
+     * Therefore we intentionally do NOT show fake
+     * "Operational" values.
+     */
+
+    return _Panel(
+      title: 'System Health',
+      icon: Icons.settings_suggest_outlined,
+      trailing: TextButton(
+        onPressed: onOpen,
+        child: const Text('View Details'),
+      ),
+      child: Container(
+        height: 105,
+        alignment: Alignment.center,
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.info_outline_rounded,
+              size: 18,
+              color: _DashboardColors.muted,
+            ),
+            SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                'Live service health data is not available '
+                'from the current dashboard API.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: _DashboardColors.muted,
+                  fontSize: 10,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AlertsPanel extends StatelessWidget {
+  const _AlertsPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    /*
+     * No hard-coded alerts.
+     *
+     * Alerts will be rendered after the backend exposes
+     * real platform alert records/rules.
+     */
+
+    return _Panel(
+      title: 'Important Alerts',
+      icon: Icons.notifications_active_outlined,
+      child: const SizedBox(
+        height: 105,
+        child: Center(
+          child: Row(
+            mainAxisAlignment:
+                MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.check_circle_outline_rounded,
+                size: 18,
+                color: _DashboardColors.green,
+              ),
+              SizedBox(width: 8),
+              Text(
+                'No alert data available',
+                style: TextStyle(
+                  color: _DashboardColors.muted,
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* COMMON PANEL                                                               */
+/* -------------------------------------------------------------------------- */
+
+class _Panel extends StatelessWidget {
   final String title;
   final IconData icon;
-  final Widget? trailing;
   final Widget child;
+  final Widget? trailing;
 
-  const _DashboardCard({
+  const _Panel({
     required this.title,
     required this.icon,
     required this.child,
@@ -597,9 +1786,30 @@ class _DashboardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SurfaceCard(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 13),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        11,
+        10,
+        11,
+        11,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(
+          color: _DashboardColors.border,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x070B2450),
+            blurRadius: 12,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
       child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -607,29 +1817,31 @@ class _DashboardCard extends StatelessWidget {
                 width: 28,
                 height: 28,
                 decoration: BoxDecoration(
-                  color: _PlatformDashboardScreenState._blueLight,
-                  borderRadius: BorderRadius.circular(8),
+                  color: _DashboardColors.blueSoft,
+                  borderRadius:
+                      BorderRadius.circular(7),
                 ),
                 child: Icon(
                   icon,
                   size: 15,
-                  color: _PlatformDashboardScreenState._blue,
+                  color: _DashboardColors.blue,
                 ),
               ),
-              const SizedBox(width: 9),
-              Text(
-                title,
-                style: const TextStyle(
-                  color: _PlatformDashboardScreenState._text,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: _DashboardColors.navy,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
-              const Spacer(),
               ?trailing,
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           child,
         ],
       ),
@@ -637,1418 +1849,438 @@ class _DashboardCard extends StatelessWidget {
   }
 }
 
-class _RevenueChart extends StatelessWidget {
-  final List<PlatformRevenuePoint> revenue;
-
-  const _RevenueChart({required this.revenue});
-
-  @override
-  Widget build(BuildContext context) {
-    if (revenue.isEmpty) {
-      return const _EmptyChart(message: 'No revenue history available');
-    }
-
-    return Column(
-      children: [
-        Expanded(
-          child: CustomPaint(
-            painter: _RevenuePainter(
-              values: revenue
-                  .map((item) => item.revenuePaise.toDouble())
-                  .toList(),
-            ),
-            child: const SizedBox.expand(),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            _LegendDot(
-              color: _PlatformDashboardScreenState._blue,
-              label: 'Revenue',
-            ),
-            const SizedBox(width: 18),
-            _LegendDot(
-              color: _PlatformDashboardScreenState._orange,
-              label: 'Live API data',
-            ),
-            const Spacer(),
-            Text(
-              revenue.isNotEmpty ? _money(revenue.last.revenuePaise) : '₹0',
-              style: const TextStyle(
-                color: _PlatformDashboardScreenState._navy,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _GrowthChart extends StatelessWidget {
-  final List<PlatformGrowthPoint> users;
-  final List<PlatformGrowthPoint> subscriptions;
-
-  const _GrowthChart({required this.users, required this.subscriptions});
-
-  @override
-  Widget build(BuildContext context) {
-    if (users.isEmpty && subscriptions.isEmpty) {
-      return const _EmptyChart(message: 'No growth history available');
-    }
-
-    return Column(
-      children: [
-        Expanded(
-          child: CustomPaint(
-            painter: _GrowthPainter(
-              first: users.map((e) => e.value.toDouble()).toList(),
-              second: subscriptions.map((e) => e.value.toDouble()).toList(),
-            ),
-            child: const SizedBox.expand(),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            _LegendDot(
-              color: _PlatformDashboardScreenState._blue,
-              label: 'Users',
-            ),
-            const SizedBox(width: 18),
-            _LegendDot(
-              color: _PlatformDashboardScreenState._violet,
-              label: 'Subscriptions',
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _RevenuePainter extends CustomPainter {
-  final List<double> values;
-
-  _RevenuePainter({required this.values});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (values.isEmpty) return;
-
-    const left = 54.0;
-    const right = 12.0;
-    const top = 12.0;
-    const bottom = 28.0;
-
-    final chart = Rect.fromLTWH(
-      left,
-      top,
-      math.max(0, size.width - left - right),
-      math.max(0, size.height - top - bottom),
-    );
-
-    final maxValue = values.fold<double>(
-      0,
-      (max, value) => math.max(max, value),
-    );
-
-    final grid = Paint()
-      ..color = _PlatformDashboardScreenState._border
-      ..strokeWidth = 1;
-
-    for (var i = 0; i < 5; i++) {
-      final y = chart.top + chart.height * i / 4;
-      canvas.drawLine(Offset(chart.left, y), Offset(chart.right, y), grid);
-
-      final value = maxValue * (4 - i) / 4;
-
-      _drawText(
-        canvas,
-        _compactMoney(value.round()),
-        Offset(0, y - 6),
-        const TextStyle(
-          color: _PlatformDashboardScreenState._muted,
-          fontSize: 8.5,
-          fontWeight: FontWeight.w600,
-        ),
-      );
-    }
-
-    if (maxValue <= 0) return;
-
-    final points = <Offset>[];
-
-    for (var i = 0; i < values.length; i++) {
-      final x = values.length == 1
-          ? chart.center.dx
-          : chart.left + chart.width * i / (values.length - 1);
-
-      final normalized = values[i] / maxValue;
-      final y = chart.bottom - normalized * chart.height;
-
-      points.add(Offset(x, y));
-    }
-
-    final fill = Path()
-      ..moveTo(points.first.dx, chart.bottom)
-      ..lineTo(points.first.dx, points.first.dy);
-
-    for (var i = 1; i < points.length; i++) {
-      fill.lineTo(points[i].dx, points[i].dy);
-    }
-
-    fill
-      ..lineTo(points.last.dx, chart.bottom)
-      ..close();
-
-    canvas.drawPath(
-      fill,
-      Paint()
-        ..color = _PlatformDashboardScreenState._blue.withValues(alpha: .07),
-    );
-
-    final line = Path()..moveTo(points.first.dx, points.first.dy);
-
-    for (var i = 1; i < points.length; i++) {
-      line.lineTo(points[i].dx, points[i].dy);
-    }
-
-    canvas.drawPath(
-      line,
-      Paint()
-        ..color = _PlatformDashboardScreenState._blue
-        ..strokeWidth = 2.4
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round,
-    );
-
-    for (var i = 0; i < points.length; i++) {
-      canvas.drawCircle(
-        points[i],
-        3.5,
-        Paint()..color = _PlatformDashboardScreenState._blue,
-      );
-
-      canvas.drawCircle(points[i], 1.5, Paint()..color = Colors.white);
-    }
-
-    final months = values.length <= 6 ? values.length : 6;
-
-    for (var i = 0; i < months; i++) {
-      final index = values.length <= 6
-          ? i
-          : ((values.length - 1) * i / (months - 1)).round();
-
-      final x = values.length == 1
-          ? chart.center.dx
-          : chart.left + chart.width * index / (values.length - 1);
-
-      _drawText(
-        canvas,
-        '${index + 1}',
-        Offset(x - 3, chart.bottom + 8),
-        const TextStyle(
-          color: _PlatformDashboardScreenState._muted,
-          fontSize: 8.5,
-          fontWeight: FontWeight.w600,
-        ),
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _RevenuePainter oldDelegate) {
-    return oldDelegate.values != values;
-  }
-}
-
-class _GrowthPainter extends CustomPainter {
-  final List<double> first;
-  final List<double> second;
-
-  _GrowthPainter({required this.first, required this.second});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const left = 36.0;
-    const right = 10.0;
-    const top = 12.0;
-    const bottom = 28.0;
-
-    final chart = Rect.fromLTWH(
-      left,
-      top,
-      math.max(0, size.width - left - right),
-      math.max(0, size.height - top - bottom),
-    );
-
-    final all = [...first, ...second];
-
-    if (all.isEmpty) return;
-
-    final maxValue = all.fold<double>(0, (max, value) => math.max(max, value));
-
-    final grid = Paint()
-      ..color = _PlatformDashboardScreenState._border
-      ..strokeWidth = 1;
-
-    for (var i = 0; i < 5; i++) {
-      final y = chart.top + chart.height * i / 4;
-
-      canvas.drawLine(Offset(chart.left, y), Offset(chart.right, y), grid);
-
-      final value = maxValue * (4 - i) / 4;
-
-      _drawText(
-        canvas,
-        _compactCount(value.round()),
-        Offset(0, y - 6),
-        const TextStyle(
-          color: _PlatformDashboardScreenState._muted,
-          fontSize: 8.5,
-          fontWeight: FontWeight.w600,
-        ),
-      );
-    }
-
-    _drawSeries(
-      canvas,
-      chart,
-      first,
-      _PlatformDashboardScreenState._blue,
-      maxValue,
-    );
-
-    _drawSeries(
-      canvas,
-      chart,
-      second,
-      _PlatformDashboardScreenState._violet,
-      maxValue,
-    );
-  }
-
-  void _drawSeries(
-    Canvas canvas,
-    Rect chart,
-    List<double> values,
-    Color color,
-    double maxValue,
-  ) {
-    if (values.isEmpty || maxValue <= 0) return;
-
-    final points = <Offset>[];
-
-    for (var i = 0; i < values.length; i++) {
-      final x = values.length == 1
-          ? chart.center.dx
-          : chart.left + chart.width * i / (values.length - 1);
-
-      final normalized = values[i] / maxValue;
-      final y = chart.bottom - normalized * chart.height;
-
-      points.add(Offset(x, y));
-    }
-
-    final path = Path()..moveTo(points.first.dx, points.first.dy);
-
-    for (var i = 1; i < points.length; i++) {
-      path.lineTo(points[i].dx, points[i].dy);
-    }
-
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = color
-        ..strokeWidth = 2
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round,
-    );
-
-    for (final point in points) {
-      canvas.drawCircle(point, 3, Paint()..color = color);
-
-      canvas.drawCircle(point, 1.25, Paint()..color = Colors.white);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _GrowthPainter oldDelegate) {
-    return oldDelegate.first != first || oldDelegate.second != second;
-  }
-}
-
-class _UsageSection extends StatelessWidget {
-  final PlatformDashboardData data;
-  final bool wide;
-
-  const _UsageSection({required this.data, required this.wide});
-
-  @override
-  Widget build(BuildContext context) {
-    final storagePercent = _ratio(
-      data.storageUsedBytes,
-      data.storageQuotaBytes,
-    );
-
-    final walletPercent = _ratio(data.walletConsumed, data.walletAllocated);
-
-    final userPercent = _ratio(data.activeUsers, data.totalUsers);
-
-    final cards = [
-      _UsageCard(
-        title: 'Storage Usage',
-        value: _bytes(data.storageUsedBytes),
-        total: _bytes(data.storageQuotaBytes),
-        percent: storagePercent,
-        icon: Icons.storage_outlined,
-        color: _PlatformDashboardScreenState._blue,
-      ),
-      _UsageCard(
-        title: 'Scan Credits',
-        value: _number(data.walletConsumed),
-        total: _number(data.walletAllocated),
-        percent: walletPercent,
-        icon: Icons.qr_code_scanner_rounded,
-        color: _PlatformDashboardScreenState._violet,
-      ),
-      _UsageCard(
-        title: 'Active Users',
-        value: _number(data.activeUsers),
-        total: _number(data.totalUsers),
-        percent: userPercent,
-        icon: Icons.people_outline_rounded,
-        color: _PlatformDashboardScreenState._green,
-      ),
-      _UsageCard(
-        title: 'Evidence',
-        value: _number(
-          data.evidenceStatus.fold<int>(0, (sum, item) => sum + item.count),
-        ),
-        total: _number(
-          data.recordingStatus.fold<int>(0, (sum, item) => sum + item.count),
-        ),
-        percent: _ratio(
-          data.evidenceStatus.fold<int>(0, (sum, item) => sum + item.count),
-          data.recordingStatus.fold<int>(0, (sum, item) => sum + item.count),
-        ),
-        icon: Icons.video_library_outlined,
-        color: _PlatformDashboardScreenState._orange,
-      ),
-    ];
-
-    if (!wide) {
-      return _DashboardCard(
-        title: 'Platform Usage Overview',
-        icon: Icons.analytics_outlined,
-        child: ListView.separated(
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: cards.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 10),
-          itemBuilder: (_, index) => cards[index],
-        ),
-      );
-    }
-
-    return _DashboardCard(
-      title: 'Platform Usage Overview',
-      icon: Icons.analytics_outlined,
-      child: Row(
-        children: [
-          for (var i = 0; i < cards.length; i++) ...[
-            Expanded(child: cards[i]),
-            if (i != cards.length - 1) const SizedBox(width: 10),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _UsageCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final String total;
-  final double percent;
+/* -------------------------------------------------------------------------- */
+/* BUTTONS                                                                    */
+/* -------------------------------------------------------------------------- */
+
+class _PrimaryButton extends StatelessWidget {
   final IconData icon;
-  final Color color;
-
-  const _UsageCard({
-    required this.title,
-    required this.value,
-    required this.total,
-    required this.percent,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFAFCFF),
-        borderRadius: BorderRadius.circular(11),
-        border: Border.all(color: _PlatformDashboardScreenState._border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 17),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    color: _PlatformDashboardScreenState._text,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              Text(
-                _percentFromRatio(percent),
-                style: TextStyle(
-                  color: color,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 9),
-          Row(
-            children: [
-              Text(
-                value,
-                style: const TextStyle(
-                  color: _PlatformDashboardScreenState._navy,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(width: 5),
-              Text(
-                '/ $total',
-                style: const TextStyle(
-                  color: _PlatformDashboardScreenState._muted,
-                  fontSize: 9.5,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 7),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: LinearProgressIndicator(
-              minHeight: 6,
-              value: percent.clamp(0.0, 1.0),
-              backgroundColor: color.withValues(alpha: .10),
-              valueColor: AlwaysStoppedAnimation<Color>(color),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LowerDashboard extends StatelessWidget {
-  final PlatformDashboardData data;
-  final bool wide;
-
-  const _LowerDashboard({required this.data, required this.wide});
-
-  @override
-  Widget build(BuildContext context) {
-    final revenue = _RevenueCollectionCard(data: data);
-    final activity = _RecentActivityCard(data: data);
-    final subscriptions = _SubscriptionCard(data: data);
-
-    if (!wide) {
-      return Column(
-        children: [
-          revenue,
-          const SizedBox(height: 14),
-          subscriptions,
-          const SizedBox(height: 14),
-          activity,
-        ],
-      );
-    }
-
-    return Column(
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(flex: 3, child: revenue),
-            const SizedBox(width: 14),
-            Expanded(flex: 2, child: subscriptions),
-          ],
-        ),
-        const SizedBox(height: 14),
-        activity,
-      ],
-    );
-  }
-}
-
-class _RevenueCollectionCard extends StatelessWidget {
-  final PlatformDashboardData data;
-
-  const _RevenueCollectionCard({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    return _DashboardCard(
-      title: 'Revenue Collection',
-      icon: Icons.payments_outlined,
-      trailing: TextButton(
-        onPressed: () {},
-        child: const Text(
-          'View Details',
-          style: TextStyle(
-            color: _PlatformDashboardScreenState._blue,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _RevenueMetric(
-              label: 'Total Revenue',
-              value: _money(data.revenueTotalPaise),
-              icon: Icons.currency_rupee_rounded,
-              color: _PlatformDashboardScreenState._green,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _RevenueMetric(
-              label: 'Subtotal',
-              value: _money(data.revenueSubtotalPaise),
-              icon: Icons.receipt_long_outlined,
-              color: _PlatformDashboardScreenState._blue,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _RevenueMetric(
-              label: 'GST',
-              value: _money(data.revenueGstPaise),
-              icon: Icons.account_balance_outlined,
-              color: _PlatformDashboardScreenState._orange,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _RevenueMetric(
-              label: 'Paid Payments',
-              value: _number(data.revenuePaidPaymentCount),
-              icon: Icons.check_circle_outline_rounded,
-              color: _PlatformDashboardScreenState._violet,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RevenueMetric extends StatelessWidget {
   final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
+  final VoidCallback onPressed;
 
-  const _RevenueMetric({
+  const _PrimaryButton({
+    required this.icon,
     required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
+    required this.onPressed,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: .045),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: .10)),
+    return ElevatedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(
+        icon,
+        size: 16,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(height: 9),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: _PlatformDashboardScreenState._muted,
-              fontSize: 9.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 3),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: _PlatformDashboardScreenState._navy,
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SubscriptionCard extends StatelessWidget {
-  final PlatformDashboardData data;
-
-  const _SubscriptionCard({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    final activeRatio = _ratio(data.activeSubscriptions, data.totalCompanies);
-
-    final inactive = math.max(
-      0,
-      data.totalCompanies - data.activeSubscriptions,
-    );
-
-    return _DashboardCard(
-      title: 'Subscription Status',
-      icon: Icons.workspace_premium_outlined,
-      trailing: TextButton(
-        onPressed: () {},
-        child: const Text(
-          'View All',
-          style: TextStyle(
-            color: _PlatformDashboardScreenState._blue,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-          ),
+      label: Text(label),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _DashboardColors.blue,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(
+          horizontal: 15,
+          vertical: 12,
         ),
-      ),
-      child: Column(
-        children: [
-          Expanded(
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 125,
-                  child: Center(
-                    child: _Donut(
-                      progress: activeRatio,
-                      color: _PlatformDashboardScreenState._green,
-                      center: _number(data.activeSubscriptions),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 18),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _StatusRow(
-                        color: _PlatformDashboardScreenState._green,
-                        label: 'Active',
-                        value: _number(data.activeSubscriptions),
-                      ),
-                      const SizedBox(height: 10),
-                      _StatusRow(
-                        color: _PlatformDashboardScreenState._orange,
-                        label: 'Inactive / Other',
-                        value: _number(inactive),
-                      ),
-                      const SizedBox(height: 10),
-                      _StatusRow(
-                        color: _PlatformDashboardScreenState._blue,
-                        label: 'New Companies',
-                        value: _number(data.newCompaniesThisMonth),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RecentActivityCard extends StatelessWidget {
-  final PlatformDashboardData data;
-
-  const _RecentActivityCard({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    final rows = <Widget>[];
-
-    for (final item in data.recentPayments.take(3)) {
-      rows.add(
-        _ActivityRow(
-          icon: Icons.payments_outlined,
-          iconColor: _PlatformDashboardScreenState._green,
-          title: 'Payment received',
-          subtitle: item.companyName,
-          meta: item.status,
-        ),
-      );
-    }
-
-    for (final item in data.recentTopups.take(3)) {
-      rows.add(
-        _ActivityRow(
-          icon: Icons.add_card_outlined,
-          iconColor: _PlatformDashboardScreenState._orange,
-          title: '${item.type} • ${_number(item.credits)} credits',
-          subtitle: item.companyName,
-          meta: _shortDate(item.createdAt),
-        ),
-      );
-    }
-
-    for (final item in data.recentUsers.take(3)) {
-      rows.add(
-        _ActivityRow(
-          icon: Icons.person_add_alt_1_outlined,
-          iconColor: _PlatformDashboardScreenState._blue,
-          title: 'New user added',
-          subtitle: '${item.name} • ${item.companyName}',
-          meta: _shortDate(item.createdAt),
-        ),
-      );
-    }
-
-    if (rows.isEmpty) {
-      rows.add(
-        const Expanded(
-          child: _EmptyChart(message: 'No recent activity available'),
-        ),
-      );
-    }
-
-    return _DashboardCard(
-      title: 'Recent Activity',
-      icon: Icons.history_rounded,
-      trailing: TextButton(
-        onPressed: () {},
-        child: const Text(
-          'View All',
-          style: TextStyle(
-            color: _PlatformDashboardScreenState._blue,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-      child: ListView.separated(
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: rows.length > 7 ? 7 : rows.length,
-        separatorBuilder: (_, _) => const Divider(
-          height: 1,
-          color: _PlatformDashboardScreenState._border,
-        ),
-        itemBuilder: (_, index) => rows[index],
-      ),
-    );
-  }
-}
-
-class _ActivityRow extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
-  final String meta;
-
-  const _ActivityRow({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    required this.meta,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Container(
-            width: 31,
-            height: 31,
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: .09),
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Icon(icon, color: iconColor, size: 16),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _PlatformDashboardScreenState._text,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _PlatformDashboardScreenState._muted,
-                    fontSize: 9.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            meta,
-            style: const TextStyle(
-              color: _PlatformDashboardScreenState._muted,
-              fontSize: 8.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AlertsSection extends StatelessWidget {
-  final PlatformDashboardData data;
-
-  const _AlertsSection({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    final alerts = <_AlertItem>[];
-
-    final storagePercent = _storagePercent(data);
-
-    if (storagePercent >= 80) {
-      alerts.add(
-        _AlertItem(
-          icon: Icons.storage_outlined,
-          title: 'Storage usage is high',
-          subtitle:
-              '${_percent(data.storageUsedBytes, data.storageQuotaBytes)}% of total quota is used.',
-          color: _PlatformDashboardScreenState._orange,
-          background: _PlatformDashboardScreenState._orangeLight,
-        ),
-      );
-    }
-
-    if (data.inactiveCompanies > 0) {
-      alerts.add(
-        _AlertItem(
-          icon: Icons.business_outlined,
-          title: 'Inactive companies',
-          subtitle:
-              '${_number(data.inactiveCompanies)} companies are currently inactive.',
-          color: _PlatformDashboardScreenState._orange,
-          background: _PlatformDashboardScreenState._orangeLight,
-        ),
-      );
-    }
-
-    if (data.inactiveUsers > 0) {
-      alerts.add(
-        _AlertItem(
-          icon: Icons.person_off_outlined,
-          title: 'Inactive users',
-          subtitle:
-              '${_number(data.inactiveUsers)} users are currently inactive.',
-          color: _PlatformDashboardScreenState._blue,
-          background: _PlatformDashboardScreenState._blueLight,
-        ),
-      );
-    }
-
-    if (data.revenuePaidPaymentCount == 0) {
-      alerts.add(
-        const _AlertItem(
-          icon: Icons.info_outline_rounded,
-          title: 'No paid payments returned',
-          subtitle:
-              'The current dashboard response contains no paid payment records.',
-          color: _PlatformDashboardScreenState._cyan,
-          background: _PlatformDashboardScreenState._cyanLight,
-        ),
-      );
-    }
-
-    if (alerts.isEmpty) {
-      alerts.add(
-        const _AlertItem(
-          icon: Icons.check_circle_outline_rounded,
-          title: 'No critical alerts',
-          subtitle:
-              'Current platform metrics are within the configured dashboard thresholds.',
-          color: _PlatformDashboardScreenState._green,
-          background: _PlatformDashboardScreenState._greenLight,
-        ),
-      );
-    }
-
-    return _SurfaceCard(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: _PlatformDashboardScreenState._orangeLight,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.notifications_none_rounded,
-                  color: _PlatformDashboardScreenState._orange,
-                  size: 16,
-                ),
-              ),
-              const SizedBox(width: 9),
-              const Text(
-                'Important Alerts',
-                style: TextStyle(
-                  color: _PlatformDashboardScreenState._text,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const Spacer(),
-              TextButton(
-                onPressed: () {},
-                child: const Text(
-                  'View All',
-                  style: TextStyle(
-                    color: _PlatformDashboardScreenState._blue,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 3),
-          for (final alert in alerts) _AlertRow(item: alert),
-        ],
-      ),
-    );
-  }
-}
-
-class _AlertItem {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color color;
-  final Color background;
-
-  const _AlertItem({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.color,
-    required this.background,
-  });
-}
-
-class _AlertRow extends StatelessWidget {
-  final _AlertItem item;
-
-  const _AlertRow({required this.item});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(top: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-      decoration: BoxDecoration(
-        color: item.background,
-        borderRadius: BorderRadius.circular(9),
-      ),
-      child: Row(
-        children: [
-          Icon(item.icon, color: item.color, size: 17),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.title,
-                  style: TextStyle(
-                    color: item.color,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  item.subtitle,
-                  style: const TextStyle(
-                    color: _PlatformDashboardScreenState._muted,
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Icon(
-            Icons.chevron_right_rounded,
-            color: _PlatformDashboardScreenState._muted,
-            size: 17,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusRow extends StatelessWidget {
-  final Color color;
-  final String label;
-  final String value;
-
-  const _StatusRow({
-    required this.color,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: _PlatformDashboardScreenState._muted,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        Text(
-          value,
-          style: const TextStyle(
-            color: _PlatformDashboardScreenState._navy,
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Donut extends StatelessWidget {
-  final double progress;
-  final Color color;
-  final String center;
-
-  const _Donut({
-    required this.progress,
-    required this.color,
-    required this.center,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 104,
-      height: 104,
-      child: CustomPaint(
-        painter: _DonutPainter(progress: progress, color: color),
-        child: Center(
-          child: Text(
-            center,
-            style: const TextStyle(
-              color: _PlatformDashboardScreenState._navy,
-              fontSize: 19,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DonutPainter extends CustomPainter {
-  final double progress;
-  final Color color;
-
-  _DonutPainter({required this.progress, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final center = rect.center;
-    final radius = math.min(size.width, size.height) / 2 - 8;
-
-    final background = Paint()
-      ..color = const Color(0xFFE8EEF7)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 12
-      ..strokeCap = StrokeCap.round;
-
-    final foreground = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 12
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawCircle(center, radius, background);
-
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -math.pi / 2,
-      math.pi * 2 * progress.clamp(0.0, 1.0),
-      false,
-      foreground,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _DonutPainter oldDelegate) {
-    return oldDelegate.progress != progress || oldDelegate.color != color;
-  }
-}
-
-class _LegendDot extends StatelessWidget {
-  final Color color;
-  final String label;
-
-  const _LegendDot({required this.color, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: const TextStyle(
-            color: _PlatformDashboardScreenState._muted,
-            fontSize: 9.5,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _CompactDropdown extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-
-  const _CompactDropdown({required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(7),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFAFCFF),
-          border: Border.all(color: _PlatformDashboardScreenState._border),
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(7),
         ),
-        child: Row(
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                color: _PlatformDashboardScreenState._text,
-                fontSize: 9.5,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(width: 5),
-            const Icon(
-              Icons.keyboard_arrow_down_rounded,
-              size: 14,
-              color: _PlatformDashboardScreenState._muted,
-            ),
-          ],
+        textStyle: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
   }
 }
 
-class _OutlineAction extends StatelessWidget {
-  final String label;
+class _OutlinedButton extends StatelessWidget {
   final IconData icon;
-  final VoidCallback onTap;
+  final String label;
+  final VoidCallback onPressed;
 
-  const _OutlineAction({
-    required this.label,
+  const _OutlinedButton({
     required this.icon,
-    required this.onTap,
+    required this.label,
+    required this.onPressed,
   });
 
   @override
   Widget build(BuildContext context) {
     return OutlinedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 15),
+      onPressed: onPressed,
+      icon: Icon(
+        icon,
+        size: 15,
+        color: _DashboardColors.navy,
+      ),
       label: Text(label),
       style: OutlinedButton.styleFrom(
-        foregroundColor: _PlatformDashboardScreenState._text,
-        side: const BorderSide(color: _PlatformDashboardScreenState._border),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
-        textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700),
+        foregroundColor: _DashboardColors.navy,
+        side: const BorderSide(
+          color: _DashboardColors.border,
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 13,
+          vertical: 12,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(7),
+        ),
+        textStyle: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
 }
 
-class _PrimaryAction extends StatelessWidget {
+class _SmallSelector extends StatelessWidget {
   final String label;
-  final IconData icon;
-  final VoidCallback onTap;
 
-  const _PrimaryAction({
+  const _SmallSelector({
     required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return FilledButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 15),
-      label: Text(label),
-      style: FilledButton.styleFrom(
-        backgroundColor: _PlatformDashboardScreenState._blue,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
-        textStyle: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
-      ),
-    );
-  }
-}
-
-class _SurfaceCard extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-
-  const _SurfaceCard({
-    required this.child,
-    this.padding = const EdgeInsets.all(16),
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      height: 29,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 9,
+      ),
       decoration: BoxDecoration(
-        color: _PlatformDashboardScreenState._surface,
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: _PlatformDashboardScreenState._border),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x080F172A),
-            blurRadius: 18,
-            offset: Offset(0, 5),
+        border: Border.all(
+          color: _DashboardColors.border,
+        ),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: _DashboardColors.navy,
+              fontSize: 8,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 5),
+          const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            size: 14,
+            color: _DashboardColors.muted,
           ),
         ],
       ),
-      padding: padding,
-      child: child,
     );
   }
 }
 
+/* -------------------------------------------------------------------------- */
+/* CHART PAINTERS                                                             */
+/* -------------------------------------------------------------------------- */
+
+class _LineChartPainter extends CustomPainter {
+  final List<double> values;
+  final double maxValue;
+
+  _LineChartPainter({
+    required this.values,
+    required this.maxValue,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.isEmpty) return;
+
+    final gridPaint = Paint()
+      ..color = _DashboardColors.grid
+      ..strokeWidth = 1;
+
+    final linePaint = Paint()
+      ..color = _DashboardColors.blue
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    final fillPaint = Paint()
+      ..color =
+          _DashboardColors.blue.withAlpha(18)
+      ..style = PaintingStyle.fill;
+
+    for (int i = 0; i < 4; i++) {
+      final y = 12 +
+          (size.height - 35) *
+              i /
+              3;
+
+      canvas.drawLine(
+        Offset(0, y),
+        Offset(size.width, y),
+        gridPaint,
+      );
+    }
+
+    final path = Path();
+    final fill = Path();
+
+    for (int i = 0; i < values.length; i++) {
+      final x = values.length == 1
+          ? size.width / 2
+          : size.width *
+              i /
+              (values.length - 1);
+
+      final normalized = maxValue <= 0
+          ? 0.0
+          : values[i] / maxValue;
+
+      final y =
+          12 +
+          (size.height - 42) *
+              (1 - normalized);
+
+      if (i == 0) {
+        path.moveTo(x, y);
+        fill.moveTo(x, size.height - 25);
+        fill.lineTo(x, y);
+      } else {
+        path.lineTo(x, y);
+        fill.lineTo(x, y);
+      }
+    }
+
+    fill.lineTo(
+      values.length == 1
+          ? size.width / 2
+          : size.width,
+      size.height - 25,
+    );
+    fill.close();
+
+    canvas.drawPath(fill, fillPaint);
+    canvas.drawPath(path, linePaint);
+
+    final dotPaint = Paint()
+      ..color = _DashboardColors.blue;
+
+    for (int i = 0; i < values.length; i++) {
+      final x = values.length == 1
+          ? size.width / 2
+          : size.width *
+              i /
+              (values.length - 1);
+
+      final normalized = maxValue <= 0
+          ? 0.0
+          : values[i] / maxValue;
+
+      final y =
+          12 +
+          (size.height - 42) *
+              (1 - normalized);
+
+      canvas.drawCircle(
+        Offset(x, y),
+        3,
+        dotPaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(
+    covariant _LineChartPainter oldDelegate,
+  ) {
+    return oldDelegate.values != values ||
+        oldDelegate.maxValue != maxValue;
+  }
+}
+
+class _MultiLineChartPainter extends CustomPainter {
+  final List<double> first;
+  final List<double> second;
+  final double maxValue;
+
+  _MultiLineChartPainter({
+    required this.first,
+    required this.second,
+    required this.maxValue,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final gridPaint = Paint()
+      ..color = _DashboardColors.grid
+      ..strokeWidth = 1;
+
+    for (int i = 0; i < 4; i++) {
+      final y = 12 +
+          (size.height - 35) *
+              i /
+              3;
+
+      canvas.drawLine(
+        Offset(0, y),
+        Offset(size.width, y),
+        gridPaint,
+      );
+    }
+
+    _drawLine(
+      canvas,
+      first,
+      _DashboardColors.blue,
+      size,
+    );
+
+    _drawLine(
+      canvas,
+      second,
+      _DashboardColors.purple,
+      size,
+    );
+  }
+
+  void _drawLine(
+    Canvas canvas,
+    List<double> values,
+    Color color,
+    Size size,
+  ) {
+    if (values.isEmpty) return;
+
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    final path = Path();
+
+    for (int i = 0; i < values.length; i++) {
+      final x = values.length == 1
+          ? size.width / 2
+          : size.width *
+              i /
+              (values.length - 1);
+
+      final normalized = maxValue <= 0
+          ? 0.0
+          : values[i] / maxValue;
+
+      final y =
+          12 +
+          (size.height - 42) *
+              (1 - normalized);
+
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+
+      canvas.drawCircle(
+        Offset(x, y),
+        2.5,
+        Paint()..color = color,
+      );
+    }
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(
+    covariant _MultiLineChartPainter oldDelegate,
+  ) {
+    return true;
+  }
+}
+
+class _DonutPainter extends CustomPainter {
+  final List<double> values;
+
+  _DonutPainter({
+    required this.values,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.isEmpty) return;
+
+    final total =
+        values.fold<double>(0, (a, b) => a + b);
+
+    if (total <= 0) return;
+
+    final colors = [
+      _DashboardColors.green,
+      _DashboardColors.orange,
+      _DashboardColors.red,
+      const Color(0xFFB7C3D9),
+      _DashboardColors.blue,
+    ];
+
+    final rect = Rect.fromLTWH(
+      10,
+      10,
+      size.width - 20,
+      size.height - 20,
+    );
+
+    double start = -math.pi / 2;
+
+    for (int i = 0; i < values.length; i++) {
+      final sweep =
+          values[i] / total * math.pi * 2;
+
+      final paint = Paint()
+        ..color = colors[i % colors.length]
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 18
+        ..strokeCap = StrokeCap.butt;
+
+      canvas.drawArc(
+        rect,
+        start,
+        sweep,
+        false,
+        paint,
+      );
+
+      start += sweep;
+    }
+  }
+
+  @override
+  bool shouldRepaint(
+    covariant _DonutPainter oldDelegate,
+  ) {
+    return oldDelegate.values != values;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* EMPTY / LOADING / ERROR                                                    */
+/* -------------------------------------------------------------------------- */
+
 class _EmptyChart extends StatelessWidget {
   final String message;
 
-  const _EmptyChart({this.message = 'No data available'});
+  const _EmptyChart({
+    required this.message,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.analytics_outlined,
-            color: Color(0xFFCBD5E1),
-            size: 30,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: _PlatformDashboardScreenState._muted,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+      child: Text(
+        message,
+        style: const TextStyle(
+          color: _DashboardColors.muted,
+          fontSize: 10,
+        ),
       ),
     );
   }
@@ -2059,11 +2291,9 @@ class _DashboardLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: _PlatformDashboardScreenState._background,
-      alignment: Alignment.center,
-      child: const CircularProgressIndicator(
-        color: _PlatformDashboardScreenState._blue,
+    return const Center(
+      child: CircularProgressIndicator(
+        strokeWidth: 2.5,
       ),
     );
   }
@@ -2073,44 +2303,57 @@ class _DashboardError extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
 
-  const _DashboardError({required this.message, required this.onRetry});
+  const _DashboardError({
+    required this.message,
+    required this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: _SurfaceCard(
+      child: Container(
+        margin: const EdgeInsets.all(30),
         padding: const EdgeInsets.all(24),
+        constraints: const BoxConstraints(
+          maxWidth: 500,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _DashboardColors.border,
+          ),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(
-              Icons.cloud_off_outlined,
-              color: Color(0xFF94A3B8),
-              size: 42,
+              Icons.error_outline_rounded,
+              color: _DashboardColors.red,
+              size: 38,
             ),
             const SizedBox(height: 12),
             const Text(
-              'Unable to load Platform Dashboard',
+              'Unable to load platform dashboard',
               style: TextStyle(
-                color: _PlatformDashboardScreenState._navy,
-                fontSize: 15,
+                color: _DashboardColors.navy,
                 fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: 7),
-            SizedBox(
-              width: 420,
-              child: Text(
-                message,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: _PlatformDashboardScreenState._muted,
-                  fontSize: 11,
-                ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: _DashboardColors.muted,
+                fontSize: 11,
               ),
             ),
             const SizedBox(height: 16),
-            FilledButton(onPressed: onRetry, child: const Text('Retry')),
+            ElevatedButton(
+              onPressed: onRetry,
+              child: const Text('Retry'),
+            ),
           ],
         ),
       ),
@@ -2118,152 +2361,170 @@ class _DashboardError extends StatelessWidget {
   }
 }
 
-void _drawText(Canvas canvas, String text, Offset offset, TextStyle style) {
-  final painter = TextPainter(
-    text: TextSpan(text: text, style: style),
-    textDirection: TextDirection.ltr,
-  )..layout();
+/* -------------------------------------------------------------------------- */
+/* SMALL WIDGETS                                                              */
+/* -------------------------------------------------------------------------- */
 
-  painter.paint(canvas, offset);
+class _LegendDot extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _LegendDot({
+    required this.color,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: const TextStyle(
+            color: _DashboardColors.muted,
+            fontSize: 8,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
-String _number(int value) {
-  return _formatIndian(value);
-}
+const _tableHeaderStyle = TextStyle(
+  color: _DashboardColors.muted,
+  fontSize: 7,
+  fontWeight: FontWeight.w700,
+);
 
-String _money(int paise) {
-  final rupees = paise / 100;
-  return '₹${_formatIndianDouble(rupees)}';
-}
+const _tableCellStyle = TextStyle(
+  color: _DashboardColors.text,
+  fontSize: 8,
+);
 
-String _bytes(int bytes) {
-  if (bytes <= 0) return '0 B';
+/* -------------------------------------------------------------------------- */
+/* HELPERS                                                                    */
+/* -------------------------------------------------------------------------- */
 
-  const kb = 1024.0;
-  const mb = kb * 1024;
-  const gb = mb * 1024;
-  const tb = gb * 1024;
+String _formatInt(int value) {
+  final text = value.toString();
+  final buffer = StringBuffer();
 
-  if (bytes >= tb) {
-    return '${(bytes / tb).toStringAsFixed(2)} TB';
+  for (int i = 0; i < text.length; i++) {
+    if (i > 0 &&
+        (text.length - i) % 3 == 0) {
+      buffer.write(',');
+    }
+
+    buffer.write(text[i]);
   }
 
-  if (bytes >= gb) {
-    return '${(bytes / gb).toStringAsFixed(2)} GB';
-  }
-
-  if (bytes >= mb) {
-    return '${(bytes / mb).toStringAsFixed(2)} MB';
-  }
-
-  if (bytes >= kb) {
-    return '${(bytes / kb).toStringAsFixed(2)} KB';
-  }
-
-  return '$bytes B';
+  return buffer.toString();
 }
 
-double _ratio(int used, int total) {
-  if (total <= 0) return 0;
-  return (used / total).clamp(0.0, 1.0);
-}
-
-double _storagePercent(PlatformDashboardData data) {
-  if (data.storageQuotaBytes <= 0) return 0;
-  return data.storageUsedBytes / data.storageQuotaBytes * 100;
-}
-
-String _percent(int used, int total) {
-  if (total <= 0) return '0.00';
-  return (used / total * 100).toStringAsFixed(2);
-}
-
-String _percentFromRatio(double value) {
-  return '${(value * 100).clamp(0, 100).toStringAsFixed(2)}%';
-}
-
-String _compactMoney(int paise) {
+String _formatMoney(int paise) {
   final rupees = paise / 100;
 
   if (rupees >= 10000000) {
-    return '₹${(rupees / 10000000).toStringAsFixed(1)}Cr';
+    return '₹${(rupees / 10000000).toStringAsFixed(2)} Cr';
   }
 
   if (rupees >= 100000) {
-    return '₹${(rupees / 100000).toStringAsFixed(1)}L';
+    return '₹${(rupees / 100000).toStringAsFixed(2)} L';
   }
 
-  if (rupees >= 1000) {
-    return '₹${(rupees / 1000).toStringAsFixed(1)}K';
-  }
-
-  return '₹${rupees.toStringAsFixed(0)}';
+  return '₹${_formatInt(rupees.round())}';
 }
 
-String _compactCount(int value) {
-  if (value >= 1000000) {
-    return '${(value / 1000000).toStringAsFixed(1)}M';
+String _formatBytes(int bytes) {
+  if (bytes <= 0) return '0 B';
+
+  const units = [
+    'B',
+    'KB',
+    'MB',
+    'GB',
+    'TB',
+  ];
+
+  double value = bytes.toDouble();
+  int index = 0;
+
+  while (value >= 1024 &&
+      index < units.length - 1) {
+    value /= 1024;
+    index++;
   }
 
-  if (value >= 1000) {
-    return '${(value / 1000).toStringAsFixed(1)}K';
+  if (index == 0) {
+    return '${value.round()} ${units[index]}';
   }
 
-  return '$value';
+  return '${value.toStringAsFixed(2)} ${units[index]}';
 }
 
-String _formatIndian(int value) {
-  final negative = value < 0;
-  final raw = value.abs().toString();
+String _prettyStatus(String value) {
+  final normalized = value
+      .replaceAll('_', ' ')
+      .replaceAll('-', ' ')
+      .trim();
 
-  if (raw.length <= 3) {
-    return negative ? '-$raw' : raw;
-  }
+  if (normalized.isEmpty) return 'Unknown';
 
-  final lastThree = raw.substring(raw.length - 3);
-  var prefix = raw.substring(0, raw.length - 3);
-
-  final parts = <String>[];
-
-  while (prefix.length > 2) {
-    parts.insert(0, prefix.substring(prefix.length - 2));
-    prefix = prefix.substring(0, prefix.length - 2);
-  }
-
-  if (prefix.isNotEmpty) {
-    parts.insert(0, prefix);
-  }
-
-  final result = '${parts.join(',')},$lastThree';
-
-  return negative ? '-$result' : result;
+  return normalized
+      .split(' ')
+      .where((e) => e.isNotEmpty)
+      .map(
+        (e) =>
+            '${e[0].toUpperCase()}${e.substring(1).toLowerCase()}',
+      )
+      .join(' ');
 }
 
-String _formatIndianDouble(double value) {
-  if (value == value.roundToDouble()) {
-    return _formatIndian(value.toInt());
-  }
+Color _statusColor(int index) {
+  const colors = [
+    _DashboardColors.green,
+    _DashboardColors.orange,
+    _DashboardColors.red,
+    Color(0xFFB7C3D9),
+    _DashboardColors.blue,
+  ];
 
-  final fixed = value.toStringAsFixed(2);
-  final split = fixed.split('.');
-  final integer = int.tryParse(split.first) ?? 0;
-
-  return '${_formatIndian(integer)}.${split.last}';
+  return colors[index % colors.length];
 }
 
-String _shortDate(dynamic value) {
-  final raw = value?.toString() ?? '';
+String _relativeTime(String raw) {
+  final parsed = DateTime.tryParse(raw);
 
-  if (raw.isEmpty) {
-    return '—';
+  if (parsed == null) return '';
+
+  final difference =
+      DateTime.now().difference(parsed.toLocal());
+
+  if (difference.inSeconds < 60) {
+    return 'now';
   }
 
-  if (raw.contains('T')) {
-    final date = raw.split('T').first;
-    if (date.length >= 10) {
-      return date.substring(5);
-    }
+  if (difference.inMinutes < 60) {
+    return '${difference.inMinutes}m';
   }
 
-  return raw.length > 16 ? raw.substring(0, 16) : raw;
+  if (difference.inHours < 24) {
+    return '${difference.inHours}h';
+  }
+
+  if (difference.inDays < 30) {
+    return '${difference.inDays}d';
+  }
+
+  return '${difference.inDays ~/ 30}mo';
 }
