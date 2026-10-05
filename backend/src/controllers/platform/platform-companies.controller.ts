@@ -1,9 +1,11 @@
-﻿import type { Response } from "express";
+import type { Response } from "express";
+import { routeParam } from "./route-param.js";
 import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
 import { IdentityService } from "../../services/identity/identity.service.js";
-import { platformCompaniesService } from "../../services/platform/platform-companies.service.js";
+import { PlatformCompaniesService } from "../../services/platform/platform-companies.service.js";
 
 const identityService = new IdentityService();
+const platformCompaniesService = new PlatformCompaniesService();
 
 async function requirePlatformAdmin(req: AuthenticatedRequest, res: Response) {
   const firebaseUid = req.firebaseUser?.uid;
@@ -30,8 +32,9 @@ export async function listPlatformCompanies(req: AuthenticatedRequest, res: Resp
 
     const search = typeof req.query.search === "string" ? req.query.search : undefined;
     const activeOnly = req.query.activeOnly === "true";
+    const status = activeOnly ? "active" : "all";
 
-    const data = await platformCompaniesService.list({ search, activeOnly });
+    const data = await platformCompaniesService.list({ search, status });
 
     res.json({ success: true, data });
   } catch (error) {
@@ -45,7 +48,7 @@ export async function setCompanyActive(req: AuthenticatedRequest, res: Response)
     const admin = await requirePlatformAdmin(req, res);
     if (!admin) return;
 
-    const companyId = req.params.companyId?.trim();
+    const companyId = routeParam(req.params.companyId).trim();
     if (!companyId) {
       res.status(400).json({ success: false, message: "companyId is required." });
       return;
@@ -64,4 +67,3 @@ export async function setCompanyActive(req: AuthenticatedRequest, res: Response)
     res.status(500).json({ success: false, message: "Unable to update company." });
   }
 }
-

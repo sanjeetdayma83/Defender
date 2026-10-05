@@ -1,4 +1,5 @@
-﻿import type { Response } from "express";
+import type { Response } from "express";
+import { routeParam } from "./route-param.js";
 import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
 import { IdentityService } from "../../services/identity/identity.service.js";
 import { PlatformCompaniesService } from "../../services/platform/platform-companies.service.js";
@@ -70,7 +71,7 @@ export async function setCompanyActive(
     const admin = await requirePlatformAdmin(req, res);
     if (!admin) return;
 
-    const companyId = req.params.id;
+    const companyId = routeParam(req.params.id);
     const isActive = Boolean(req.body?.isActive);
 
     if (!companyId) {
@@ -91,4 +92,3 @@ export async function setCompanyActive(
     });
   }
 }
-

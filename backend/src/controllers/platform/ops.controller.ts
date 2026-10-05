@@ -1,4 +1,5 @@
-﻿import type { Response } from "express";
+import type { Response } from "express";
+import { routeParam } from "./route-param.js";
 import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
 import { requirePlatformAdmin } from "../../services/platform/platform-admin.guard.js";
 import { PlatformTopupsService } from "../../services/platform/platform-topups.service.js";
@@ -31,7 +32,7 @@ export async function createTopup(req: AuthenticatedRequest, res: Response) {
 export async function setTopupActive(req: AuthenticatedRequest, res: Response) {
   try {
     if (!(await requirePlatformAdmin(req, res))) return;
-    const data = await topups.setActive(req.params.id, Boolean(req.body?.isActive));
+    const data = await topups.setActive(routeParam(req.params.id), Boolean(req.body?.isActive));
     res.json({ success: true, data });
   } catch (e) {
     res.status(500).json({ success: false, message: "Update failed." });

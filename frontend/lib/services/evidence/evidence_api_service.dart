@@ -108,6 +108,66 @@ class EvidenceData {
 class EvidenceApiService {
   const EvidenceApiService();
 
+  Future<Map<String, dynamic>> createEvidence({
+    required String recordingId,
+    String type = 'VIDEO',
+    String? fileName,
+    String? contentType,
+    int? sizeBytes,
+    int? durationSeconds,
+  }) async {
+    final value = recordingId.trim();
+
+    if (value.isEmpty) {
+      throw Exception('recordingId is required.');
+    }
+
+    final uri = Uri.parse('${ApiConfig.baseUrl}/evidence');
+
+    const apiClient = ApiClient();
+
+    final body = <String, dynamic>{
+      'recordingId': value,
+      'type': type,
+      if (fileName != null && fileName.trim().isNotEmpty)
+        'fileName': fileName.trim(),
+      if (contentType != null && contentType.trim().isNotEmpty)
+        'contentType': contentType.trim(),
+      'sizeBytes': ?sizeBytes,
+      'durationSeconds': ?durationSeconds,
+    };
+
+    final response = await apiClient.post(uri, body: body);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Evidence create failed '
+        '(${response.statusCode}): '
+        '${response.body}',
+      );
+    }
+
+    final decoded = jsonDecode(response.body);
+
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Invalid evidence create response.');
+    }
+
+    if (decoded['success'] != true) {
+      throw Exception(
+        decoded['message']?.toString() ?? 'Evidence creation failed.',
+      );
+    }
+
+    final data = decoded['data'];
+
+    if (data is! Map) {
+      throw Exception('Evidence data is missing from API response.');
+    }
+
+    return Map<String, dynamic>.from(data);
+  }
+
   Future<EvidenceData> getEvidence(String awb) async {
     final value = awb.trim();
 

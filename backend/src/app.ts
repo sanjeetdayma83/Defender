@@ -1,56 +1,33 @@
-﻿import scanRouter from "./routes/scan.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
+﻿import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
+import scanRouter from "./routes/scan.routes.js";
 import importsRoutes from "./routes/imports.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import productsRoutes from "./routes/products.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import ordersRoutes from "./routes/orders.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import shipmentsRoutes from "./routes/shipments.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import plansRoutes from "./routes/plans.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import walletRoutes from "./routes/wallet.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import express from "express";
 import onboardingRoutes from "./routes/onboarding.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import cors from "cors";
 import helmet from "helmet";
 import dotenv from "dotenv";
 
 import storageRoutes from "./routes/storage.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import packingRoutes from "./routes/packing.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import evidenceRoutes from "./routes/evidence.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import { healthRouter } from "./routes/health.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import authRoutes from "./routes/auth.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import { firebaseAuthMiddleware } from "./middleware/firebase-auth.middleware.js";
 import identityRoutes from "./routes/identity.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import liveDashboardRoutes from "./routes/live-dashboard.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import platformCompaniesRoutes from "./routes/platform-companies.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
-import { platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-ops.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import platformSubscriptionsRoutes from "./routes/platform-subscriptions.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import platformPlansRoutes from "./routes/platform-plans.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import platformUsersRoutes from "./routes/platform-users.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import warehouseRoutes from "./routes/warehouse.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 
 import billingRoutes from "./routes/billing.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import billingWebhookRoutes from "./routes/billing-webhook.routes.js";
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 
 dotenv.config();
 

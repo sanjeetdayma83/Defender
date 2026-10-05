@@ -1,4 +1,5 @@
-﻿import type { Response } from "express";
+import type { Response } from "express";
+import { routeParam } from "./route-param.js";
 import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
 import { requirePlatformAdmin } from "../../services/platform/platform-admin.guard.js";
 import { PlatformCompaniesService } from "../../services/platform/platform-companies.service.js";
@@ -31,7 +32,7 @@ export async function listPlatformCompanies(req: AuthenticatedRequest, res: Resp
 export async function setCompanyActive(req: AuthenticatedRequest, res: Response) {
   try {
     if (!(await requirePlatformAdmin(req, res))) return;
-    const data = await companies.setActive(req.params.id, Boolean(req.body?.isActive));
+    const data = await companies.setActive(routeParam(req.params.id), Boolean(req.body?.isActive));
     res.json({ success: true, data });
   } catch (e) {
     console.error(e);
@@ -58,11 +59,11 @@ export async function setUserStatus(req: AuthenticatedRequest, res: Response) {
   try {
     const admin = await requirePlatformAdmin(req, res);
     if (!admin) return;
-    if (admin.id === req.params.id && !req.body?.isActive) {
+    if (admin.id === routeParam(req.params.id) && !req.body?.isActive) {
       res.status(400).json({ success: false, message: "Cannot suspend your own account." });
       return;
     }
-    const data = await users.setStatus(req.params.id, Boolean(req.body?.isActive));
+    const data = await users.setStatus(routeParam(req.params.id), Boolean(req.body?.isActive));
     res.json({ success: true, data });
   } catch (e) {
     res.status(500).json({ success: false, message: "Unable to update user." });
@@ -91,7 +92,7 @@ export async function createPlatformPlan(req: AuthenticatedRequest, res: Respons
 export async function updatePlatformPlan(req: AuthenticatedRequest, res: Response) {
   try {
     if (!(await requirePlatformAdmin(req, res))) return;
-    const data = await plans.update(req.params.id, req.body ?? {});
+    const data = await plans.update(routeParam(req.params.id), req.body ?? {});
     res.json({ success: true, data });
   } catch (e: any) {
     res.status(e?.message === "PLAN_NOT_FOUND" ? 404 : 400).json({ success: false, message: e?.message ?? "Update failed" });
@@ -100,7 +101,7 @@ export async function updatePlatformPlan(req: AuthenticatedRequest, res: Respons
 export async function setPlanActive(req: AuthenticatedRequest, res: Response) {
   try {
     if (!(await requirePlatformAdmin(req, res))) return;
-    const data = await plans.setActive(req.params.id, Boolean(req.body?.isActive));
+    const data = await plans.setActive(routeParam(req.params.id), Boolean(req.body?.isActive));
     res.json({ success: true, data });
   } catch (e) {
     res.status(500).json({ success: false, message: "Unable to update plan." });
@@ -141,7 +142,7 @@ export async function createTopup(req: AuthenticatedRequest, res: Response) {
 export async function setTopupActive(req: AuthenticatedRequest, res: Response) {
   try {
     if (!(await requirePlatformAdmin(req, res))) return;
-    res.json({ success: true, data: await topups.setActive(req.params.id, Boolean(req.body?.isActive)) });
+    res.json({ success: true, data: await topups.setActive(routeParam(req.params.id), Boolean(req.body?.isActive)) });
   } catch (e) {
     res.status(500).json({ success: false, message: "Update failed" });
   }

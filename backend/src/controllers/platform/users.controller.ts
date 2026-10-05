@@ -1,4 +1,5 @@
-﻿import type { Response } from "express";
+import type { Response } from "express";
+import { routeParam } from "./route-param.js";
 import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
 import { IdentityService } from "../../services/identity/identity.service.js";
 import { PlatformUsersService } from "../../services/platform/platform-users.service.js";
@@ -67,7 +68,7 @@ export async function setUserStatus(
     const admin = await requirePlatformAdmin(req, res);
     if (!admin) return;
 
-    const userId = req.params.id;
+    const userId = routeParam(req.params.id);
     const isActive = Boolean(req.body?.isActive);
 
     if (!userId) {

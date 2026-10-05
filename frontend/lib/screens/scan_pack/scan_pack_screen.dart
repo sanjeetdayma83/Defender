@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +7,7 @@ import '../../models/models.dart';
 import '../../providers/session_provider.dart';
 import '../../services/api/media_upload_service.dart';
 import '../../services/packing/packing_api_service.dart';
+import '../../services/evidence/evidence_api_service.dart';
 import '../../services/camera/camera_recording_service.dart';
 import '../../services/orders/order_service.dart';
 import '../../services/scanner/barcode_input_service.dart';
@@ -27,6 +28,7 @@ class _ScanPackScreenState extends State<ScanPackScreen> {
 
   final MediaUploadService _mediaUploadService = const MediaUploadService();
   final PackingApiService _packingApi = PackingApiService();
+    final EvidenceApiService _evidenceApi = EvidenceApiService();
   String? _activeRecordingId;
   bool _startingPacking = false;
 
@@ -504,6 +506,16 @@ class _ScanPackScreenState extends State<ScanPackScreen> {
       setState(() {
       });
 
+      final evidence = await _evidenceApi.createEvidence(
+        recordingId: recordingId,
+        type: 'VIDEO',
+      );
+
+      debugPrint(
+        'SCAN_PACK: evidence created '
+        'recordingId=$recordingId '
+        'evidenceId=${evidence['id'] ?? ''}',
+      );
       await _packingApi.completePacking(sessionId: recordingId);
 
       if (!mounted) {
@@ -1078,6 +1090,3 @@ class _ScanPackScreenState extends State<ScanPackScreen> {
     super.dispose();
   }
 }
-
-
-

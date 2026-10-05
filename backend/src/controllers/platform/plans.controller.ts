@@ -1,4 +1,5 @@
-﻿import type { Response } from "express";
+import type { Response } from "express";
+import { routeParam } from "./route-param.js";
 import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
 import { IdentityService } from "../../services/identity/identity.service.js";
 import { PlatformPlansService } from "../../services/platform/platform-plans.service.js";
@@ -107,7 +108,7 @@ export async function updatePlatformPlan(
     const admin = await requirePlatformAdmin(req, res);
     if (!admin) return;
 
-    const id = req.params.id;
+    const id = routeParam(req.params.id);
     if (!id) {
       res.status(400).json({ success: false, message: "Plan id required." });
       return;
@@ -169,7 +170,7 @@ export async function setPlanActive(
     const admin = await requirePlatformAdmin(req, res);
     if (!admin) return;
 
-    const id = req.params.id;
+    const id = routeParam(req.params.id);
     const isActive = Boolean(req.body?.isActive);
     if (!id) {
       res.status(400).json({ success: false, message: "Plan id required." });
