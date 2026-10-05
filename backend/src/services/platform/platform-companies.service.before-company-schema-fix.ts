@@ -146,7 +146,7 @@ async function getCompanyAggregates(
         FROM "User"
         WHERE "companyId" = ${companyId}
           AND (
-            LOWER(status::text) = 'active'
+            LOWER(COALESCE(status, '')) = 'active'
             OR status IS NULL
           )
       `,
@@ -177,7 +177,9 @@ async function getCompanyAggregates(
 async function getRegions(): Promise<string[]> {
   try {
     const rows = await prisma.$queryRaw<{ state: string | null }[]>`
-      SELECT DISTINCT NULLIF(TRIM(address->>'state'), '') AS state FROM "Company" WHERE address->>'state' IS NOT NULL
+      SELECT DISTINCT NULLIF(TRIM(state), '') AS state
+      FROM "Company"
+      WHERE state IS NOT NULL
       ORDER BY state ASC
     `;
 
@@ -192,7 +194,9 @@ async function getRegions(): Promise<string[]> {
 async function getPlans(): Promise<string[]> {
   try {
     const rows = await prisma.$queryRaw<{ plan: string | null }[]>`
-      SELECT DISTINCT NULLIF(TRIM(plan::text), '') AS plan FROM "Company" WHERE plan IS NOT NULL
+      SELECT DISTINCT NULLIF(TRIM(plan), '') AS plan
+      FROM "Company"
+      WHERE plan IS NOT NULL
       ORDER BY plan ASC
     `;
 
@@ -387,14 +391,14 @@ export class PlatformCompaniesService {
     let paramIndex = 1;
 
     if (status === "active") {
-      conditions.push(`LOWER(status::text) = 'active'`);
+      conditions.push(`"isActive" = true`);
     } else if (status === "inactive") {
-      conditions.push(`LOWER(status::text) <> 'active'`);
+      conditions.push(`"isActive" = false`);
     }
 
     if (search) {
       conditions.push(`(
-        "companyName" ILIKE ${paramIndex}
+        name ILIKE $${paramIndex}
         OR code ILIKE $${paramIndex}
       )`);
       params.push(`%${search}%`);
@@ -431,7 +435,15 @@ export class PlatformCompaniesService {
 
     const companies = await prisma.$queryRawUnsafe<LegacyCompanyRow[]>(
       `
-      SELECT id, "companyName" AS name, NULL::text AS code, plan::text AS plan, (LOWER(status::text) = 'active') AS "isActive", "createdAt", "updatedAt", email, phone, gst, pan, address, "storageUsed", "storageQuota" FROM "Company"
+      SELECT
+        id,
+        name,
+        code,
+        plan,
+        "isActive",
+        "createdAt",
+        "updatedAt"
+      FROM "Company"
       ${whereSql}
       ORDER BY "createdAt" DESC NULLS LAST, id
       LIMIT $${paramIndex}
@@ -469,7 +481,7 @@ export class PlatformCompaniesService {
       regionRows,
     ] = await Promise.all([
       prisma.$queryRawUnsafe<{ count: bigint }[]>(
-        `SELECT COUNT(*)::bigint AS count FROM "Company" ${whereSql} AND LOWER(status::text) = 'active'`.replace(
+        `SELECT COUNT(*)::bigint AS count FROM "Company" ${whereSql} AND "isActive" = true`.replace(
           "WHERE  AND",
           "WHERE",
         ),
@@ -477,7 +489,7 @@ export class PlatformCompaniesService {
       ).catch(() => [{ count: BigInt(0) }]),
 
       prisma.$queryRawUnsafe<{ count: bigint }[]>(
-        `SELECT COUNT(*)::bigint AS count FROM "Company" ${whereSql} AND LOWER(status::text) <> 'active'`.replace(
+        `SELECT COUNT(*)::bigint AS count FROM "Company" ${whereSql} AND "isActive" = false`.replace(
           "WHERE  AND",
           "WHERE",
         ),
@@ -540,7 +552,15 @@ export class PlatformCompaniesService {
 
   async get(companyId: string): Promise<PlatformCompanyRow | null> {
     const rows = await prisma.$queryRaw<LegacyCompanyRow[]>`
-      SELECT id, "companyName" AS name, NULL::text AS code, plan::text AS plan, (LOWER(status::text) = 'active') AS "isActive", "createdAt", "updatedAt", email, phone, gst, pan, address, "storageUsed", "storageQuota" FROM "Company"
+      SELECT
+        id,
+        name,
+        code,
+        plan,
+        "isActive",
+        "createdAt",
+        "updatedAt"
+      FROM "Company"
       WHERE id = ${companyId}
       LIMIT 1
     `;
@@ -590,6 +610,3 @@ export class PlatformCompaniesService {
     };
   }
 }
-
-
-

@@ -1,5 +1,3 @@
-import 'branding/loss_defender_logo.dart';
-
 import 'package:flutter/material.dart';
 
 class SidebarItem {
@@ -37,11 +35,22 @@ class LossDefenderSidebar extends StatelessWidget {
       child: Column(
         children: [
           const SizedBox(height: 22),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: LossDefenderLogo(width: 175, height: 46),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Icon(Icons.shield_outlined, color: Colors.white, size: 28),
+                SizedBox(width: 10),
+                Text(
+                  'LOSS DEFENDER',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 28),

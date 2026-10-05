@@ -124,13 +124,13 @@ class PlatformCompany {
       walletConsumed: n(json['walletConsumed']),
       recentActivity: rawActivity is List
           ? rawActivity
-                .whereType<Map>()
-                .map(
-                  (e) => PlatformCompanyActivity.fromJson(
-                    Map<String, dynamic>.from(e),
-                  ),
-                )
-                .toList()
+              .whereType<Map>()
+              .map(
+                (e) => PlatformCompanyActivity.fromJson(
+                  Map<String, dynamic>.from(e),
+                ),
+              )
+              .toList()
           : const [],
     );
   }
@@ -167,18 +167,14 @@ class PlatformCompaniesSummary {
   final int activeCompanies;
   final int inactiveCompanies;
   final int trialCompanies;
-  final int totalUsers;
   final int totalRevenuePaise;
-  final int scanCreditsSold;
 
   const PlatformCompaniesSummary({
     required this.totalCompanies,
     required this.activeCompanies,
     required this.inactiveCompanies,
     required this.trialCompanies,
-    required this.totalUsers,
     required this.totalRevenuePaise,
-    required this.scanCreditsSold,
   });
 
   factory PlatformCompaniesSummary.fromJson(Map<String, dynamic> json) {
@@ -192,9 +188,7 @@ class PlatformCompaniesSummary {
       activeCompanies: n(json['activeCompanies']),
       inactiveCompanies: n(json['inactiveCompanies']),
       trialCompanies: n(json['trialCompanies']),
-      totalUsers: n(json['totalUsers']),
       totalRevenuePaise: n(json['totalRevenuePaise']),
-      scanCreditsSold: n(json['scanCreditsSold']),
     );
   }
 }
@@ -234,29 +228,29 @@ class PlatformCompaniesPage {
             ? Map<String, dynamic>.from(rawSummary)
             : const <String, dynamic>{},
       ),
-      plans:
-          (json['filterOptions'] is Map &&
+      plans: (json['filterOptions'] is Map &&
               (json['filterOptions'] as Map)['plans'] is List)
           ? ((json['filterOptions'] as Map)['plans'] as List)
-                .map((e) => e.toString())
-                .where((e) => e.trim().isNotEmpty)
-                .toList()
+              .map((e) => e.toString())
+              .where((e) => e.trim().isNotEmpty)
+              .toList()
           : const [],
-      regions:
-          (json['filterOptions'] is Map &&
+      regions: (json['filterOptions'] is Map &&
               (json['filterOptions'] as Map)['regions'] is List)
           ? ((json['filterOptions'] as Map)['regions'] as List)
-                .map((e) => e.toString())
-                .where((e) => e.trim().isNotEmpty)
-                .toList()
+              .map((e) => e.toString())
+              .where((e) => e.trim().isNotEmpty)
+              .toList()
           : const [],
       items: rawItems is List
           ? rawItems
-                .whereType<Map>()
-                .map(
-                  (e) => PlatformCompany.fromJson(Map<String, dynamic>.from(e)),
-                )
-                .toList()
+              .whereType<Map>()
+              .map(
+                (e) => PlatformCompany.fromJson(
+                  Map<String, dynamic>.from(e),
+                ),
+              )
+              .toList()
           : const [],
     );
   }
@@ -266,7 +260,7 @@ class PlatformCompaniesService {
   final ApiClient _client;
 
   const PlatformCompaniesService({ApiClient? client})
-    : _client = client ?? const ApiClient();
+      : _client = client ?? const ApiClient();
 
   Future<PlatformCompaniesPage> list({
     String search = '',
@@ -285,9 +279,8 @@ class PlatformCompaniesService {
       if (region.trim().isNotEmpty && region != 'All') 'region': region.trim(),
     };
 
-    final uri = Uri.parse(
-      '${ApiConfig.baseUrl}/platform/companies',
-    ).replace(queryParameters: qs);
+    final uri = Uri.parse('${ApiConfig.baseUrl}/platform/companies')
+        .replace(queryParameters: qs);
 
     final response = await _client.get(uri);
     final decoded = jsonDecode(response.body);

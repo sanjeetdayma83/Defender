@@ -146,7 +146,7 @@ async function getCompanyAggregates(
         FROM "User"
         WHERE "companyId" = ${companyId}
           AND (
-            LOWER(status::text) = 'active'
+            LOWER(COALESCE(status, '')) = 'active'
             OR status IS NULL
           )
       `,
@@ -590,6 +590,5 @@ export class PlatformCompaniesService {
     };
   }
 }
-
 
 

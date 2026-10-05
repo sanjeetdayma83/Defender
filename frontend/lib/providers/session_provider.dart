@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -169,8 +169,12 @@ class SessionProvider extends ChangeNotifier {
       final body = jsonDecode(res.body);
       final found = body is Map && body['found'] == true;
       debugPrint('TENANT_HTTP_NEGATIVE_FOUND=$found');
+      final isExpectedNegativeStatus =
+          res.statusCode >= 400 && res.statusCode < 500;
+
       debugPrint(
-        'TENANT_HTTP_NEGATIVE_RESULT=${res.statusCode == 200 && found == false ? "PASS" : "FAIL"}',
+        'TENANT_HTTP_NEGATIVE_RESULT='
+        '${isExpectedNegativeStatus && found == false ? "PASS" : "FAIL"}',
       );
     } catch (_) {
       debugPrint('TENANT_HTTP_NEGATIVE_RESULT=SKIP');

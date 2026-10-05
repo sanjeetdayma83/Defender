@@ -25,21 +25,11 @@ class FirebaseAuthService {
   Future<UserCredential> createAccountWithEmail({
     required String email,
     required String password,
-    String? displayName,
   }) async {
-    final credential = await _auth.createUserWithEmailAndPassword(
+    return _auth.createUserWithEmailAndPassword(
       email: email.trim(),
       password: password,
     );
-
-    final name = displayName?.trim();
-
-    if (credential.user != null && name != null && name.isNotEmpty) {
-      await credential.user!.updateDisplayName(name);
-      await credential.user!.reload();
-    }
-
-    return credential;
   }
 
   Future<void> signInWithGoogle() async {
@@ -53,23 +43,6 @@ class FirebaseAuthService {
     }
 
     await _auth.signInWithProvider(provider);
-  }
-
-  Future<void> signInWithMicrosoft() async {
-    final provider = OAuthProvider('microsoft.com');
-
-    provider.setCustomParameters({'prompt': 'select_account'});
-
-    if (kIsWeb) {
-      await _auth.signInWithPopup(provider);
-      return;
-    }
-
-    await _auth.signInWithProvider(provider);
-  }
-
-  Future<void> sendPasswordResetEmail({required String email}) async {
-    await _auth.sendPasswordResetEmail(email: email.trim());
   }
 
   Future<UserCredential?> getRedirectResult() async {

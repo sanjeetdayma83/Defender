@@ -1,4 +1,4 @@
-﻿import '../platform/platform_ops_screens.dart';
+import '../platform/platform_ops_screens.dart';
 import '../platform/platform_subscriptions_screen.dart';
 import '../platform/platform_plans_screen.dart';
 import '../platform/platform_users_screen.dart';
@@ -15,7 +15,6 @@ import '../team/team_screen.dart';
 import '../evidence/evidence_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../profile/profile_screen.dart';
-
 enum SaaSRole { platformAdmin, companyAdmin, operator }
 
 class SaaSPortalScreen extends StatefulWidget {
@@ -53,37 +52,14 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
       }
     });
   }
-  String get _roleLabel {
-    switch (_role) {
-      case SaaSRole.platformAdmin:
-        return 'Platform Admin';
-      case SaaSRole.companyAdmin:
-        return 'Company Admin';
-      case SaaSRole.operator:
-        return 'Packing Operator';
-    }
-  }
-
-
 
   SaaSRole? _mapSessionRole(String? role) {
     final r = (role ?? '').trim().toUpperCase().replaceAll('-', '_');
-
-    if (r == 'PLATFORM_ADMIN' || r == 'SUPER_ADMIN') {
-      return SaaSRole.platformAdmin;
-    }
-
-    if (r == 'OPERATOR' || r == 'PACKING_OPERATOR') {
-      return SaaSRole.operator;
-    }
-
-    if (r.isEmpty) {
-      return null;
-    }
-
+    if (((r == 'PLATFORM_ADMIN' || r == 'SUPER_ADMIN') || r == 'SUPER_ADMIN')) return SaaSRole.platformAdmin;
+    if (r == 'OPERATOR' || r == 'PACKING_OPERATOR') return SaaSRole.operator;
+    if (r.isEmpty) return null;
     return SaaSRole.companyAdmin;
   }
-
   List<_NavItem> get _navigation {
     switch (_role) {
       case SaaSRole.platformAdmin:
@@ -142,7 +118,9 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
           return PlatformDashboardScreen(
             onOpenSection: (section) {
               final items = _navigation;
-              final i = items.indexWhere((e) => e.label == section);
+              final i = items.indexWhere(
+                (e) => e.label == section,
+              );
 
               if (i >= 0 && mounted) {
                 setState(() => _index = i);
@@ -225,7 +203,7 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
       case 'Dashboard':
         return const _OperatorDashboardPage();
       case 'Scan & Pack':
-        return const ScanPackScreen();
+          return const ScanPackScreen();
       case 'My Sessions':
         return const _SessionsPage();
       case 'Recordings':
@@ -233,7 +211,7 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
       case 'Evidence':
         return const _OperatorEvidencePage();
       case 'Profile':
-        return const ProfileScreen();
+          return const ProfileScreen();
       case 'Help':
         return const _HelpPage();
     }
@@ -285,149 +263,72 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
 
   Widget _sidebar() {
     return Container(
-      width: 252,
-      color: _navy,
+      width: 232,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF071B48),
+            Color(0xFF04132F),
+          ],
+        ),
+      ),
       child: SafeArea(
         child: Column(
           children: [
+            // ------------------------------------------------
+            // BRAND
+            // ------------------------------------------------
             Padding(
-              padding: const EdgeInsets.fromLTRB(17, 16, 17, 16),
-              child: Container(
-                height: 58,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 7,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: Image.asset(
-                  'assets/branding/loss_defender_logo.png',
-                  fit: BoxFit.contain,
-                  filterQuality: FilterQuality.high,
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Container(
-                padding: const EdgeInsets.all(11),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .055),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: .08),
-                  ),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(
-                      Icons.admin_panel_settings_outlined,
-                      color: Colors.white70,
-                      size: 19,
-                    ),
-                    SizedBox(width: 9),
-                    Expanded(
-                      child: Text(
-                        'Platform Admin',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      'Full Access',
-                      style: TextStyle(color: Colors.white54, fontSize: 9),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                itemCount: _navigation.length,
-                itemBuilder: (context, index) {
-                  final item = _navigation[index];
-                  final selected = index == _index;
-
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 3),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: ListTile(
-                        dense: true,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(11),
-                        ),
-                        selected: selected,
-                        selectedTileColor: _blue,
-                        leading: Icon(
-                          item.icon,
-                          size: 20,
-                          color: selected ? Colors.white : Colors.white60,
-                        ),
-                        title: Text(
-                          item.label,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: selected ? Colors.white : Colors.white70,
-                            fontWeight: selected
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                            fontSize: 13,
-                          ),
-                        ),
-                        onTap: () => _select(index),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            Container(
-              margin: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: .055),
-                borderRadius: BorderRadius.circular(13),
+              padding: const EdgeInsets.fromLTRB(
+                15,
+                16,
+                15,
+                14,
               ),
               child: Row(
                 children: [
                   Container(
-                    width: 34,
-                    height: 34,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFFF9819),
-                      shape: BoxShape.circle,
+                    width: 43,
+                    height: 43,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFF1769FF),
+                          Color(0xFF0BC6FF),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(
-                      Icons.workspace_premium_rounded,
+                      Icons.shield_rounded,
                       color: Colors.white,
-                      size: 18,
+                      size: 26,
                     ),
                   ),
-                  const SizedBox(width: 9),
+                  const SizedBox(width: 10),
                   const Expanded(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Platform Admin',
+                          'Loss Defender',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                         SizedBox(height: 2),
                         Text(
-                          'Full Access',
-                          style: TextStyle(color: Colors.white54, fontSize: 9),
+                          'Platform Administration',
+                          style: TextStyle(
+                            color: Color(0xFFB6C4E2),
+                            fontSize: 9,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ],
                     ),
@@ -435,21 +336,197 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
                 ],
               ),
             ),
-            InkWell(
-              onTap: () async {
-                await context.read<SessionProvider>().signOut();
-              },
-              child: const Padding(
-                padding: EdgeInsets.fromLTRB(22, 0, 22, 18),
-                child: Row(
-                  children: [
-                    Icon(Icons.logout_rounded, color: Colors.white70, size: 19),
-                    SizedBox(width: 12),
-                    Text(
-                      'Logout',
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
+
+            // ------------------------------------------------
+            // NAVIGATION
+            // ------------------------------------------------
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(
+                  14,
+                  4,
+                  14,
+                  8,
+                ),
+                itemCount: _navigation.length,
+                itemBuilder: (context, index) {
+                  final item = _navigation[index];
+                  final selected = index == _index;
+
+                  return Padding(
+                    padding: const EdgeInsets.only(
+                      bottom: 3,
                     ),
-                  ],
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius:
+                            BorderRadius.circular(8),
+                        onTap: () => _select(index),
+                        child: AnimatedContainer(
+                          duration: const Duration(
+                            milliseconds: 160,
+                          ),
+                          height: 42,
+                          padding:
+                              const EdgeInsets.symmetric(
+                            horizontal: 11,
+                          ),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? const Color(0xFF1769FF)
+                                : Colors.transparent,
+                            borderRadius:
+                                BorderRadius.circular(8),
+                            boxShadow: selected
+                                ? const [
+                                    BoxShadow(
+                                      color:
+                                          Color(0x441769FF),
+                                      blurRadius: 12,
+                                      offset: Offset(0, 4),
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                item.icon,
+                                size: 19,
+                                color: selected
+                                    ? Colors.white
+                                    : const Color(
+                                        0xFFB7C3DA,
+                                      ),
+                              ),
+                              const SizedBox(width: 11),
+                              Expanded(
+                                child: Text(
+                                  item.label,
+                                  maxLines: 1,
+                                  overflow:
+                                      TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: selected
+                                        ? Colors.white
+                                        : const Color(
+                                            0xFFD4DCEE,
+                                          ),
+                                    fontSize: 11,
+                                    fontWeight: selected
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            // ------------------------------------------------
+            // ADMIN PROFILE CARD
+            // ------------------------------------------------
+            Container(
+              margin: const EdgeInsets.fromLTRB(
+                14,
+                8,
+                14,
+                10,
+              ),
+              padding: const EdgeInsets.all(11),
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(10),
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(
+                  color: Colors.white.withAlpha(15),
+                ),
+              ),
+              child: const Row(
+                children: [
+                  CircleAvatar(
+                    radius: 17,
+                    backgroundColor: Color(0xFFFFA116),
+                    child: Icon(
+                      Icons.workspace_premium_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
+                  SizedBox(width: 9),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Platform Admin',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Full Access',
+                          style: TextStyle(
+                            color: Color(0xFF9EADCB),
+                            fontSize: 8,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ------------------------------------------------
+            // LOGOUT
+            // ------------------------------------------------
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                20,
+                0,
+                20,
+                14,
+              ),
+              child: InkWell(
+                borderRadius:
+                    BorderRadius.circular(7),
+                onTap: () {
+                  // Existing auth/session logout flow
+                  // can be connected here.
+                },
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(
+                    vertical: 7,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.logout_rounded,
+                        color: Color(0xFFC1CCE0),
+                        size: 18,
+                      ),
+                      SizedBox(width: 11),
+                      Text(
+                        'Logout',
+                        style: TextStyle(
+                          color: Color(0xFFC1CCE0),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -458,195 +535,307 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
       ),
     );
   }
-
   Widget _topbar() {
-
     return Container(
-      height: 72,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      height: 66,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 17,
+      ),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(bottom: BorderSide(color: _border)),
+        border: Border(
+          bottom: BorderSide(
+            color: Color(0xFFE4E9F1),
+          ),
+        ),
       ),
       child: Row(
         children: [
+          // MENU
           Container(
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: const Color(0xFFF1F6FF),
-              borderRadius: BorderRadius.circular(11),
+              color: const Color(0xFFF1F5FF),
+              borderRadius:
+                  BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.menu_rounded, color: _blue, size: 21),
+            child: IconButton(
+              onPressed: () {},
+              padding: EdgeInsets.zero,
+              icon: const Icon(
+                Icons.menu_rounded,
+                color: Color(0xFF1769FF),
+                size: 21,
+              ),
+            ),
           ),
-          const SizedBox(width: 18),
-          Expanded(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 570),
-              child: SizedBox(
-                height: 42,
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Search companies, users, orders, warehouses...',
-                    prefixIcon: const Icon(
-                      Icons.search_rounded,
-                      size: 19,
-                      color: _blue,
+
+          const SizedBox(width: 13),
+
+          // GLOBAL SEARCH
+          SizedBox(
+            width: 570,
+            height: 38,
+            child: TextField(
+              decoration: InputDecoration(
+                hintText:
+                    'Search companies, users, orders, warehouses...',
+                hintStyle: const TextStyle(
+                  color: Color(0xFF7B89A5),
+                  fontSize: 11,
+                ),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  size: 18,
+                  color: Color(0xFF1769FF),
+                ),
+                suffixIcon: const Padding(
+                  padding: EdgeInsets.only(right: 10),
+                  child: Center(
+                    widthFactor: 1,
+                    child: Text(
+                      'Ctrl + K',
+                      style: TextStyle(
+                        color: Color(0xFF8895AD),
+                        fontSize: 8,
+                      ),
                     ),
-                    suffixText: 'Ctrl + K',
-                    suffixStyle: const TextStyle(
-                      color: Color(0xFF98A4BC),
-                      fontSize: 9,
-                    ),
-                    filled: true,
-                    fillColor: const Color(0xFFF9FBFE),
-                    contentPadding: EdgeInsets.zero,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: _border),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: _border),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: _blue),
-                    ),
+                  ),
+                ),
+                filled: true,
+                fillColor:
+                    const Color(0xFFF8FAFD),
+                contentPadding:
+                    const EdgeInsets.symmetric(
+                  vertical: 0,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius:
+                      BorderRadius.circular(7),
+                  borderSide: const BorderSide(
+                    color: Color(0xFFDCE3EE),
+                  ),
+                ),
+                enabledBorder:
+                    OutlineInputBorder(
+                  borderRadius:
+                      BorderRadius.circular(7),
+                  borderSide: const BorderSide(
+                    color: Color(0xFFDCE3EE),
+                  ),
+                ),
+                focusedBorder:
+                    OutlineInputBorder(
+                  borderRadius:
+                      BorderRadius.circular(7),
+                  borderSide: const BorderSide(
+                    color: Color(0xFF1769FF),
                   ),
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 14),
+
+          const Spacer(),
+
+          // DATE RANGE
           Container(
-            height: 42,
-            padding: const EdgeInsets.symmetric(horizontal: 13),
+            height: 38,
+            padding:
+                const EdgeInsets.symmetric(
+              horizontal: 11,
+            ),
             decoration: BoxDecoration(
               color: Colors.white,
-              border: Border.all(color: _border),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius:
+                  BorderRadius.circular(7),
+              border: Border.all(
+                color: const Color(0xFFDCE3EE),
+              ),
             ),
             child: const Row(
               children: [
-                Icon(Icons.calendar_month_outlined, color: _navy, size: 17),
-                SizedBox(width: 8),
+                Icon(
+                  Icons.calendar_month_outlined,
+                  size: 16,
+                  color: Color(0xFF0A1B55),
+                ),
+                SizedBox(width: 7),
                 Text(
                   'Date Range',
                   style: TextStyle(
-                    color: _navy,
-                    fontSize: 11,
+                    color: Color(0xFF10235E),
+                    fontSize: 9,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                SizedBox(width: 5),
+                SizedBox(width: 6),
                 Icon(
                   Icons.keyboard_arrow_down_rounded,
-                  color: _muted,
-                  size: 16,
+                  size: 15,
+                  color: Color(0xFF6F7D9E),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 10),
+
+          const SizedBox(width: 11),
+
+          // NOTIFICATIONS
           Stack(
             clipBehavior: Clip.none,
             children: [
               IconButton(
-                tooltip: 'Notifications',
                 onPressed: () {},
                 icon: const Icon(
                   Icons.notifications_none_rounded,
-                  color: _navy,
+                  color: Color(0xFF10235E),
+                  size: 23,
                 ),
               ),
               Positioned(
                 right: 5,
-                top: 3,
+                top: 4,
                 child: Container(
                   width: 17,
                   height: 17,
-                  alignment: Alignment.center,
-                  decoration: const BoxDecoration(
-                    color: _red,
+                  decoration:
+                      const BoxDecoration(
+                    color: Color(0xFFF23D4F),
                     shape: BoxShape.circle,
                   ),
+                  alignment:
+                      Alignment.center,
                   child: const Text(
                     '!',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 9,
-                      fontWeight: FontWeight.w900,
+                      fontWeight:
+                          FontWeight.w800,
                     ),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(width: 6),
+
+          const SizedBox(width: 3),
+
+          // PROFILE
           const CircleAvatar(
             radius: 18,
-            backgroundColor: _blue,
+            backgroundColor:
+                Color(0xFF1E4FBB),
             child: Text(
               'PA',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
+                fontSize: 9,
+                fontWeight:
+                    FontWeight.w800,
               ),
             ),
           ),
+
           const SizedBox(width: 8),
-          Text(
-            _roleLabel,
-            style: const TextStyle(
-              color: _navy,
-              fontSize: 11,
+
+          const Text(
+            'Platform Admin',
+            style: TextStyle(
+              color: Color(0xFF10235E),
+              fontSize: 10,
               fontWeight: FontWeight.w700,
             ),
           ),
+
           const Icon(
             Icons.keyboard_arrow_down_rounded,
-            color: _muted,
-            size: 17,
+            size: 16,
+            color: Color(0xFF6F7D9E),
           ),
         ],
       ),
     );
   }
-
   Widget _mobileHeader() {
     return SafeArea(
       bottom: false,
       child: Container(
-        height: 64,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: const BoxDecoration(
+        height: 62,
+        padding:
+            const EdgeInsets.symmetric(
+          horizontal: 14,
+        ),
+        decoration:
+            const BoxDecoration(
           color: Colors.white,
-          border: Border(bottom: BorderSide(color: _border)),
+          border: Border(
+            bottom: BorderSide(
+              color: Color(0xFFE4E9F1),
+            ),
+          ),
         ),
         child: Row(
           children: [
             IconButton(
-              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-              icon: const Icon(Icons.menu_rounded),
-            ),
-            const SizedBox(width: 5),
-            SizedBox(
-              width: 145,
-              height: 40,
-              child: Image.asset(
-                'assets/branding/loss_defender_logo.png',
-                fit: BoxFit.contain,
+              onPressed: () =>
+                  _scaffoldKey.currentState
+                      ?.openDrawer(),
+              icon: const Icon(
+                Icons.menu_rounded,
+                color: Color(0xFF10235E),
               ),
             ),
-            const Spacer(),
+            const SizedBox(width: 3),
             Container(
-              width: 9,
-              height: 9,
-              decoration: const BoxDecoration(
-                color: _green,
-                shape: BoxShape.circle,
+              width: 31,
+              height: 31,
+              decoration: BoxDecoration(
+                gradient:
+                    const LinearGradient(
+                  colors: [
+                    Color(0xFF1769FF),
+                    Color(0xFF0BC6FF),
+                  ],
+                ),
+                borderRadius:
+                    BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.shield_rounded,
+                color: Colors.white,
+                size: 19,
+              ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                _navigation[_index].label,
+                maxLines: 1,
+                overflow:
+                    TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF10235E),
+                  fontSize: 15,
+                  fontWeight:
+                      FontWeight.w800,
+                ),
+              ),
+            ),
+            const CircleAvatar(
+              radius: 15,
+              backgroundColor:
+                  Color(0xFF1E4FBB),
+              child: Text(
+                'PA',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 8,
+                  fontWeight:
+                      FontWeight.w800,
+                ),
               ),
             ),
           ],
@@ -654,7 +843,6 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
       ),
     );
   }
-
   Widget _mobileDrawer() {
     return Drawer(
       backgroundColor: _navy,
@@ -676,7 +864,7 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
             Expanded(
               child: ListView.builder(
                 itemCount: _navigation.length,
-                itemBuilder: (context, index) {
+                                itemBuilder: (context, index) {
                   final item = _navigation[index];
                   final selected = index == _index;
 
@@ -838,6 +1026,7 @@ class _AdminDashboardPage extends StatelessWidget {
     );
   }
 }
+
 
 class _SellerDashboardPage extends StatelessWidget {
   const _SellerDashboardPage();
@@ -1098,6 +1287,9 @@ class _BillingPage extends StatelessWidget {
   }
 }
 
+
+
+
 class _IntegrationsPage extends StatelessWidget {
   const _IntegrationsPage();
 
@@ -1134,6 +1326,7 @@ class _IntegrationsPage extends StatelessWidget {
     );
   }
 }
+
 
 class _OperatorDashboardPage extends StatelessWidget {
   const _OperatorDashboardPage();
@@ -1334,6 +1527,7 @@ class _OperatorEvidencePage extends StatelessWidget {
     );
   }
 }
+
 
 class _CompanySettingsPage extends StatelessWidget {
   const _CompanySettingsPage();
@@ -1818,6 +2012,7 @@ class _IntegrationCard extends StatelessWidget {
   }
 }
 
+
 class _ChartCard extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -2140,10 +2335,3 @@ const _red = Color(0xFFDC2626);
 const _bg = Color(0xFFF8FAFC);
 const _border = Color(0xFFE2E8F0);
 const _muted = Color(0xFF64748B);
-
-
-
-
-
-
-

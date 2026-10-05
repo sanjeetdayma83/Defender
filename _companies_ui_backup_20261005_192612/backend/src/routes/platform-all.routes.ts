@@ -1,5 +1,4 @@
 ﻿import { Router } from "express";
-import { getPlatformCompany } from "../controllers/platform/companies.controller.js";
 import {
   listPlatformCompanies, setCompanyActive,
   listPlatformUsers, setUserStatus,
@@ -11,7 +10,6 @@ import {
 
 export const platformCompaniesRouter = Router();
 platformCompaniesRouter.get("/", listPlatformCompanies);
-platformCompaniesRouter.get("/:id", getPlatformCompany);
 platformCompaniesRouter.patch("/:id/status", setCompanyActive);
 
 export const platformUsersRouter = Router();
@@ -44,4 +42,3 @@ platformAuditRouter.get("/", listAuditLogs);
 export const platformSettingsRouter = Router();
 platformSettingsRouter.get("/", getSettings);
 platformSettingsRouter.patch("/", patchSettings);
-

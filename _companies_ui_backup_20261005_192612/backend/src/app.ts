@@ -1,4 +1,4 @@
-import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
+﻿import { platformCompaniesRouter, platformUsersRouter, platformPlansRouter, platformSubscriptionsRouter, platformTopupsRouter, platformStorageRouter, platformAnalyticsRouter, platformAuditRouter, platformSettingsRouter } from "./routes/platform-all.routes.js";
 import scanRouter from "./routes/scan.routes.js";
 import importsRoutes from "./routes/imports.routes.js";
 import productsRoutes from "./routes/products.routes.js";
@@ -20,6 +20,10 @@ import authRoutes from "./routes/auth.routes.js";
 import { firebaseAuthMiddleware } from "./middleware/firebase-auth.middleware.js";
 import identityRoutes from "./routes/identity.routes.js";
 import liveDashboardRoutes from "./routes/live-dashboard.routes.js";
+import platformCompaniesRoutes from "./routes/platform-companies.routes.js";
+import platformSubscriptionsRoutes from "./routes/platform-subscriptions.routes.js";
+import platformPlansRoutes from "./routes/platform-plans.routes.js";
+import platformUsersRoutes from "./routes/platform-users.routes.js";
 import warehouseRoutes from "./routes/warehouse.routes.js";
 
 import billingRoutes from "./routes/billing.routes.js";
@@ -88,16 +92,25 @@ app.get("/", (_req, res) => {
 app.use("/api/v1/onboarding", firebaseAuthMiddleware, onboardingRoutes);
 app.use("/api/v1/identity", firebaseAuthMiddleware, identityRoutes);
 app.use("/api/v1/dashboard", firebaseAuthMiddleware, liveDashboardRoutes);
+app.use("/api/v1/platform/companies", firebaseAuthMiddleware, platformCompaniesRoutes);
 app.use("/api/v1/platform/topups", firebaseAuthMiddleware, platformTopupsRouter);
 app.use("/api/v1/platform/storage", firebaseAuthMiddleware, platformStorageRouter);
 app.use("/api/v1/platform/analytics", firebaseAuthMiddleware, platformAnalyticsRouter);
 app.use("/api/v1/platform/audit-logs", firebaseAuthMiddleware, platformAuditRouter);
 app.use("/api/v1/platform/settings", firebaseAuthMiddleware, platformSettingsRouter);
+app.use("/api/v1/platform/users", firebaseAuthMiddleware, platformUsersRoutes);
+app.use("/api/v1/platform/plans", firebaseAuthMiddleware, platformPlansRoutes);
+app.use("/api/v1/platform/subscriptions", firebaseAuthMiddleware, platformSubscriptionsRoutes);
 app.use("/api/v1/warehouses", firebaseAuthMiddleware, warehouseRoutes);
 app.use("/api/v1/platform/companies", firebaseAuthMiddleware, platformCompaniesRouter);
 app.use("/api/v1/platform/users", firebaseAuthMiddleware, platformUsersRouter);
 app.use("/api/v1/platform/plans", firebaseAuthMiddleware, platformPlansRouter);
 app.use("/api/v1/platform/subscriptions", firebaseAuthMiddleware, platformSubscriptionsRouter);
+app.use("/api/v1/platform/topups", firebaseAuthMiddleware, platformTopupsRouter);
+app.use("/api/v1/platform/storage", firebaseAuthMiddleware, platformStorageRouter);
+app.use("/api/v1/platform/analytics", firebaseAuthMiddleware, platformAnalyticsRouter);
+app.use("/api/v1/platform/audit-logs", firebaseAuthMiddleware, platformAuditRouter);
+app.use("/api/v1/platform/settings", firebaseAuthMiddleware, platformSettingsRouter);
 
 app.use("/api/v1/scan", firebaseAuthMiddleware, scanRouter);
 
