@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/session_provider.dart';
@@ -68,14 +68,14 @@ class _LDSessionGateState extends State<LDSessionGate> {
 
       case 'warehouse_manager':
       case 'manager':
-        return SaaSRole.manager;
+        return SaaSRole.companyAdmin; // manager → company shell
 
       case 'packing_operator':
       case 'operator':
         return SaaSRole.operator;
 
       case 'viewer':
-        return SaaSRole.viewer;
+        return SaaSRole.companyAdmin; // viewer → limited later
 
       default:
         return SaaSRole.companyAdmin;
@@ -156,3 +156,4 @@ class _SessionError extends StatelessWidget {
     );
   }
 }
+

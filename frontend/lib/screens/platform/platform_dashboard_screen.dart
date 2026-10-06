@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+﻿import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -1092,7 +1092,7 @@ class _CompaniesAndSubscriptionsRow extends StatelessWidget {
 
   const _CompaniesAndSubscriptionsRow({
     required this.data,
-    required this.onOpenSection,
+    this.onOpenSection,
   });
 
   @override
@@ -1349,7 +1349,7 @@ class _HealthAndAlertsRow extends StatelessWidget {
   final PlatformDashboardData data;
   final ValueChanged<String>? onOpenSection;
 
-  const _HealthAndAlertsRow({required this.data, required this.onOpenSection});
+  const _HealthAndAlertsRow({required this.data, this.onOpenSection});
 
   @override
   Widget build(BuildContext context) {
@@ -2056,3 +2056,4 @@ String _relativeTime(String raw) {
 
   return '${difference.inDays ~/ 30}mo';
 }
+

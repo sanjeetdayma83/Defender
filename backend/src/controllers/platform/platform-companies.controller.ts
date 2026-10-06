@@ -1,4 +1,4 @@
-import type { Response } from "express";
+﻿import type { Response } from "express";
 import { routeParam } from "./route-param.js";
 import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
 import { IdentityService } from "../../services/identity/identity.service.js";
@@ -14,7 +14,7 @@ async function requirePlatformAdmin(req: AuthenticatedRequest, res: Response) {
     return null;
   }
   const user = await identityService.getByFirebaseUid(firebaseUid);
-  if (!user || (user.role !== "PLATFORM_ADMIN" && user.role !== "super_admin")) {
+  if (!user || ((String(user.role).toUpperCase() !== "PLATFORM_ADMIN" && String(user.role).toUpperCase() !== "SUPER_ADMIN") && user.role !== "super_admin")) {
     res.status(403).json({
       success: false,
       code: "FORBIDDEN",
@@ -67,3 +67,4 @@ export async function setCompanyActive(req: AuthenticatedRequest, res: Response)
     res.status(500).json({ success: false, message: "Unable to update company." });
   }
 }
+

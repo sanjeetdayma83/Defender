@@ -1,6 +1,5 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
 import '../../services/platform/platform_plans_service.dart';
 
 class PlatformPlansScreen extends StatefulWidget {
@@ -11,9 +10,8 @@ class PlatformPlansScreen extends StatefulWidget {
 }
 
 class _PlatformPlansScreenState extends State<PlatformPlansScreen> {
-  final _service = const PlatformPlansService();
-  Future<({int total, List<PlatformPlan> items})>? _future;
-  bool _activeOnly = false;
+  final _svc = const PlatformPlansService();
+  Future<List<PlatformPlan>>? _future;
 
   @override
   void initState() {
@@ -23,293 +21,164 @@ class _PlatformPlansScreenState extends State<PlatformPlansScreen> {
 
   void _reload() {
     setState(() {
-      _future = _service.list(activeOnly: _activeOnly);
+      _future = _svc.list();
     });
   }
 
-  Future<void> _toggle(PlatformPlan p) async {
-    try {
-      await _service.setActive(p.id, !p.isActive);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              p.isActive ? '${p.name} deactivated' : '${p.name} activated',
-            ),
-          ),
-        );
-        _reload();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$e')));
-      }
-    }
-  }
-
-  Future<void> _showCreateDialog() async {
-    final codeCtrl = TextEditingController();
-    final nameCtrl = TextEditingController();
-    final priceCtrl = TextEditingController(text: '999');
-    final scansCtrl = TextEditingController(text: '1000');
-    final whCtrl = TextEditingController(text: '1');
-    final opsCtrl = TextEditingController(text: '3');
+  Future<void> _openCreate() async {
+    final name = TextEditingController();
+    final code = TextEditingController();
+    final price = TextEditingController(text: '999');
+    final scans = TextEditingController(text: '1000');
+    final wh = TextEditingController(text: '2');
+    final ops = TextEditingController(text: '5');
+    var period = 'monthly';
 
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New plan'),
-        content: SizedBox(
-          width: 400,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: codeCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Code (e.g. starter)',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Create plan'),
+          content: SizedBox(
+            width: 400,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(controller: name, decoration: const InputDecoration(labelText: 'Name *')),
+                  TextField(controller: code, decoration: const InputDecoration(labelText: 'Code')),
+                  TextField(
+                    controller: price,
+                    decoration: const InputDecoration(labelText: 'Price (₹) *'),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   ),
-                ),
-                TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(labelText: 'Name'),
-                ),
-                TextField(
-                  controller: priceCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Price (INR, whole rupees)',
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: period,
+                    decoration: const InputDecoration(labelText: 'Period'),
+                    items: const [
+                      DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
+                      DropdownMenuItem(value: 'yearly', child: Text('Yearly')),
+                    ],
+                    onChanged: (v) => setLocal(() => period = v ?? 'monthly'),
                   ),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                ),
-                TextField(
-                  controller: scansCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Included scans / period',
-                  ),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                ),
-                TextField(
-                  controller: whCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Max warehouses',
-                  ),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                ),
-                TextField(
-                  controller: opsCtrl,
-                  decoration: const InputDecoration(labelText: 'Max operators'),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                ),
-              ],
+                  TextField(controller: scans, decoration: const InputDecoration(labelText: 'Included scans')),
+                  TextField(controller: wh, decoration: const InputDecoration(labelText: 'Max warehouses')),
+                  TextField(controller: ops, decoration: const InputDecoration(labelText: 'Max operators')),
+                ],
+              ),
             ),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create')),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Create'),
-          ),
-        ],
       ),
     );
 
     if (ok != true || !mounted) return;
-
+    if (name.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Name required')));
+      return;
+    }
+    final rupees = int.tryParse(price.text) ?? 0;
     try {
-      final rupees = int.tryParse(priceCtrl.text) ?? 0;
-      await _service.create({
-        'code': codeCtrl.text.trim(),
-        'name': nameCtrl.text.trim(),
-        'pricePaise': rupees * 100,
-        'includedScans': int.tryParse(scansCtrl.text) ?? 0,
-        'maxWarehouses': int.tryParse(whCtrl.text) ?? 1,
-        'maxOperators': int.tryParse(opsCtrl.text) ?? 1,
-        'currency': 'INR',
-        'billingInterval': 'MONTHLY',
-        'isCommercial': true,
-        'isActive': true,
-      });
+      await _svc.create(
+        name: name.text.trim(),
+        code: code.text.trim().isEmpty ? null : code.text.trim(),
+        pricePaise: rupees * 100,
+        period: period,
+        includedScans: int.tryParse(scans.text),
+        maxWarehouses: int.tryParse(wh.text),
+        maxOperators: int.tryParse(ops.text),
+      );
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Plan created')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Plan created')));
         _reload();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+          child: Row(
             children: [
               const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Plans',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Packages, prices, scan & warehouse limits (live).',
-                      style: TextStyle(color: Colors.black54, fontSize: 13),
-                    ),
-                  ],
-                ),
+                child: Text('Plans', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
               ),
-              FilterChip(
-                label: const Text('Active only'),
-                selected: _activeOnly,
-                onSelected: (v) {
-                  _activeOnly = v;
-                  _reload();
-                },
-              ),
+              OutlinedButton.icon(onPressed: _reload, icon: const Icon(Icons.refresh, size: 18), label: const Text('Refresh')),
               const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: _showCreateDialog,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('New plan'),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                onPressed: _reload,
-                icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Refresh'),
-              ),
+              FilledButton.icon(onPressed: _openCreate, icon: const Icon(Icons.add, size: 18), label: const Text('Create plan')),
             ],
           ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: FutureBuilder(
-              future: _future,
-              builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snap.hasError) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('${snap.error}', textAlign: TextAlign.center),
-                        const SizedBox(height: 12),
-                        FilledButton(
-                          onPressed: _reload,
-                          child: const Text('Retry'),
-                        ),
-                      ],
+        ),
+        Expanded(
+          child: FutureBuilder<List<PlatformPlan>>(
+            future: _future,
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snap.hasError) {
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(padding: const EdgeInsets.all(16), child: Text('${snap.error}', textAlign: TextAlign.center)),
+                      FilledButton(onPressed: _reload, child: const Text('Retry')),
+                    ],
+                  ),
+                );
+              }
+              final items = snap.data ?? [];
+              if (items.isEmpty) {
+                return const Center(child: Text('No plans yet. Create the first plan.'));
+              }
+              return ListView.separated(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                itemCount: items.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 8),
+                itemBuilder: (_, i) {
+                  final p = items[i];
+                  return Material(
+                    color: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(color: Color(0xFFE2E8F0)),
                     ),
-                  );
-                }
-                final items = snap.data?.items ?? [];
-                final total = snap.data?.total ?? 0;
-                if (items.isEmpty) {
-                  return const Center(child: Text('No plans yet. Create one.'));
-                }
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '$total plans',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: DataTable(
-                          columns: const [
-                            DataColumn(label: Text('Code')),
-                            DataColumn(label: Text('Name')),
-                            DataColumn(label: Text('Price')),
-                            DataColumn(label: Text('Scans')),
-                            DataColumn(label: Text('Warehouses')),
-                            DataColumn(label: Text('Operators')),
-                            DataColumn(label: Text('Status')),
-                            DataColumn(label: Text('Action')),
-                          ],
-                          rows: items.map((p) {
-                            return DataRow(
-                              cells: [
-                                DataCell(Text(p.code)),
-                                DataCell(Text(p.name)),
-                                DataCell(
-                                  Text('₹${p.priceInr.toStringAsFixed(0)}'),
-                                ),
-                                DataCell(Text('${p.includedScans}')),
-                                DataCell(Text('${p.maxWarehouses}')),
-                                DataCell(Text('${p.maxOperators}')),
-                                DataCell(
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: p.isActive
-                                          ? Colors.green.shade50
-                                          : Colors.orange.shade50,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      p.isActive ? 'ACTIVE' : 'INACTIVE',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: p.isActive
-                                            ? Colors.green.shade800
-                                            : Colors.orange.shade800,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                DataCell(
-                                  TextButton(
-                                    onPressed: () => _toggle(p),
-                                    child: Text(
-                                      p.isActive ? 'Deactivate' : 'Activate',
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            );
-                          }).toList(),
-                        ),
+                    child: ListTile(
+                      title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                      subtitle: Text(
+                        [
+                          if (p.code != null) p.code!,
+                          p.priceLabel,
+                          if (p.includedScans != null) '${p.includedScans} scans',
+                          if (p.maxWarehouses != null) '${p.maxWarehouses} WH',
+                          p.isActive ? 'Active' : 'Off',
+                        ].join(' · '),
                       ),
                     ),
-                  ],
-                );
-              },
-            ),
+                  );
+                },
+              );
+            },
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
+
+
+
