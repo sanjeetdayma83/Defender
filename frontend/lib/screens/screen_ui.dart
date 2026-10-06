@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 const ldNavy = Color(0xFF0F172A);
 const ldBlue = Color(0xFF2563EB);
@@ -338,4 +338,3 @@ Widget ldButton(
     ),
   );
 }
-

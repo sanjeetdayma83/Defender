@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../services/platform/platform_users_service.dart';
 
@@ -46,9 +46,7 @@ class _PlatformUsersScreenState extends State<PlatformUsersScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              u.isActive
-                  ? '${u.email} suspended'
-                  : '${u.email} activated',
+              u.isActive ? '${u.email} suspended' : '${u.email} activated',
             ),
           ),
         );
@@ -56,9 +54,9 @@ class _PlatformUsersScreenState extends State<PlatformUsersScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
       }
     }
   }
@@ -105,10 +103,7 @@ class _PlatformUsersScreenState extends State<PlatformUsersScreen> {
                 items: const [
                   DropdownMenuItem(value: 'all', child: Text('All status')),
                   DropdownMenuItem(value: 'active', child: Text('Active')),
-                  DropdownMenuItem(
-                    value: 'inactive',
-                    child: Text('Inactive'),
-                  ),
+                  DropdownMenuItem(value: 'inactive', child: Text('Inactive')),
                 ],
                 onChanged: (v) {
                   if (v == null) return;
@@ -127,10 +122,7 @@ class _PlatformUsersScreenState extends State<PlatformUsersScreen> {
                   DropdownMenuItem(value: 'OWNER', child: Text('Owner')),
                   DropdownMenuItem(value: 'ADMIN', child: Text('Admin')),
                   DropdownMenuItem(value: 'MANAGER', child: Text('Manager')),
-                  DropdownMenuItem(
-                    value: 'OPERATOR',
-                    child: Text('Operator'),
-                  ),
+                  DropdownMenuItem(value: 'OPERATOR', child: Text('Operator')),
                   DropdownMenuItem(value: 'VIEWER', child: Text('Viewer')),
                 ],
                 onChanged: (v) {
@@ -203,9 +195,11 @@ class _PlatformUsersScreenState extends State<PlatformUsersScreen> {
                           rows: items.map((u) {
                             return DataRow(
                               cells: [
-                                DataCell(Text(u.name?.isNotEmpty == true
-                                    ? u.name!
-                                    : '—')),
+                                DataCell(
+                                  Text(
+                                    u.name?.isNotEmpty == true ? u.name! : '—',
+                                  ),
+                                ),
                                 DataCell(Text(u.email)),
                                 DataCell(Text(u.role)),
                                 DataCell(Text(u.companyName ?? '—')),

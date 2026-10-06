@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 class PlatformAsyncBody extends StatelessWidget {
   final AsyncSnapshot snap;
@@ -20,10 +20,7 @@ class PlatformAsyncBody extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
     if (snap.hasError) {
-      return PlatformErrorPage(
-        message: '${snap.error}',
-        onRetry: onRetry,
-      );
+      return PlatformErrorPage(message: '${snap.error}', onRetry: onRetry);
     }
     return builder(context);
   }

@@ -19,6 +19,7 @@ import { healthRouter } from "./routes/health.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import { firebaseAuthMiddleware } from "./middleware/firebase-auth.middleware.js";
 import identityRoutes from "./routes/identity.routes.js";
+import invitationRoutes from "./routes/invitation.routes.js";
 import liveDashboardRoutes from "./routes/live-dashboard.routes.js";
 import warehouseRoutes from "./routes/warehouse.routes.js";
 
@@ -86,6 +87,7 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/api/v1/onboarding", firebaseAuthMiddleware, onboardingRoutes);
+app.use("/api/v1/invitations", invitationRoutes);
 app.use("/api/v1/identity", firebaseAuthMiddleware, identityRoutes);
 app.use("/api/v1/dashboard", firebaseAuthMiddleware, liveDashboardRoutes);
 app.use("/api/v1/platform/topups", firebaseAuthMiddleware, platformTopupsRouter);

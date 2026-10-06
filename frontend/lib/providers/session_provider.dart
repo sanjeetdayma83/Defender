@@ -15,7 +15,7 @@ class SessionProvider extends ChangeNotifier {
   final IdentityService _identityService;
 
   SessionProvider({IdentityService? identityService})
-      : _identityService = identityService ?? IdentityService();
+    : _identityService = identityService ?? IdentityService();
 
   SessionStatus _status = SessionStatus.loading;
   CurrentUser? _user;
@@ -136,7 +136,8 @@ class SessionProvider extends ChangeNotifier {
       return;
     }
 
-    final profileIncomplete = user.name.trim().isEmpty ||
+    final profileIncomplete =
+        user.name.trim().isEmpty ||
         user.company == null ||
         user.warehouse == null;
 

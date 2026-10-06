@@ -28,7 +28,7 @@ class _ScanPackScreenState extends State<ScanPackScreen> {
 
   final MediaUploadService _mediaUploadService = const MediaUploadService();
   final PackingApiService _packingApi = PackingApiService();
-    final EvidenceApiService _evidenceApi = EvidenceApiService();
+  final EvidenceApiService _evidenceApi = EvidenceApiService();
   String? _activeRecordingId;
   bool _startingPacking = false;
 
@@ -347,7 +347,6 @@ class _ScanPackScreenState extends State<ScanPackScreen> {
     await _uploadRecording(result, order);
   }
 
-
   String? _resolveWarehouseId() {
     final session = context.read<SessionProvider>();
     final id = session.user?.warehouse?.id.trim();
@@ -356,6 +355,7 @@ class _ScanPackScreenState extends State<ScanPackScreen> {
     }
     return id;
   }
+
   Future<void> _startRecording() async {
     if (_recording || _startingPacking) {
       return;
@@ -377,8 +377,7 @@ class _ScanPackScreenState extends State<ScanPackScreen> {
 
     if (_cameraService.stream == null) {
       setState(() {
-        _cameraError =
-            'Camera is not ready. Please select a camera.';
+        _cameraError = 'Camera is not ready. Please select a camera.';
       });
       return;
     }
@@ -442,7 +441,8 @@ class _ScanPackScreenState extends State<ScanPackScreen> {
       setState(() {
         _startingPacking = false;
         _activeRecordingId = null;
-        if (msg.contains('INSUFFICIENT') || msg.toLowerCase().contains('credit')) {
+        if (msg.contains('INSUFFICIENT') ||
+            msg.toLowerCase().contains('credit')) {
           _scanError =
               'Insufficient scan credits. Ask owner to buy a plan or scan pack.';
         } else if (msg.toLowerCase().contains('plan') ||
@@ -503,8 +503,7 @@ class _ScanPackScreenState extends State<ScanPackScreen> {
         throw Exception(response.message ?? 'Cloud upload failed.');
       }
 
-      setState(() {
-      });
+      setState(() {});
 
       final evidence = await _evidenceApi.createEvidence(
         recordingId: recordingId,

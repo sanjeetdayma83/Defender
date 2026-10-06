@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -32,11 +32,7 @@ class MediaUploadService {
     request.fields['recordingId'] = id;
 
     request.files.add(
-      http.MultipartFile.fromBytes(
-        'file',
-        bytes,
-        filename: recording.filename,
-      ),
+      http.MultipartFile.fromBytes('file', bytes, filename: recording.filename),
     );
 
     const apiClient = ApiClient();
@@ -60,9 +56,7 @@ class MediaUploadService {
   Future<Uint8List> _downloadObjectBytes(String objectUrl) async {
     final response = await http.get(Uri.parse(objectUrl));
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-        'Unable to read recorded video from browser memory.',
-      );
+      throw Exception('Unable to read recorded video from browser memory.');
     }
     return response.bodyBytes;
   }

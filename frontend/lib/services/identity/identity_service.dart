@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -26,34 +26,25 @@ class IdentityService {
     );
 
     // Safe tenant E2E diagnostics: never log Firebase ID tokens.
-    debugPrint(
-      'TENANT_HTTP_E2E_STATUS=${response.statusCode}',
-    );
+    debugPrint('TENANT_HTTP_E2E_STATUS=${response.statusCode}');
 
     try {
       final diagnosticDecoded = jsonDecode(response.body);
 
       if (diagnosticDecoded is Map<String, dynamic>) {
-        debugPrint(
-          'TENANT_HTTP_E2E_SUCCESS=${diagnosticDecoded['success']}',
-        );
+        debugPrint('TENANT_HTTP_E2E_SUCCESS=${diagnosticDecoded['success']}');
 
         final diagnosticData = diagnosticDecoded['data'];
 
         if (diagnosticData is Map<String, dynamic>) {
-          debugPrint(
-            'TENANT_HTTP_E2E_UID=${diagnosticData['firebaseUid']}',
-          );
+          debugPrint('TENANT_HTTP_E2E_UID=${diagnosticData['firebaseUid']}');
 
           final diagnosticCompany = diagnosticData['company'];
 
           if (diagnosticCompany is Map<String, dynamic>) {
-            debugPrint(
-              'TENANT_HTTP_E2E_COMPANY_ID=${diagnosticCompany['id']}',
-            );
+            debugPrint('TENANT_HTTP_E2E_COMPANY_ID=${diagnosticCompany['id']}');
 
-            final diagnosticWarehouses =
-                diagnosticData['warehouses'];
+            final diagnosticWarehouses = diagnosticData['warehouses'];
 
             debugPrint(
               'TENANT_HTTP_E2E_WAREHOUSE_COUNT='
@@ -144,5 +135,3 @@ class IdentityService {
     return CurrentUser.fromJson(data);
   }
 }
-
-

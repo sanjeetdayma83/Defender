@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import '../api/api_client.dart';
 import '../api/api_config.dart';
@@ -41,8 +41,7 @@ class PlatformPlan {
   double get priceInr => pricePaise / 100.0;
 
   factory PlatformPlan.fromJson(Map<String, dynamic> json) {
-    int n(dynamic v) =>
-        v is num ? v.toInt() : int.tryParse('$v') ?? 0;
+    int n(dynamic v) => v is num ? v.toInt() : int.tryParse('$v') ?? 0;
     return PlatformPlan(
       id: json['id']?.toString() ?? '',
       code: json['code']?.toString() ?? '',
@@ -70,7 +69,7 @@ class PlatformPlan {
 class PlatformPlansService {
   final ApiClient _client;
   const PlatformPlansService({ApiClient? client})
-      : _client = client ?? const ApiClient();
+    : _client = client ?? const ApiClient();
 
   Future<({int total, List<PlatformPlan> items})> list({
     bool activeOnly = false,
@@ -79,8 +78,9 @@ class PlatformPlansService {
       if (activeOnly) 'active': 'true',
       'limit': '100',
     };
-    final uri = Uri.parse('${ApiConfig.baseUrl}/platform/plans')
-        .replace(queryParameters: qs);
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/platform/plans',
+    ).replace(queryParameters: qs);
     final response = await _client.get(uri);
     final decoded = jsonDecode(response.body);
 
@@ -95,12 +95,13 @@ class PlatformPlansService {
     final raw = data['items'];
     final items = raw is List
         ? raw
-            .whereType<Map>()
-            .map((e) => PlatformPlan.fromJson(Map<String, dynamic>.from(e)))
-            .toList()
+              .whereType<Map>()
+              .map((e) => PlatformPlan.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
         : <PlatformPlan>[];
-    final total =
-        data['total'] is num ? (data['total'] as num).toInt() : items.length;
+    final total = data['total'] is num
+        ? (data['total'] as num).toInt()
+        : items.length;
     return (total: total, items: items);
   }
 
@@ -118,8 +119,7 @@ class PlatformPlansService {
   }
 
   Future<void> setActive(String id, bool isActive) async {
-    final uri =
-        Uri.parse('${ApiConfig.baseUrl}/platform/plans/$id/status');
+    final uri = Uri.parse('${ApiConfig.baseUrl}/platform/plans/$id/status');
     final response = await _client.patch(uri, body: {'isActive': isActive});
     final decoded = jsonDecode(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {

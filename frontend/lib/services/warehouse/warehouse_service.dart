@@ -71,11 +71,7 @@ class WarehouseService {
 
     return rawData
         .whereType<Map>()
-        .map(
-          (item) => WarehouseInfo.fromJson(
-            Map<String, dynamic>.from(item),
-          ),
-        )
+        .map((item) => WarehouseInfo.fromJson(Map<String, dynamic>.from(item)))
         .toList();
   }
 
@@ -88,11 +84,7 @@ class WarehouseService {
 
     final decoded = _decode(response);
 
-    _throwIfFailed(
-      response,
-      decoded,
-      'Unable to load warehouse.',
-    );
+    _throwIfFailed(response, decoded, 'Unable to load warehouse.');
 
     final data = decoded['data'];
 
@@ -100,9 +92,7 @@ class WarehouseService {
       throw Exception('Warehouse data is missing.');
     }
 
-    return WarehouseInfo.fromJson(
-      Map<String, dynamic>.from(data),
-    );
+    return WarehouseInfo.fromJson(Map<String, dynamic>.from(data));
   }
 
   Future<WarehouseStats> getStats(String warehouseId) async {
@@ -114,11 +104,7 @@ class WarehouseService {
 
     final decoded = _decode(response);
 
-    _throwIfFailed(
-      response,
-      decoded,
-      'Unable to load warehouse statistics.',
-    );
+    _throwIfFailed(response, decoded, 'Unable to load warehouse statistics.');
 
     final data = decoded['data'];
 
@@ -126,9 +112,7 @@ class WarehouseService {
       throw Exception('Warehouse statistics are missing.');
     }
 
-    return WarehouseStats.fromJson(
-      Map<String, dynamic>.from(data),
-    );
+    return WarehouseStats.fromJson(Map<String, dynamic>.from(data));
   }
 
   Future<WarehouseInfo> createWarehouse({
@@ -153,11 +137,7 @@ class WarehouseService {
 
     final decoded = _decode(response);
 
-    _throwIfFailed(
-      response,
-      decoded,
-      'Unable to create warehouse.',
-    );
+    _throwIfFailed(response, decoded, 'Unable to create warehouse.');
 
     final data = decoded['data'];
 
@@ -165,9 +145,7 @@ class WarehouseService {
       throw Exception('Created warehouse data is missing.');
     }
 
-    return WarehouseInfo.fromJson(
-      Map<String, dynamic>.from(data),
-    );
+    return WarehouseInfo.fromJson(Map<String, dynamic>.from(data));
   }
 
   Future<WarehouseInfo> updateWarehouse({
@@ -195,11 +173,7 @@ class WarehouseService {
 
     final decoded = _decode(response);
 
-    _throwIfFailed(
-      response,
-      decoded,
-      'Unable to update warehouse.',
-    );
+    _throwIfFailed(response, decoded, 'Unable to update warehouse.');
 
     final data = decoded['data'];
 
@@ -207,9 +181,7 @@ class WarehouseService {
       throw Exception('Updated warehouse data is missing.');
     }
 
-    return WarehouseInfo.fromJson(
-      Map<String, dynamic>.from(data),
-    );
+    return WarehouseInfo.fromJson(Map<String, dynamic>.from(data));
   }
 
   Future<WarehouseInfo> setWarehouseStatus({
@@ -220,18 +192,12 @@ class WarehouseService {
 
     final response = await _apiClient.patch(
       Uri.parse('${ApiConfig.baseUrl}/warehouses/$id/status'),
-      body: <String, dynamic>{
-        'isActive': isActive,
-      },
+      body: <String, dynamic>{'isActive': isActive},
     );
 
     final decoded = _decode(response);
 
-    _throwIfFailed(
-      response,
-      decoded,
-      'Unable to update warehouse status.',
-    );
+    _throwIfFailed(response, decoded, 'Unable to update warehouse status.');
 
     final data = decoded['data'];
 
@@ -239,9 +205,7 @@ class WarehouseService {
       throw Exception('Updated warehouse data is missing.');
     }
 
-    return WarehouseInfo.fromJson(
-      Map<String, dynamic>.from(data),
-    );
+    return WarehouseInfo.fromJson(Map<String, dynamic>.from(data));
   }
 
   Future<void> deleteWarehouse(String warehouseId) async {
@@ -253,11 +217,7 @@ class WarehouseService {
 
     final decoded = _decode(response);
 
-    _throwIfFailed(
-      response,
-      decoded,
-      'Unable to delete warehouse.',
-    );
+    _throwIfFailed(response, decoded, 'Unable to delete warehouse.');
   }
 
   Map<String, dynamic> _decode(dynamic response) {
@@ -281,15 +241,12 @@ class WarehouseService {
   ) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
-        decoded['message']?.toString() ??
-            '$fallback (${response.statusCode}).',
+        decoded['message']?.toString() ?? '$fallback (${response.statusCode}).',
       );
     }
 
     if (decoded['success'] != true) {
-      throw Exception(
-        decoded['message']?.toString() ?? fallback,
-      );
+      throw Exception(decoded['message']?.toString() ?? fallback);
     }
   }
 

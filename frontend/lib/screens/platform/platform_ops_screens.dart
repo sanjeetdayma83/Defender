@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/platform/platform_ops_service.dart';
@@ -37,8 +37,14 @@ class _PlatformTopUpsScreenState extends State<PlatformTopUpsScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: code, decoration: const InputDecoration(labelText: 'Code')),
-            TextField(controller: name, decoration: const InputDecoration(labelText: 'Name')),
+            TextField(
+              controller: code,
+              decoration: const InputDecoration(labelText: 'Code'),
+            ),
+            TextField(
+              controller: name,
+              decoration: const InputDecoration(labelText: 'Name'),
+            ),
             TextField(
               controller: credits,
               decoration: const InputDecoration(labelText: 'Credits'),
@@ -54,8 +60,14 @@ class _PlatformTopUpsScreenState extends State<PlatformTopUpsScreen> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Create'),
+          ),
         ],
       ),
     );
@@ -70,7 +82,9 @@ class _PlatformTopUpsScreenState extends State<PlatformTopUpsScreen> {
       _reload();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
       }
     }
   }
@@ -119,31 +133,35 @@ class _PlatformTopUpsScreenState extends State<PlatformTopUpsScreen> {
                   final m = Map<String, dynamic>.from(raw);
                   final id = '${m['id']}';
                   final active = m['isActive'] == true;
-                  final paise =
-                      (m['pricePaise'] is num) ? (m['pricePaise'] as num).toInt() : 0;
-                  return DataRow(cells: [
-                    DataCell(Text('${m['code'] ?? ''}')),
-                    DataCell(Text('${m['name'] ?? ''}')),
-                    DataCell(Text('${m['credits'] ?? 0}')),
-                    DataCell(Text('₹${(paise / 100).toStringAsFixed(0)}')),
-                    DataCell(Text(active ? 'ACTIVE' : 'INACTIVE')),
-                    DataCell(
-                      TextButton(
-                        onPressed: () async {
-                          try {
-                            await _svc.setTopupActive(id, !active);
-                            _reload();
-                          } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context)
-                                  .showSnackBar(SnackBar(content: Text('$e')));
+                  final paise = (m['pricePaise'] is num)
+                      ? (m['pricePaise'] as num).toInt()
+                      : 0;
+                  return DataRow(
+                    cells: [
+                      DataCell(Text('${m['code'] ?? ''}')),
+                      DataCell(Text('${m['name'] ?? ''}')),
+                      DataCell(Text('${m['credits'] ?? 0}')),
+                      DataCell(Text('₹${(paise / 100).toStringAsFixed(0)}')),
+                      DataCell(Text(active ? 'ACTIVE' : 'INACTIVE')),
+                      DataCell(
+                        TextButton(
+                          onPressed: () async {
+                            try {
+                              await _svc.setTopupActive(id, !active);
+                              _reload();
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(
+                                  context,
+                                ).showSnackBar(SnackBar(content: Text('$e')));
+                              }
                             }
-                          }
-                        },
-                        child: Text(active ? 'Deactivate' : 'Activate'),
+                          },
+                          child: Text(active ? 'Deactivate' : 'Activate'),
+                        ),
                       ),
-                    ),
-                  ]);
+                    ],
+                  );
                 }).toList(),
               ),
             );
@@ -219,13 +237,17 @@ class _PlatformStorageScreenState extends State<PlatformStorageScreen> {
                       ],
                       rows: items.whereType<Map>().map((raw) {
                         final m = Map<String, dynamic>.from(raw);
-                        return DataRow(cells: [
-                          DataCell(
-                            Text('${m['companyName'] ?? m['companyId'] ?? '—'}'),
-                          ),
-                          DataCell(Text(_fmtBytes(m['usedBytes'] ?? 0))),
-                          DataCell(Text('${m['objectCount'] ?? 0}')),
-                        ]);
+                        return DataRow(
+                          cells: [
+                            DataCell(
+                              Text(
+                                '${m['companyName'] ?? m['companyId'] ?? '—'}',
+                              ),
+                            ),
+                            DataCell(Text(_fmtBytes(m['usedBytes'] ?? 0))),
+                            DataCell(Text('${m['objectCount'] ?? 0}')),
+                          ],
+                        );
                       }).toList(),
                     ),
                   ),
@@ -281,30 +303,30 @@ class _PlatformAnalyticsScreenState extends State<PlatformAnalyticsScreen> {
           builder: (_) {
             final d = snap.data ?? {};
             Widget card(String label, String value) => Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          label,
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          value,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 12,
+                      ),
                     ),
-                  ),
-                );
+                    const SizedBox(height: 6),
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
             return Wrap(
               spacing: 12,
               runSpacing: 12,
@@ -392,13 +414,15 @@ class _PlatformAuditLogsScreenState extends State<PlatformAuditLogsScreen> {
                 rows: items.whereType<Map>().map((raw) {
                   final m = Map<String, dynamic>.from(raw);
                   final t = '${m['createdAt'] ?? ''}';
-                  return DataRow(cells: [
-                    DataCell(Text(t.length >= 19 ? t.substring(0, 19) : t)),
-                    DataCell(Text('${m['action'] ?? ''}')),
-                    DataCell(Text('${m['entity'] ?? '—'}')),
-                    DataCell(Text('${m['userId'] ?? '—'}')),
-                    DataCell(Text('${m['companyId'] ?? '—'}')),
-                  ]);
+                  return DataRow(
+                    cells: [
+                      DataCell(Text(t.length >= 19 ? t.substring(0, 19) : t)),
+                      DataCell(Text('${m['action'] ?? ''}')),
+                      DataCell(Text('${m['entity'] ?? '—'}')),
+                      DataCell(Text('${m['userId'] ?? '—'}')),
+                      DataCell(Text('${m['companyId'] ?? '—'}')),
+                    ],
+                  );
                 }).toList(),
               ),
             );
@@ -446,14 +470,16 @@ class _PlatformSettingsScreenState extends State<PlatformSettingsScreen> {
         'allowNewSignups': '$_signups',
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Settings saved')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Settings saved')));
         _reload();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
       }
     }
   }
@@ -553,13 +579,17 @@ class _PlatformScaffold extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ),
               ),
               ...actions.map(
-                (w) => Padding(padding: const EdgeInsets.only(left: 8), child: w),
+                (w) =>
+                    Padding(padding: const EdgeInsets.only(left: 8), child: w),
               ),
             ],
           ),

@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import '../api/api_client.dart';
 import '../api/api_config.dart';
@@ -43,7 +43,7 @@ class PlatformUser {
 class PlatformUsersService {
   final ApiClient _client;
   const PlatformUsersService({ApiClient? client})
-      : _client = client ?? const ApiClient();
+    : _client = client ?? const ApiClient();
 
   Future<({int total, List<PlatformUser> items})> list({
     String search = '',
@@ -56,8 +56,9 @@ class PlatformUsersService {
       if (role.trim().isNotEmpty) 'role': role.trim(),
       'limit': '100',
     };
-    final uri = Uri.parse('${ApiConfig.baseUrl}/platform/users')
-        .replace(queryParameters: qs);
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/platform/users',
+    ).replace(queryParameters: qs);
 
     final response = await _client.get(uri);
     final decoded = jsonDecode(response.body);
@@ -79,9 +80,9 @@ class PlatformUsersService {
     final rawItems = data['items'];
     final items = rawItems is List
         ? rawItems
-            .whereType<Map>()
-            .map((e) => PlatformUser.fromJson(Map<String, dynamic>.from(e)))
-            .toList()
+              .whereType<Map>()
+              .map((e) => PlatformUser.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
         : <PlatformUser>[];
 
     final total = data['total'] is num

@@ -7,20 +7,15 @@ import '../../services/dashboard/platform_dashboard_service.dart';
 class PlatformDashboardScreen extends StatefulWidget {
   final ValueChanged<String>? onOpenSection;
 
-  const PlatformDashboardScreen({
-    super.key,
-    this.onOpenSection,
-  });
+  const PlatformDashboardScreen({super.key, this.onOpenSection});
 
   @override
   State<PlatformDashboardScreen> createState() =>
       _PlatformDashboardScreenState();
 }
 
-class _PlatformDashboardScreenState
-    extends State<PlatformDashboardScreen> {
-  final PlatformDashboardService _service =
-      const PlatformDashboardService();
+class _PlatformDashboardScreenState extends State<PlatformDashboardScreen> {
+  final PlatformDashboardService _service = const PlatformDashboardService();
 
   PlatformDashboardData? _data;
 
@@ -65,10 +60,7 @@ class _PlatformDashboardScreenState
     }
 
     if (_error != null) {
-      return _DashboardError(
-        message: _error!,
-        onRetry: _load,
-      );
+      return _DashboardError(message: _error!, onRetry: _load);
     }
 
     final data = _data ?? PlatformDashboardData.empty();
@@ -83,15 +75,11 @@ class _PlatformDashboardScreenState
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
               child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight,
-                ),
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _DashboardHeader(
-                      onExport: () {},
-                    ),
+                    _DashboardHeader(onExport: () {}),
 
                     const SizedBox(height: 14),
 
@@ -166,9 +154,7 @@ abstract final class _DashboardColors {
 class _DashboardHeader extends StatelessWidget {
   final VoidCallback onExport;
 
-  const _DashboardHeader({
-    required this.onExport,
-  });
+  const _DashboardHeader({required this.onExport});
 
   @override
   Widget build(BuildContext context) {
@@ -231,21 +217,14 @@ class _DashboardTabs extends StatelessWidget {
     return Container(
       height: 42,
       decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: _DashboardColors.border,
-          ),
-        ),
+        border: Border(bottom: BorderSide(color: _DashboardColors.border)),
       ),
       child: Row(
         children: [
           for (int i = 0; i < tabs.length; i++)
             Padding(
               padding: const EdgeInsets.only(right: 28),
-              child: _TabItem(
-                label: tabs[i],
-                selected: i == 0,
-              ),
+              child: _TabItem(label: tabs[i], selected: i == 0),
             ),
         ],
       ),
@@ -257,10 +236,7 @@ class _TabItem extends StatelessWidget {
   final String label;
   final bool selected;
 
-  const _TabItem({
-    required this.label,
-    required this.selected,
-  });
+  const _TabItem({required this.label, required this.selected});
 
   @override
   Widget build(BuildContext context) {
@@ -269,10 +245,7 @@ class _TabItem extends StatelessWidget {
       decoration: BoxDecoration(
         border: selected
             ? const Border(
-                bottom: BorderSide(
-                  color: _DashboardColors.blue,
-                  width: 3,
-                ),
+                bottom: BorderSide(color: _DashboardColors.blue, width: 3),
               )
             : null,
       ),
@@ -280,13 +253,9 @@ class _TabItem extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          color: selected
-              ? _DashboardColors.blue
-              : _DashboardColors.text,
+          color: selected ? _DashboardColors.blue : _DashboardColors.text,
           fontSize: 12,
-          fontWeight: selected
-              ? FontWeight.w800
-              : FontWeight.w500,
+          fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
         ),
       ),
     );
@@ -300,9 +269,7 @@ class _TabItem extends StatelessWidget {
 class _KpiGrid extends StatelessWidget {
   final PlatformDashboardData data;
 
-  const _KpiGrid({
-    required this.data,
-  });
+  const _KpiGrid({required this.data});
 
   @override
   Widget build(BuildContext context) {
@@ -321,8 +288,7 @@ class _KpiGrid extends StatelessWidget {
       _KpiItem(
         title: 'Total Revenue',
         value: _formatMoney(m.totalRevenuePaise),
-        subtitle:
-            '${data.revenuePaidPaymentCount} paid payments',
+        subtitle: '${data.revenuePaidPaymentCount} paid payments',
         icon: Icons.currency_rupee_rounded,
         color: _DashboardColors.green,
         background: _DashboardColors.greenSoft,
@@ -330,8 +296,7 @@ class _KpiGrid extends StatelessWidget {
       _KpiItem(
         title: 'Active Subscriptions',
         value: _formatInt(m.activeSubscriptions),
-        subtitle:
-            '${m.totalCompanies} companies',
+        subtitle: '${m.totalCompanies} companies',
         icon: Icons.workspace_premium_rounded,
         color: _DashboardColors.orange,
         background: _DashboardColors.orangeSoft,
@@ -339,8 +304,7 @@ class _KpiGrid extends StatelessWidget {
       _KpiItem(
         title: 'Total Users',
         value: _formatInt(m.totalUsers),
-        subtitle:
-            '${data.activeUsers} active • ${data.inactiveUsers} inactive',
+        subtitle: '${data.activeUsers} active • ${data.inactiveUsers} inactive',
         icon: Icons.people_alt_rounded,
         color: _DashboardColors.blue,
         background: _DashboardColors.blueSoft,
@@ -368,17 +332,16 @@ class _KpiGrid extends StatelessWidget {
         final columns = constraints.maxWidth >= 1250
             ? 6
             : constraints.maxWidth >= 850
-                ? 3
-                : constraints.maxWidth >= 560
-                    ? 2
-                    : 1;
+            ? 3
+            : constraints.maxWidth >= 560
+            ? 2
+            : 1;
 
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: cards.length,
-          gridDelegate:
-              SliverGridDelegateWithFixedCrossAxisCount(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
@@ -397,10 +360,7 @@ class _KpiGrid extends StatelessWidget {
       return 'Quota not configured';
     }
 
-    final percentage =
-        m.totalStorageUsedBytes /
-        m.totalStorageQuotaBytes *
-        100;
+    final percentage = m.totalStorageUsedBytes / m.totalStorageQuotaBytes * 100;
 
     return '${_formatBytes(m.totalStorageQuotaBytes)} quota '
         '(${percentage.toStringAsFixed(1)}%)';
@@ -428,9 +388,7 @@ class _KpiItem {
 class _KpiCard extends StatelessWidget {
   final _KpiItem item;
 
-  const _KpiCard({
-    required this.item,
-  });
+  const _KpiCard({required this.item});
 
   @override
   Widget build(BuildContext context) {
@@ -439,9 +397,7 @@ class _KpiCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(9),
-        border: Border.all(
-          color: _DashboardColors.border,
-        ),
+        border: Border.all(color: _DashboardColors.border),
         boxShadow: const [
           BoxShadow(
             color: Color(0x080B2450),
@@ -459,11 +415,7 @@ class _KpiCard extends StatelessWidget {
               color: item.background,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(
-              item.icon,
-              color: item.color,
-              size: 24,
-            ),
+            child: Icon(item.icon, color: item.color, size: 24),
           ),
           const SizedBox(width: 11),
           Expanded(
@@ -518,9 +470,7 @@ class _KpiCard extends StatelessWidget {
 class _ChartsRow extends StatelessWidget {
   final PlatformDashboardData data;
 
-  const _ChartsRow({
-    required this.data,
-  });
+  const _ChartsRow({required this.data});
 
   @override
   Widget build(BuildContext context) {
@@ -541,20 +491,11 @@ class _ChartsRow extends StatelessWidget {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              flex: 3,
-              child: _RevenueCard(data: data),
-            ),
+            Expanded(flex: 3, child: _RevenueCard(data: data)),
             const SizedBox(width: 10),
-            Expanded(
-              flex: 3,
-              child: _GrowthCard(data: data),
-            ),
+            Expanded(flex: 3, child: _GrowthCard(data: data)),
             const SizedBox(width: 10),
-            Expanded(
-              flex: 2,
-              child: _SubscriptionDistribution(data: data),
-            ),
+            Expanded(flex: 2, child: _SubscriptionDistribution(data: data)),
           ],
         );
       },
@@ -565,9 +506,7 @@ class _ChartsRow extends StatelessWidget {
 class _RevenueCard extends StatelessWidget {
   final PlatformDashboardData data;
 
-  const _RevenueCard({
-    required this.data,
-  });
+  const _RevenueCard({required this.data});
 
   @override
   Widget build(BuildContext context) {
@@ -580,35 +519,23 @@ class _RevenueCard extends StatelessWidget {
         children: [
           Align(
             alignment: Alignment.topRight,
-            child: _SmallSelector(
-              label: 'Last 6 Months',
-            ),
+            child: _SmallSelector(label: 'Last 6 Months'),
           ),
           const SizedBox(height: 3),
           SizedBox(
             height: 155,
             child: points.isEmpty
-                ? const _EmptyChart(
-                    message: 'No revenue data available',
-                  )
-                : _RevenueChart(
-                    points: points,
-                  ),
+                ? const _EmptyChart(message: 'No revenue data available')
+                : _RevenueChart(points: points),
           ),
           const SizedBox(height: 6),
           if (points.isNotEmpty)
             const Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _LegendDot(
-                  color: _DashboardColors.blue,
-                  label: 'Revenue',
-                ),
+                _LegendDot(color: _DashboardColors.blue, label: 'Revenue'),
                 SizedBox(width: 18),
-                _LegendDot(
-                  color: _DashboardColors.orange,
-                  label: 'Payments',
-                ),
+                _LegendDot(color: _DashboardColors.orange, label: 'Payments'),
               ],
             ),
         ],
@@ -620,24 +547,17 @@ class _RevenueCard extends StatelessWidget {
 class _RevenueChart extends StatelessWidget {
   final List<PlatformRevenuePoint> points;
 
-  const _RevenueChart({
-    required this.points,
-  });
+  const _RevenueChart({required this.points});
 
   @override
   Widget build(BuildContext context) {
     final maxValue = points
         .map((e) => e.revenuePaise)
-        .fold<int>(
-          0,
-          (a, b) => math.max(a, b),
-        );
+        .fold<int>(0, (a, b) => math.max(a, b));
 
     return CustomPaint(
       painter: _LineChartPainter(
-        values: points
-            .map((e) => e.revenuePaise.toDouble())
-            .toList(),
+        values: points.map((e) => e.revenuePaise.toDouble()).toList(),
         maxValue: maxValue.toDouble(),
       ),
       child: Row(
@@ -668,9 +588,7 @@ class _RevenueChart extends StatelessWidget {
 class _GrowthCard extends StatelessWidget {
   final PlatformDashboardData data;
 
-  const _GrowthCard({
-    required this.data,
-  });
+  const _GrowthCard({required this.data});
 
   @override
   Widget build(BuildContext context) {
@@ -689,18 +607,13 @@ class _GrowthCard extends StatelessWidget {
         children: [
           Align(
             alignment: Alignment.topRight,
-            child: _SmallSelector(
-              label: 'Last 6 Months',
-            ),
+            child: _SmallSelector(label: 'Last 6 Months'),
           ),
           const SizedBox(height: 3),
           SizedBox(
             height: 155,
-            child: users.isEmpty &&
-                    subscriptions.isEmpty
-                ? const _EmptyChart(
-                    message: 'No growth data available',
-                  )
+            child: users.isEmpty && subscriptions.isEmpty
+                ? const _EmptyChart(message: 'No growth data available')
                 : _GrowthChart(
                     users: users,
                     subscriptions: subscriptions,
@@ -711,10 +624,7 @@ class _GrowthCard extends StatelessWidget {
           const Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _LegendDot(
-                color: _DashboardColors.blue,
-                label: 'Users',
-              ),
+              _LegendDot(color: _DashboardColors.blue, label: 'Users'),
               SizedBox(width: 18),
               _LegendDot(
                 color: _DashboardColors.purple,
@@ -741,17 +651,12 @@ class _GrowthChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final count = math.max(
-      users.length,
-      subscriptions.length,
-    );
+    final count = math.max(users.length, subscriptions.length);
 
     return CustomPaint(
       painter: _MultiLineChartPainter(
         first: users.map((e) => e.value.toDouble()).toList(),
-        second: subscriptions
-            .map((e) => e.value.toDouble())
-            .toList(),
+        second: subscriptions.map((e) => e.value.toDouble()).toList(),
         maxValue: maxValue.toDouble(),
       ),
       child: Row(
@@ -765,8 +670,8 @@ class _GrowthChart extends StatelessWidget {
                   i < users.length
                       ? users[i].month
                       : i < subscriptions.length
-                          ? subscriptions[i].month
-                          : '',
+                      ? subscriptions[i].month
+                      : '',
                   style: const TextStyle(
                     color: _DashboardColors.muted,
                     fontSize: 8,
@@ -783,9 +688,7 @@ class _GrowthChart extends StatelessWidget {
 class _SubscriptionDistribution extends StatelessWidget {
   final PlatformDashboardData data;
 
-  const _SubscriptionDistribution({
-    required this.data,
-  });
+  const _SubscriptionDistribution({required this.data});
 
   @override
   Widget build(BuildContext context) {
@@ -797,9 +700,7 @@ class _SubscriptionDistribution extends StatelessWidget {
       child: SizedBox(
         height: 210,
         child: items.isEmpty
-            ? const _EmptyChart(
-                message: 'No subscription data available',
-              )
+            ? const _EmptyChart(message: 'No subscription data available')
             : Row(
                 children: [
                   SizedBox(
@@ -807,9 +708,7 @@ class _SubscriptionDistribution extends StatelessWidget {
                     height: 125,
                     child: CustomPaint(
                       painter: _DonutPainter(
-                        values: items
-                            .map((e) => e.count.toDouble())
-                            .toList(),
+                        values: items.map((e) => e.count.toDouble()).toList(),
                       ),
                       child: Center(
                         child: Text(
@@ -826,12 +725,10 @@ class _SubscriptionDistribution extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: ListView.separated(
-                      physics:
-                          const NeverScrollableScrollPhysics(),
+                      physics: const NeverScrollableScrollPhysics(),
                       shrinkWrap: true,
                       itemCount: math.min(items.length, 5),
-                      separatorBuilder: (_, _) =>
-                          const SizedBox(height: 7),
+                      separatorBuilder: (_, _) => const SizedBox(height: 7),
                       itemBuilder: (_, index) {
                         final item = items[index];
 
@@ -850,8 +747,7 @@ class _SubscriptionDistribution extends StatelessWidget {
                               child: Text(
                                 _prettyStatus(item.status),
                                 style: const TextStyle(
-                                  color:
-                                      _DashboardColors.text,
+                                  color: _DashboardColors.text,
                                   fontSize: 9,
                                 ),
                               ),
@@ -859,11 +755,9 @@ class _SubscriptionDistribution extends StatelessWidget {
                             Text(
                               '${item.count}',
                               style: const TextStyle(
-                                color:
-                                    _DashboardColors.navy,
+                                color: _DashboardColors.navy,
                                 fontSize: 9,
-                                fontWeight:
-                                    FontWeight.w700,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ],
@@ -885,9 +779,7 @@ class _SubscriptionDistribution extends StatelessWidget {
 class _UsageAndActivityRow extends StatelessWidget {
   final PlatformDashboardData data;
 
-  const _UsageAndActivityRow({
-    required this.data,
-  });
+  const _UsageAndActivityRow({required this.data});
 
   @override
   Widget build(BuildContext context) {
@@ -900,26 +792,16 @@ class _UsageAndActivityRow extends StatelessWidget {
 
         if (!wide) {
           return Column(
-            children: [
-              usage,
-              const SizedBox(height: 10),
-              activity,
-            ],
+            children: [usage, const SizedBox(height: 10), activity],
           );
         }
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              flex: 7,
-              child: usage,
-            ),
+            Expanded(flex: 7, child: usage),
             const SizedBox(width: 10),
-            Expanded(
-              flex: 3,
-              child: activity,
-            ),
+            Expanded(flex: 3, child: activity),
           ],
         );
       },
@@ -930,18 +812,13 @@ class _UsageAndActivityRow extends StatelessWidget {
 class _UsageCard extends StatelessWidget {
   final PlatformDashboardData data;
 
-  const _UsageCard({
-    required this.data,
-  });
+  const _UsageCard({required this.data});
 
   @override
   Widget build(BuildContext context) {
-    final storagePercentage =
-        data.storageQuotaBytes <= 0
-            ? 0.0
-            : (data.storageUsedBytes /
-                    data.storageQuotaBytes)
-                .clamp(0.0, 1.0);
+    final storagePercentage = data.storageQuotaBytes <= 0
+        ? 0.0
+        : (data.storageUsedBytes / data.storageQuotaBytes).clamp(0.0, 1.0);
 
     return _Panel(
       title: 'Platform Usage Overview',
@@ -963,9 +840,7 @@ class _UsageCard extends StatelessWidget {
             child: _UsageMetric(
               icon: Icons.inventory_2_outlined,
               title: 'Total Orders',
-              value: _formatInt(
-                data.metrics.totalOrders,
-              ),
+              value: _formatInt(data.metrics.totalOrders),
               progress: null,
             ),
           ),
@@ -973,9 +848,7 @@ class _UsageCard extends StatelessWidget {
             child: _UsageMetric(
               icon: Icons.qr_code_scanner_rounded,
               title: 'Scan Credits',
-              value: _formatInt(
-                data.walletConsumed,
-              ),
+              value: _formatInt(data.walletConsumed),
               progress: null,
             ),
           ),
@@ -983,12 +856,10 @@ class _UsageCard extends StatelessWidget {
             child: _UsageMetric(
               icon: Icons.people_alt_outlined,
               title: 'Active Users',
-              value:
-                  '${data.activeUsers} / ${data.totalUsers}',
+              value: '${data.activeUsers} / ${data.totalUsers}',
               progress: data.totalUsers <= 0
                   ? 0
-                  : data.activeUsers /
-                      data.totalUsers,
+                  : data.activeUsers / data.totalUsers,
             ),
           ),
         ],
@@ -1018,21 +889,14 @@ class _UsageMetric extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFFBFCFE),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: _DashboardColors.border,
-        ),
+        border: Border.all(color: _DashboardColors.border),
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                icon,
-                size: 17,
-                color: _DashboardColors.blue,
-              ),
+              Icon(icon, size: 17, color: _DashboardColors.blue),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -1065,12 +929,8 @@ class _UsageMetric extends StatelessWidget {
               child: LinearProgressIndicator(
                 value: progress,
                 minHeight: 6,
-                backgroundColor:
-                    const Color(0xFFE8EEF8),
-                valueColor:
-                    const AlwaysStoppedAnimation(
-                  _DashboardColors.blue,
-                ),
+                backgroundColor: const Color(0xFFE8EEF8),
+                valueColor: const AlwaysStoppedAnimation(_DashboardColors.blue),
               ),
             ),
           ],
@@ -1083,14 +943,14 @@ class _UsageMetric extends StatelessWidget {
 class _ActivityCard extends StatelessWidget {
   final PlatformDashboardData data;
 
-  const _ActivityCard({
-    required this.data,
-  });
+  const _ActivityCard({required this.data});
 
   @override
   Widget build(BuildContext context) {
     final activities = <_Activity>[
-      ...data.recentUsers.take(4).map(
+      ...data.recentUsers
+          .take(4)
+          .map(
             (user) => _Activity(
               icon: Icons.person_add_alt_1_rounded,
               color: _DashboardColors.purple,
@@ -1099,7 +959,9 @@ class _ActivityCard extends StatelessWidget {
               time: _relativeTime(user.createdAt),
             ),
           ),
-      ...data.recentPayments.take(4).map(
+      ...data.recentPayments
+          .take(4)
+          .map(
             (payment) => _Activity(
               icon: Icons.payments_rounded,
               color: _DashboardColors.green,
@@ -1110,7 +972,9 @@ class _ActivityCard extends StatelessWidget {
               time: _relativeTime(payment.createdAt),
             ),
           ),
-      ...data.recentTopups.take(4).map(
+      ...data.recentTopups
+          .take(4)
+          .map(
             (topup) => _Activity(
               icon: Icons.shopping_cart_rounded,
               color: _DashboardColors.orange,
@@ -1126,33 +990,23 @@ class _ActivityCard extends StatelessWidget {
     return _Panel(
       title: 'Recent Activity',
       icon: Icons.event_note_outlined,
-      trailing: TextButton(
-        onPressed: () {},
-        child: const Text('View All'),
-      ),
+      trailing: TextButton(onPressed: () {}, child: const Text('View All')),
       child: activities.isEmpty
           ? const SizedBox(
               height: 180,
               child: Center(
                 child: Text(
                   'No recent activity',
-                  style: TextStyle(
-                    color: _DashboardColors.muted,
-                    fontSize: 11,
-                  ),
+                  style: TextStyle(color: _DashboardColors.muted, fontSize: 11),
                 ),
               ),
             )
           : Column(
               children: [
-                for (final activity
-                    in activities.take(7))
+                for (final activity in activities.take(7))
                   Padding(
-                    padding:
-                        const EdgeInsets.only(bottom: 8),
-                    child: _ActivityTile(
-                      item: activity,
-                    ),
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _ActivityTile(item: activity),
                   ),
               ],
             ),
@@ -1179,9 +1033,7 @@ class _Activity {
 class _ActivityTile extends StatelessWidget {
   final _Activity item;
 
-  const _ActivityTile({
-    required this.item,
-  });
+  const _ActivityTile({required this.item});
 
   @override
   Widget build(BuildContext context) {
@@ -1194,17 +1046,12 @@ class _ActivityTile extends StatelessWidget {
             color: item.color.withAlpha(20),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(
-            item.icon,
-            size: 15,
-            color: item.color,
-          ),
+          child: Icon(item.icon, size: 15, color: item.color),
         ),
         const SizedBox(width: 8),
         Expanded(
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 item.title,
@@ -1228,10 +1075,7 @@ class _ActivityTile extends StatelessWidget {
         ),
         Text(
           item.time,
-          style: const TextStyle(
-            color: _DashboardColors.muted,
-            fontSize: 7,
-          ),
+          style: const TextStyle(color: _DashboardColors.muted, fontSize: 7),
         ),
       ],
     );
@@ -1242,8 +1086,7 @@ class _ActivityTile extends StatelessWidget {
 /* COMPANIES + STATUS                                                         */
 /* -------------------------------------------------------------------------- */
 
-class _CompaniesAndSubscriptionsRow
-    extends StatelessWidget {
+class _CompaniesAndSubscriptionsRow extends StatelessWidget {
   final PlatformDashboardData data;
   final ValueChanged<String>? onOpenSection;
 
@@ -1260,36 +1103,23 @@ class _CompaniesAndSubscriptionsRow
 
         final companies = _TopCompaniesPanel(
           data: data,
-          onOpen: () =>
-              onOpenSection?.call('Companies'),
+          onOpen: () => onOpenSection?.call('Companies'),
         );
 
-        final status = _SubscriptionStatusPanel(
-          data: data,
-        );
+        final status = _SubscriptionStatusPanel(data: data);
 
         if (!wide) {
           return Column(
-            children: [
-              companies,
-              const SizedBox(height: 10),
-              status,
-            ],
+            children: [companies, const SizedBox(height: 10), status],
           );
         }
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              flex: 7,
-              child: companies,
-            ),
+            Expanded(flex: 7, child: companies),
             const SizedBox(width: 10),
-            Expanded(
-              flex: 3,
-              child: status,
-            ),
+            Expanded(flex: 3, child: status),
           ],
         );
       },
@@ -1301,49 +1131,31 @@ class _TopCompaniesPanel extends StatelessWidget {
   final PlatformDashboardData data;
   final VoidCallback onOpen;
 
-  const _TopCompaniesPanel({
-    required this.data,
-    required this.onOpen,
-  });
+  const _TopCompaniesPanel({required this.data, required this.onOpen});
 
   @override
   Widget build(BuildContext context) {
     return _Panel(
       title: 'Top Companies by Revenue',
       icon: Icons.business_center_outlined,
-      trailing: TextButton(
-        onPressed: onOpen,
-        child: const Text('View All'),
-      ),
+      trailing: TextButton(onPressed: onOpen, child: const Text('View All')),
       child: Column(
         children: [
           _tableHeader(),
-          const Divider(
-            height: 1,
-            color: _DashboardColors.border,
-          ),
+          const Divider(height: 1, color: _DashboardColors.border),
           if (data.recentPayments.isEmpty)
             const SizedBox(
               height: 100,
               child: Center(
                 child: Text(
                   'No payment data available',
-                  style: TextStyle(
-                    color: _DashboardColors.muted,
-                    fontSize: 10,
-                  ),
+                  style: TextStyle(color: _DashboardColors.muted, fontSize: 10),
                 ),
               ),
             )
           else
-            for (int i = 0;
-                i < data.recentPayments.length &&
-                    i < 5;
-                i++)
-              _paymentRow(
-                i + 1,
-                data.recentPayments[i],
-              ),
+            for (int i = 0; i < data.recentPayments.length && i < 5; i++)
+              _paymentRow(i + 1, data.recentPayments[i]),
         ],
       ),
     );
@@ -1352,68 +1164,26 @@ class _TopCompaniesPanel extends StatelessWidget {
   Widget _tableHeader() {
     return const Row(
       children: [
-        SizedBox(
-          width: 25,
-          child: Text(
-            '#',
-            style: _tableHeaderStyle,
-          ),
-        ),
-        Expanded(
-          flex: 3,
-          child: Text(
-            'COMPANY',
-            style: _tableHeaderStyle,
-          ),
-        ),
-        Expanded(
-          child: Text(
-            'PLAN',
-            style: _tableHeaderStyle,
-          ),
-        ),
-        Expanded(
-          child: Text(
-            'REVENUE',
-            style: _tableHeaderStyle,
-          ),
-        ),
-        SizedBox(
-          width: 55,
-          child: Text(
-            'STATUS',
-            style: _tableHeaderStyle,
-          ),
-        ),
+        SizedBox(width: 25, child: Text('#', style: _tableHeaderStyle)),
+        Expanded(flex: 3, child: Text('COMPANY', style: _tableHeaderStyle)),
+        Expanded(child: Text('PLAN', style: _tableHeaderStyle)),
+        Expanded(child: Text('REVENUE', style: _tableHeaderStyle)),
+        SizedBox(width: 55, child: Text('STATUS', style: _tableHeaderStyle)),
       ],
     );
   }
 
-  Widget _paymentRow(
-    int index,
-    PlatformRecentPayment payment,
-  ) {
-    final success =
-        payment.status.toLowerCase() == 'success';
+  Widget _paymentRow(int index, PlatformRecentPayment payment) {
+    final success = payment.status.toLowerCase() == 'success';
 
     return Container(
       height: 32,
       decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: Color(0xFFF0F3F8),
-          ),
-        ),
+        border: Border(bottom: BorderSide(color: Color(0xFFF0F3F8))),
       ),
       child: Row(
         children: [
-          SizedBox(
-            width: 25,
-            child: Text(
-              '$index',
-              style: _tableCellStyle,
-            ),
-          ),
+          SizedBox(width: 25, child: Text('$index', style: _tableCellStyle)),
           Expanded(
             flex: 3,
             child: Text(
@@ -1429,9 +1199,7 @@ class _TopCompaniesPanel extends StatelessWidget {
           ),
           Expanded(
             child: Text(
-              payment.plan.isEmpty
-                  ? '—'
-                  : payment.plan,
+              payment.plan.isEmpty ? '—' : payment.plan,
               style: _tableCellStyle,
             ),
           ),
@@ -1444,17 +1212,12 @@ class _TopCompaniesPanel extends StatelessWidget {
           SizedBox(
             width: 55,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(
-                horizontal: 5,
-                vertical: 3,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
               decoration: BoxDecoration(
                 color: success
                     ? _DashboardColors.greenSoft
                     : const Color(0xFFFFECEF),
-                borderRadius:
-                    BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
                 success ? 'Active' : payment.status,
@@ -1478,9 +1241,7 @@ class _TopCompaniesPanel extends StatelessWidget {
 class _SubscriptionStatusPanel extends StatelessWidget {
   final PlatformDashboardData data;
 
-  const _SubscriptionStatusPanel({
-    required this.data,
-  });
+  const _SubscriptionStatusPanel({required this.data});
 
   @override
   Widget build(BuildContext context) {
@@ -1493,10 +1254,7 @@ class _SubscriptionStatusPanel extends StatelessWidget {
             ? const Center(
                 child: Text(
                   'No subscription data available',
-                  style: TextStyle(
-                    color: _DashboardColors.muted,
-                    fontSize: 10,
-                  ),
+                  style: TextStyle(color: _DashboardColors.muted, fontSize: 10),
                 ),
               )
             : Column(
@@ -1509,23 +1267,17 @@ class _SubscriptionStatusPanel extends StatelessWidget {
                           height: 125,
                           child: CustomPaint(
                             painter: _DonutPainter(
-                              values: data
-                                  .subscriptionStatus
-                                  .map(
-                                    (e) =>
-                                        e.count.toDouble(),
-                                  )
+                              values: data.subscriptionStatus
+                                  .map((e) => e.count.toDouble())
                                   .toList(),
                             ),
                             child: Center(
                               child: Text(
                                 '${data.activeSubscriptions}',
                                 style: const TextStyle(
-                                  color:
-                                      _DashboardColors.navy,
+                                  color: _DashboardColors.navy,
                                   fontSize: 18,
-                                  fontWeight:
-                                      FontWeight.w800,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
                             ),
@@ -1534,64 +1286,43 @@ class _SubscriptionStatusPanel extends StatelessWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
-                            mainAxisAlignment:
-                                MainAxisAlignment.center,
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              for (int i = 0;
-                                  i <
-                                      data
-                                          .subscriptionStatus
-                                          .length &&
-                                      i < 5;
-                                  i++)
+                              for (
+                                int i = 0;
+                                i < data.subscriptionStatus.length && i < 5;
+                                i++
+                              )
                                 Padding(
-                                  padding:
-                                      const EdgeInsets
-                                          .only(bottom: 9),
+                                  padding: const EdgeInsets.only(bottom: 9),
                                   child: Row(
                                     children: [
                                       Container(
                                         width: 8,
                                         height: 8,
-                                        decoration:
-                                            BoxDecoration(
-                                          color:
-                                              _statusColor(
-                                                  i),
-                                          shape: BoxShape
-                                              .circle,
+                                        decoration: BoxDecoration(
+                                          color: _statusColor(i),
+                                          shape: BoxShape.circle,
                                         ),
                                       ),
-                                      const SizedBox(
-                                        width: 7,
-                                      ),
+                                      const SizedBox(width: 7),
                                       Expanded(
                                         child: Text(
                                           _prettyStatus(
-                                            data
-                                                .subscriptionStatus[
-                                                    i]
-                                                .status,
+                                            data.subscriptionStatus[i].status,
                                           ),
-                                          style:
-                                              const TextStyle(
-                                            color:
-                                                _DashboardColors
-                                                    .text,
+                                          style: const TextStyle(
+                                            color: _DashboardColors.text,
                                             fontSize: 9,
                                           ),
                                         ),
                                       ),
                                       Text(
                                         '${data.subscriptionStatus[i].count}',
-                                        style:
-                                            const TextStyle(
-                                          color:
-                                              _DashboardColors
-                                                  .navy,
+                                        style: const TextStyle(
+                                          color: _DashboardColors.navy,
                                           fontSize: 9,
-                                          fontWeight:
-                                              FontWeight.w700,
+                                          fontWeight: FontWeight.w700,
                                         ),
                                       ),
                                     ],
@@ -1618,10 +1349,7 @@ class _HealthAndAlertsRow extends StatelessWidget {
   final PlatformDashboardData data;
   final ValueChanged<String>? onOpenSection;
 
-  const _HealthAndAlertsRow({
-    required this.data,
-    required this.onOpenSection,
-  });
+  const _HealthAndAlertsRow({required this.data, required this.onOpenSection});
 
   @override
   Widget build(BuildContext context) {
@@ -1631,34 +1359,21 @@ class _HealthAndAlertsRow extends StatelessWidget {
 
         final health = _SystemHealthPanel(
           data: data,
-          onOpen: () =>
-              onOpenSection?.call('System Health'),
+          onOpen: () => onOpenSection?.call('System Health'),
         );
 
         final alerts = const _AlertsPanel();
 
         if (!wide) {
-          return Column(
-            children: [
-              health,
-              const SizedBox(height: 10),
-              alerts,
-            ],
-          );
+          return Column(children: [health, const SizedBox(height: 10), alerts]);
         }
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              flex: 7,
-              child: health,
-            ),
+            Expanded(flex: 7, child: health),
             const SizedBox(width: 10),
-            const Expanded(
-              flex: 3,
-              child: _AlertsPanel(),
-            ),
+            const Expanded(flex: 3, child: _AlertsPanel()),
           ],
         );
       },
@@ -1670,10 +1385,7 @@ class _SystemHealthPanel extends StatelessWidget {
   final PlatformDashboardData data;
   final VoidCallback onOpen;
 
-  const _SystemHealthPanel({
-    required this.data,
-    required this.onOpen,
-  });
+  const _SystemHealthPanel({required this.data, required this.onOpen});
 
   @override
   Widget build(BuildContext context) {
@@ -1711,10 +1423,7 @@ class _SystemHealthPanel extends StatelessWidget {
                 'Live service health data is not available '
                 'from the current dashboard API.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: _DashboardColors.muted,
-                  fontSize: 10,
-                ),
+                style: TextStyle(color: _DashboardColors.muted, fontSize: 10),
               ),
             ),
           ],
@@ -1743,8 +1452,7 @@ class _AlertsPanel extends StatelessWidget {
         height: 105,
         child: Center(
           child: Row(
-            mainAxisAlignment:
-                MainAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
                 Icons.check_circle_outline_rounded,
@@ -1754,10 +1462,7 @@ class _AlertsPanel extends StatelessWidget {
               SizedBox(width: 8),
               Text(
                 'No alert data available',
-                style: TextStyle(
-                  color: _DashboardColors.muted,
-                  fontSize: 10,
-                ),
+                style: TextStyle(color: _DashboardColors.muted, fontSize: 10),
               ),
             ],
           ),
@@ -1787,18 +1492,11 @@ class _Panel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(
-        11,
-        10,
-        11,
-        11,
-      ),
+      padding: const EdgeInsets.fromLTRB(11, 10, 11, 11),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(9),
-        border: Border.all(
-          color: _DashboardColors.border,
-        ),
+        border: Border.all(color: _DashboardColors.border),
         boxShadow: const [
           BoxShadow(
             color: Color(0x070B2450),
@@ -1808,8 +1506,7 @@ class _Panel extends StatelessWidget {
         ],
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -1818,14 +1515,9 @@ class _Panel extends StatelessWidget {
                 height: 28,
                 decoration: BoxDecoration(
                   color: _DashboardColors.blueSoft,
-                  borderRadius:
-                      BorderRadius.circular(7),
+                  borderRadius: BorderRadius.circular(7),
                 ),
-                child: Icon(
-                  icon,
-                  size: 15,
-                  color: _DashboardColors.blue,
-                ),
+                child: Icon(icon, size: 15, color: _DashboardColors.blue),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -1868,26 +1560,15 @@ class _PrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ElevatedButton.icon(
       onPressed: onPressed,
-      icon: Icon(
-        icon,
-        size: 16,
-      ),
+      icon: Icon(icon, size: 16),
       label: Text(label),
       style: ElevatedButton.styleFrom(
         backgroundColor: _DashboardColors.blue,
         foregroundColor: Colors.white,
         elevation: 0,
-        padding: const EdgeInsets.symmetric(
-          horizontal: 15,
-          vertical: 12,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(7),
-        ),
-        textStyle: const TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
+        textStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -1908,28 +1589,14 @@ class _OutlinedButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return OutlinedButton.icon(
       onPressed: onPressed,
-      icon: Icon(
-        icon,
-        size: 15,
-        color: _DashboardColors.navy,
-      ),
+      icon: Icon(icon, size: 15, color: _DashboardColors.navy),
       label: Text(label),
       style: OutlinedButton.styleFrom(
         foregroundColor: _DashboardColors.navy,
-        side: const BorderSide(
-          color: _DashboardColors.border,
-        ),
-        padding: const EdgeInsets.symmetric(
-          horizontal: 13,
-          vertical: 12,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(7),
-        ),
-        textStyle: const TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-        ),
+        side: const BorderSide(color: _DashboardColors.border),
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
+        textStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -1938,21 +1605,15 @@ class _OutlinedButton extends StatelessWidget {
 class _SmallSelector extends StatelessWidget {
   final String label;
 
-  const _SmallSelector({
-    required this.label,
-  });
+  const _SmallSelector({required this.label});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       height: 29,
-      padding: const EdgeInsets.symmetric(
-        horizontal: 9,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 9),
       decoration: BoxDecoration(
-        border: Border.all(
-          color: _DashboardColors.border,
-        ),
+        border: Border.all(color: _DashboardColors.border),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
@@ -1986,10 +1647,7 @@ class _LineChartPainter extends CustomPainter {
   final List<double> values;
   final double maxValue;
 
-  _LineChartPainter({
-    required this.values,
-    required this.maxValue,
-  });
+  _LineChartPainter({required this.values, required this.maxValue});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -2005,21 +1663,13 @@ class _LineChartPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     final fillPaint = Paint()
-      ..color =
-          _DashboardColors.blue.withAlpha(18)
+      ..color = _DashboardColors.blue.withAlpha(18)
       ..style = PaintingStyle.fill;
 
     for (int i = 0; i < 4; i++) {
-      final y = 12 +
-          (size.height - 35) *
-              i /
-              3;
+      final y = 12 + (size.height - 35) * i / 3;
 
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        gridPaint,
-      );
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
     }
 
     final path = Path();
@@ -2028,18 +1678,11 @@ class _LineChartPainter extends CustomPainter {
     for (int i = 0; i < values.length; i++) {
       final x = values.length == 1
           ? size.width / 2
-          : size.width *
-              i /
-              (values.length - 1);
+          : size.width * i / (values.length - 1);
 
-      final normalized = maxValue <= 0
-          ? 0.0
-          : values[i] / maxValue;
+      final normalized = maxValue <= 0 ? 0.0 : values[i] / maxValue;
 
-      final y =
-          12 +
-          (size.height - 42) *
-              (1 - normalized);
+      final y = 12 + (size.height - 42) * (1 - normalized);
 
       if (i == 0) {
         path.moveTo(x, y);
@@ -2052,9 +1695,7 @@ class _LineChartPainter extends CustomPainter {
     }
 
     fill.lineTo(
-      values.length == 1
-          ? size.width / 2
-          : size.width,
+      values.length == 1 ? size.width / 2 : size.width,
       size.height - 25,
     );
     fill.close();
@@ -2062,39 +1703,24 @@ class _LineChartPainter extends CustomPainter {
     canvas.drawPath(fill, fillPaint);
     canvas.drawPath(path, linePaint);
 
-    final dotPaint = Paint()
-      ..color = _DashboardColors.blue;
+    final dotPaint = Paint()..color = _DashboardColors.blue;
 
     for (int i = 0; i < values.length; i++) {
       final x = values.length == 1
           ? size.width / 2
-          : size.width *
-              i /
-              (values.length - 1);
+          : size.width * i / (values.length - 1);
 
-      final normalized = maxValue <= 0
-          ? 0.0
-          : values[i] / maxValue;
+      final normalized = maxValue <= 0 ? 0.0 : values[i] / maxValue;
 
-      final y =
-          12 +
-          (size.height - 42) *
-              (1 - normalized);
+      final y = 12 + (size.height - 42) * (1 - normalized);
 
-      canvas.drawCircle(
-        Offset(x, y),
-        3,
-        dotPaint,
-      );
+      canvas.drawCircle(Offset(x, y), 3, dotPaint);
     }
   }
 
   @override
-  bool shouldRepaint(
-    covariant _LineChartPainter oldDelegate,
-  ) {
-    return oldDelegate.values != values ||
-        oldDelegate.maxValue != maxValue;
+  bool shouldRepaint(covariant _LineChartPainter oldDelegate) {
+    return oldDelegate.values != values || oldDelegate.maxValue != maxValue;
   }
 }
 
@@ -2116,39 +1742,17 @@ class _MultiLineChartPainter extends CustomPainter {
       ..strokeWidth = 1;
 
     for (int i = 0; i < 4; i++) {
-      final y = 12 +
-          (size.height - 35) *
-              i /
-              3;
+      final y = 12 + (size.height - 35) * i / 3;
 
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        gridPaint,
-      );
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
     }
 
-    _drawLine(
-      canvas,
-      first,
-      _DashboardColors.blue,
-      size,
-    );
+    _drawLine(canvas, first, _DashboardColors.blue, size);
 
-    _drawLine(
-      canvas,
-      second,
-      _DashboardColors.purple,
-      size,
-    );
+    _drawLine(canvas, second, _DashboardColors.purple, size);
   }
 
-  void _drawLine(
-    Canvas canvas,
-    List<double> values,
-    Color color,
-    Size size,
-  ) {
+  void _drawLine(Canvas canvas, List<double> values, Color color, Size size) {
     if (values.isEmpty) return;
 
     final paint = Paint()
@@ -2161,18 +1765,11 @@ class _MultiLineChartPainter extends CustomPainter {
     for (int i = 0; i < values.length; i++) {
       final x = values.length == 1
           ? size.width / 2
-          : size.width *
-              i /
-              (values.length - 1);
+          : size.width * i / (values.length - 1);
 
-      final normalized = maxValue <= 0
-          ? 0.0
-          : values[i] / maxValue;
+      final normalized = maxValue <= 0 ? 0.0 : values[i] / maxValue;
 
-      final y =
-          12 +
-          (size.height - 42) *
-              (1 - normalized);
+      final y = 12 + (size.height - 42) * (1 - normalized);
 
       if (i == 0) {
         path.moveTo(x, y);
@@ -2180,20 +1777,14 @@ class _MultiLineChartPainter extends CustomPainter {
         path.lineTo(x, y);
       }
 
-      canvas.drawCircle(
-        Offset(x, y),
-        2.5,
-        Paint()..color = color,
-      );
+      canvas.drawCircle(Offset(x, y), 2.5, Paint()..color = color);
     }
 
     canvas.drawPath(path, paint);
   }
 
   @override
-  bool shouldRepaint(
-    covariant _MultiLineChartPainter oldDelegate,
-  ) {
+  bool shouldRepaint(covariant _MultiLineChartPainter oldDelegate) {
     return true;
   }
 }
@@ -2201,16 +1792,13 @@ class _MultiLineChartPainter extends CustomPainter {
 class _DonutPainter extends CustomPainter {
   final List<double> values;
 
-  _DonutPainter({
-    required this.values,
-  });
+  _DonutPainter({required this.values});
 
   @override
   void paint(Canvas canvas, Size size) {
     if (values.isEmpty) return;
 
-    final total =
-        values.fold<double>(0, (a, b) => a + b);
+    final total = values.fold<double>(0, (a, b) => a + b);
 
     if (total <= 0) return;
 
@@ -2222,18 +1810,12 @@ class _DonutPainter extends CustomPainter {
       _DashboardColors.blue,
     ];
 
-    final rect = Rect.fromLTWH(
-      10,
-      10,
-      size.width - 20,
-      size.height - 20,
-    );
+    final rect = Rect.fromLTWH(10, 10, size.width - 20, size.height - 20);
 
     double start = -math.pi / 2;
 
     for (int i = 0; i < values.length; i++) {
-      final sweep =
-          values[i] / total * math.pi * 2;
+      final sweep = values[i] / total * math.pi * 2;
 
       final paint = Paint()
         ..color = colors[i % colors.length]
@@ -2241,22 +1823,14 @@ class _DonutPainter extends CustomPainter {
         ..strokeWidth = 18
         ..strokeCap = StrokeCap.butt;
 
-      canvas.drawArc(
-        rect,
-        start,
-        sweep,
-        false,
-        paint,
-      );
+      canvas.drawArc(rect, start, sweep, false, paint);
 
       start += sweep;
     }
   }
 
   @override
-  bool shouldRepaint(
-    covariant _DonutPainter oldDelegate,
-  ) {
+  bool shouldRepaint(covariant _DonutPainter oldDelegate) {
     return oldDelegate.values != values;
   }
 }
@@ -2268,19 +1842,14 @@ class _DonutPainter extends CustomPainter {
 class _EmptyChart extends StatelessWidget {
   final String message;
 
-  const _EmptyChart({
-    required this.message,
-  });
+  const _EmptyChart({required this.message});
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Text(
         message,
-        style: const TextStyle(
-          color: _DashboardColors.muted,
-          fontSize: 10,
-        ),
+        style: const TextStyle(color: _DashboardColors.muted, fontSize: 10),
       ),
     );
   }
@@ -2291,11 +1860,7 @@ class _DashboardLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: CircularProgressIndicator(
-        strokeWidth: 2.5,
-      ),
-    );
+    return const Center(child: CircularProgressIndicator(strokeWidth: 2.5));
   }
 }
 
@@ -2303,10 +1868,7 @@ class _DashboardError extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
 
-  const _DashboardError({
-    required this.message,
-    required this.onRetry,
-  });
+  const _DashboardError({required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -2314,15 +1876,11 @@ class _DashboardError extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.all(30),
         padding: const EdgeInsets.all(24),
-        constraints: const BoxConstraints(
-          maxWidth: 500,
-        ),
+        constraints: const BoxConstraints(maxWidth: 500),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: _DashboardColors.border,
-          ),
+          border: Border.all(color: _DashboardColors.border),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -2350,10 +1908,7 @@ class _DashboardError extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: onRetry,
-              child: const Text('Retry'),
-            ),
+            ElevatedButton(onPressed: onRetry, child: const Text('Retry')),
           ],
         ),
       ),
@@ -2369,10 +1924,7 @@ class _LegendDot extends StatelessWidget {
   final Color color;
   final String label;
 
-  const _LegendDot({
-    required this.color,
-    required this.label,
-  });
+  const _LegendDot({required this.color, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -2382,18 +1934,12 @@ class _LegendDot extends StatelessWidget {
         Container(
           width: 7,
           height: 7,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 5),
         Text(
           label,
-          style: const TextStyle(
-            color: _DashboardColors.muted,
-            fontSize: 8,
-          ),
+          style: const TextStyle(color: _DashboardColors.muted, fontSize: 8),
         ),
       ],
     );
@@ -2406,10 +1952,7 @@ const _tableHeaderStyle = TextStyle(
   fontWeight: FontWeight.w700,
 );
 
-const _tableCellStyle = TextStyle(
-  color: _DashboardColors.text,
-  fontSize: 8,
-);
+const _tableCellStyle = TextStyle(color: _DashboardColors.text, fontSize: 8);
 
 /* -------------------------------------------------------------------------- */
 /* HELPERS                                                                    */
@@ -2420,8 +1963,7 @@ String _formatInt(int value) {
   final buffer = StringBuffer();
 
   for (int i = 0; i < text.length; i++) {
-    if (i > 0 &&
-        (text.length - i) % 3 == 0) {
+    if (i > 0 && (text.length - i) % 3 == 0) {
       buffer.write(',');
     }
 
@@ -2448,19 +1990,12 @@ String _formatMoney(int paise) {
 String _formatBytes(int bytes) {
   if (bytes <= 0) return '0 B';
 
-  const units = [
-    'B',
-    'KB',
-    'MB',
-    'GB',
-    'TB',
-  ];
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
 
   double value = bytes.toDouble();
   int index = 0;
 
-  while (value >= 1024 &&
-      index < units.length - 1) {
+  while (value >= 1024 && index < units.length - 1) {
     value /= 1024;
     index++;
   }
@@ -2473,20 +2008,14 @@ String _formatBytes(int bytes) {
 }
 
 String _prettyStatus(String value) {
-  final normalized = value
-      .replaceAll('_', ' ')
-      .replaceAll('-', ' ')
-      .trim();
+  final normalized = value.replaceAll('_', ' ').replaceAll('-', ' ').trim();
 
   if (normalized.isEmpty) return 'Unknown';
 
   return normalized
       .split(' ')
       .where((e) => e.isNotEmpty)
-      .map(
-        (e) =>
-            '${e[0].toUpperCase()}${e.substring(1).toLowerCase()}',
-      )
+      .map((e) => '${e[0].toUpperCase()}${e.substring(1).toLowerCase()}')
       .join(' ');
 }
 
@@ -2507,8 +2036,7 @@ String _relativeTime(String raw) {
 
   if (parsed == null) return '';
 
-  final difference =
-      DateTime.now().difference(parsed.toLocal());
+  final difference = DateTime.now().difference(parsed.toLocal());
 
   if (difference.inSeconds < 60) {
     return 'now';

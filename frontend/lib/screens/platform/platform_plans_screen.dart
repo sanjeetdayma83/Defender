@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/platform/platform_plans_service.dart';
@@ -42,7 +42,9 @@ class _PlatformPlansScreenState extends State<PlatformPlansScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
       }
     }
   }
@@ -93,7 +95,9 @@ class _PlatformPlansScreenState extends State<PlatformPlansScreen> {
                 ),
                 TextField(
                   controller: whCtrl,
-                  decoration: const InputDecoration(labelText: 'Max warehouses'),
+                  decoration: const InputDecoration(
+                    labelText: 'Max warehouses',
+                  ),
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 ),
@@ -137,14 +141,16 @@ class _PlatformPlansScreenState extends State<PlatformPlansScreen> {
         'isActive': true,
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Plan created')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Plan created')));
         _reload();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
       }
     }
   }
@@ -254,9 +260,7 @@ class _PlatformPlansScreenState extends State<PlatformPlansScreen> {
                                 DataCell(Text(p.code)),
                                 DataCell(Text(p.name)),
                                 DataCell(
-                                  Text(
-                                    '₹${p.priceInr.toStringAsFixed(0)}',
-                                  ),
+                                  Text('₹${p.priceInr.toStringAsFixed(0)}'),
                                 ),
                                 DataCell(Text('${p.includedScans}')),
                                 DataCell(Text('${p.maxWarehouses}')),

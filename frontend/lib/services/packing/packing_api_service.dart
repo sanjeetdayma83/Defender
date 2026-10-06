@@ -31,7 +31,7 @@ class PackingApiService {
   final ApiClient _apiClient;
 
   PackingApiService({ApiClient? apiClient})
-      : _apiClient = apiClient ?? const ApiClient();
+    : _apiClient = apiClient ?? const ApiClient();
 
   Future<PackingSession> startPacking({
     required String awb,
@@ -50,10 +50,7 @@ class PackingApiService {
 
     final response = await _apiClient.post(
       Uri.parse('${ApiConfig.baseUrl}/packing'),
-      body: <String, dynamic>{
-        'awb': cleanAwb,
-        'warehouseId': cleanWarehouseId,
-      },
+      body: <String, dynamic>{'awb': cleanAwb, 'warehouseId': cleanWarehouseId},
     );
 
     final decoded = _decode(response);
@@ -70,9 +67,7 @@ class PackingApiService {
       throw Exception('Packing session data is missing.');
     }
 
-    final session = PackingSession.fromJson(
-      Map<String, dynamic>.from(data),
-    );
+    final session = PackingSession.fromJson(Map<String, dynamic>.from(data));
 
     if (session.id.isEmpty) {
       throw Exception('Packing session ID is missing.');
@@ -81,9 +76,7 @@ class PackingApiService {
     return session;
   }
 
-  Future<PackingSession> completePacking({
-    required String sessionId,
-  }) async {
+  Future<PackingSession> completePacking({required String sessionId}) async {
     final id = sessionId.trim();
 
     if (id.isEmpty) {
@@ -108,14 +101,10 @@ class PackingApiService {
       throw Exception('Completed packing session data is missing.');
     }
 
-    return PackingSession.fromJson(
-      Map<String, dynamic>.from(data),
-    );
+    return PackingSession.fromJson(Map<String, dynamic>.from(data));
   }
 
-  Future<PackingSession> cancelPacking({
-    required String sessionId,
-  }) async {
+  Future<PackingSession> cancelPacking({required String sessionId}) async {
     final id = sessionId.trim();
 
     if (id.isEmpty) {
@@ -140,9 +129,7 @@ class PackingApiService {
       throw Exception('Cancelled packing session data is missing.');
     }
 
-    return PackingSession.fromJson(
-      Map<String, dynamic>.from(data),
-    );
+    return PackingSession.fromJson(Map<String, dynamic>.from(data));
   }
 
   Map<String, dynamic> _decode(dynamic response) {
@@ -164,16 +151,12 @@ class PackingApiService {
   }) {
     if (statusCode < 200 || statusCode >= 300) {
       throw Exception(
-        decoded['message']?.toString() ??
-            '$fallback ($statusCode).',
+        decoded['message']?.toString() ?? '$fallback ($statusCode).',
       );
     }
 
     if (decoded['success'] != true) {
-      throw Exception(
-        decoded['message']?.toString() ?? '$fallback.',
-      );
+      throw Exception(decoded['message']?.toString() ?? '$fallback.');
     }
   }
 }
-

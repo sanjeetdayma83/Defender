@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/session_provider.dart';
@@ -73,7 +73,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
     final session = context.watch<SessionProvider>();
     final role = (session.user?.role ?? '').toUpperCase().replaceAll('-', '_');
-    final canImport = role == 'OWNER' ||
+    final canImport =
+        role == 'OWNER' ||
         role == 'ADMIN' ||
         role == 'MANAGER' ||
         role == 'COMPANY_ADMIN' ||
@@ -94,11 +95,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
             onPressed: !canImport
                 ? null
                 : () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const OrderImportScreen()),
-              );
-              await _load();
-            },
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const OrderImportScreen(),
+                      ),
+                    );
+                    await _load();
+                  },
             icon: const Icon(Icons.upload_file_rounded),
             label: const Text('Import Orders'),
           ),
@@ -261,4 +264,3 @@ class _OrdersScreenState extends State<OrdersScreen> {
     super.dispose();
   }
 }
-

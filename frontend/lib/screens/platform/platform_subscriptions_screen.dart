@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../services/platform/platform_subscriptions_service.dart';
 
@@ -31,10 +31,7 @@ class _PlatformSubscriptionsScreenState
 
   void _reload() {
     setState(() {
-      _future = _service.list(
-        search: _searchCtrl.text,
-        status: _status,
-      );
+      _future = _service.list(search: _searchCtrl.text, status: _status);
     });
   }
 
@@ -176,21 +173,15 @@ class _PlatformSubscriptionsScreenState
                             final periodLabel = periodEnd == null
                                 ? '—'
                                 : periodEnd.length >= 10
-                                    ? periodEnd.substring(0, 10)
-                                    : periodEnd;
+                                ? periodEnd.substring(0, 10)
+                                : periodEnd;
                             return DataRow(
                               cells: [
                                 DataCell(Text(s.companyName ?? s.companyId)),
-                                DataCell(
-                                  Text(
-                                    s.planName ?? s.planCode ?? '—',
-                                  ),
-                                ),
+                                DataCell(Text(s.planName ?? s.planCode ?? '—')),
                                 DataCell(Text(s.priceLabel)),
                                 DataCell(
-                                  Text(
-                                    s.includedScans?.toString() ?? '—',
-                                  ),
+                                  Text(s.includedScans?.toString() ?? '—'),
                                 ),
                                 DataCell(
                                   Container(
@@ -235,4 +226,3 @@ class _PlatformSubscriptionsScreenState
     );
   }
 }
-

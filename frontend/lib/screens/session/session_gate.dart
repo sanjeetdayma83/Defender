@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/session_provider.dart';
+import '../../models/identity/current_user.dart';
 import '../auth/login_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../saas/saas_portal_screen.dart';
@@ -19,33 +20,9 @@ class _LDSessionGateState extends State<LDSessionGate> {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        context.read<SessionProvider>().initialize();
-      }
+      if (!mounted) return;
+      context.read<SessionProvider>().initialize();
     });
-  }
-
-  SaaSRole _roleForUser(String? role) {
-    final r = (role ?? '').trim().toUpperCase().replaceAll('-', '_');
-    switch (r) {
-      case 'PLATFORM_ADMIN':
-      case 'SUPER_ADMIN':
-        return SaaSRole.platformAdmin;
-      case 'OWNER':
-      case 'ADMIN':
-      case 'MANAGER':
-      case 'COMPANY_ADMIN':
-        return SaaSRole.companyAdmin;
-      case 'OPERATOR':
-      case 'PACKING_OPERATOR':
-        return SaaSRole.operator;
-      case 'VIEWER':
-        // Viewers use company shell but screens must hide mutations.
-        return SaaSRole.companyAdmin;
-      default:
-        // Unknown → least privilege company shell; APIs still enforce.
-        return SaaSRole.companyAdmin;
-    }
   }
 
   @override
@@ -69,12 +46,40 @@ class _LDSessionGateState extends State<LDSessionGate> {
             return const OnboardingScreen();
 
           case SessionStatus.authenticated:
-            return SaaSPortalScreen(
-              initialRole: _roleForUser(session.user?.role),
-            );
+            return SaaSPortalScreen(initialRole: _roleForUser(session.user));
         }
       },
     );
+  }
+
+  SaaSRole _roleForUser(CurrentUser? user) {
+    final rawRole = user?.role.trim().toLowerCase() ?? '';
+
+    switch (rawRole) {
+      case 'super_admin':
+      case 'platform':
+      case 'platform_admin':
+        return SaaSRole.platformAdmin;
+
+      case 'company_admin':
+      case 'owner':
+      case 'admin':
+        return SaaSRole.companyAdmin;
+
+      case 'warehouse_manager':
+      case 'manager':
+        return SaaSRole.manager;
+
+      case 'packing_operator':
+      case 'operator':
+        return SaaSRole.operator;
+
+      case 'viewer':
+        return SaaSRole.viewer;
+
+      default:
+        return SaaSRole.companyAdmin;
+    }
   }
 }
 
@@ -85,106 +90,64 @@ class _SessionLoading extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Scaffold(
       backgroundColor: Color(0xFFF8FAFC),
-      body: Center(
-        child: SizedBox(
-          width: 320,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: 42,
-                height: 42,
-                child: CircularProgressIndicator(strokeWidth: 3),
-              ),
-              SizedBox(height: 22),
-              Text(
-                'Loading your workspace...',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Connecting to Loss Defender.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-              ),
-            ],
-          ),
-        ),
-      ),
+      body: Center(child: CircularProgressIndicator()),
     );
   }
 }
 
 class _SessionError extends StatelessWidget {
+  const _SessionError({required this.message, required this.onRetry});
+
   final String message;
   final Future<void> Function() onRetry;
-
-  const _SessionError({required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Container(
-              padding: const EdgeInsets.all(26),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 58,
-                    height: 58,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF2F2),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Icon(
-                      Icons.cloud_off_rounded,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Card(
+              elevation: 0,
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      size: 52,
                       color: Color(0xFFDC2626),
-                      size: 28,
                     ),
-                  ),
-                  const SizedBox(height: 18),
-                  const Text(
-                    'Workspace unavailable',
-                    style: TextStyle(
-                      fontSize: 19,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF0F172A),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Workspace unavailable',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    message,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF64748B),
+                    const SizedBox(height: 10),
+                    Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        height: 1.5,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
+                    const SizedBox(height: 24),
+                    FilledButton.icon(
                       onPressed: onRetry,
-                      icon: const Icon(Icons.refresh_rounded),
+                      icon: const Icon(Icons.refresh),
                       label: const Text('Retry'),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

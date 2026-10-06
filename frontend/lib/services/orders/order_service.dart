@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import '../../models/models.dart';
 import '../api/api_client.dart';
@@ -209,4 +209,3 @@ class OrderService {
     );
   }
 }
-

@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -62,11 +62,13 @@ class _OrderImportScreenState extends State<OrderImportScreen> {
         if (!mounted) return;
         setState(() {
           _warehouses = sessionList
-              .map((w) => <String, dynamic>{
-                    'id': w.id,
-                    'name': w.name,
-                    'code': w.code,
-                  })
+              .map(
+                (w) => <String, dynamic>{
+                  'id': w.id,
+                  'name': w.name,
+                  'code': w.code,
+                },
+              )
               .toList();
           _warehouseId = sessionList.first.id;
           _error = null;
@@ -84,8 +86,9 @@ class _OrderImportScreenState extends State<OrderImportScreen> {
         if (!mounted) return;
         setState(() {
           _warehouses = warehouses;
-          _warehouseId =
-              warehouses.isEmpty ? null : warehouses.first['id']?.toString();
+          _warehouseId = warehouses.isEmpty
+              ? null
+              : warehouses.first['id']?.toString();
           if (warehouses.isEmpty) {
             _error =
                 'No warehouse found. Open Warehouses and create one, or finish onboarding.';
@@ -364,5 +367,3 @@ class _OrderImportScreenState extends State<OrderImportScreen> {
     );
   }
 }
-
-

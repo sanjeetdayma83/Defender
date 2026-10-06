@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/identity/current_user.dart';
@@ -28,9 +28,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
   bool get _canManage {
     final role = context.read<SessionProvider>().user?.role;
 
-    return role == 'PLATFORM_ADMIN' ||
-        role == 'OWNER' ||
-        role == 'ADMIN';
+    return role == 'PLATFORM_ADMIN' || role == 'OWNER' || role == 'ADMIN';
   }
 
   @override
@@ -224,9 +222,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       builder: (context) {
         return AlertDialog(
           title: Text(
-            newStatus
-                ? 'Activate warehouse?'
-                : 'Deactivate warehouse?',
+            newStatus ? 'Activate warehouse?' : 'Deactivate warehouse?',
           ),
           content: Text(
             newStatus
@@ -262,9 +258,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       setState(() => _saving = false);
 
       _showMessage(
-        newStatus
-            ? 'Warehouse activated.'
-            : 'Warehouse deactivated.',
+        newStatus ? 'Warehouse activated.' : 'Warehouse deactivated.',
       );
 
       await _load();
@@ -343,9 +337,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
           builder: (context, setDialogState) {
             return AlertDialog(
               title: Text(
-                initialName == null
-                    ? 'Add Warehouse'
-                    : 'Edit Warehouse',
+                initialName == null ? 'Add Warehouse' : 'Edit Warehouse',
               ),
               content: SizedBox(
                 width: 420,
@@ -397,8 +389,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
 
                     if (name.isEmpty || code.isEmpty) {
                       setDialogState(() {
-                        localError =
-                            'Warehouse name and code are required.';
+                        localError = 'Warehouse name and code are required.';
                       });
                       return;
                     }
@@ -451,9 +442,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
 
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -461,10 +450,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     return LDPage(
       title: 'Warehouse',
       subtitle: 'Operational configuration, warehouse status and health.',
-      child: RefreshIndicator(
-        onRefresh: _load,
-        child: _buildBody(),
-      ),
+      child: RefreshIndicator(onRefresh: _load, child: _buildBody()),
     );
   }
 
@@ -472,9 +458,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.all(32),
-        child: Center(
-          child: CircularProgressIndicator(),
-        ),
+        child: Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -557,9 +541,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     if (_loadingStats) {
       return const Padding(
         padding: EdgeInsets.all(24),
-        child: Center(
-          child: CircularProgressIndicator(),
-        ),
+        child: Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -619,17 +601,10 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                 _row(
                   'Status',
                   warehouse.isActive ? 'Active' : 'Inactive',
-                  valueColor:
-                      warehouse.isActive ? ldGreen : Colors.red,
+                  valueColor: warehouse.isActive ? ldGreen : Colors.red,
                 ),
-                _row(
-                  'Warehouse ID',
-                  warehouse.id,
-                ),
-                _row(
-                  'Total Sessions',
-                  stats?.totalSessions.toString() ?? '—',
-                ),
+                _row('Warehouse ID', warehouse.id),
+                _row('Total Sessions', stats?.totalSessions.toString() ?? '—'),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 10,
@@ -650,9 +625,7 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                               : Icons.play_circle_outline,
                         ),
                         label: Text(
-                          warehouse.isActive
-                              ? 'Deactivate'
-                              : 'Activate',
+                          warehouse.isActive ? 'Deactivate' : 'Activate',
                         ),
                       ),
                     if (_canManage)
@@ -687,16 +660,12 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                 ),
                 _healthRow(
                   'Orders',
-                  stats == null
-                      ? 'Loading'
-                      : '${stats.activeOrders} active',
+                  stats == null ? 'Loading' : '${stats.activeOrders} active',
                   stats != null,
                 ),
                 _healthRow(
                   'Packing Sessions',
-                  stats == null
-                      ? 'Loading'
-                      : '${stats.activeSessions} active',
+                  stats == null ? 'Loading' : '${stats.activeSessions} active',
                   stats != null,
                 ),
                 _healthRow(
@@ -719,23 +688,14 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.cloud_off_outlined,
-              size: 48,
-            ),
+            const Icon(Icons.cloud_off_outlined, size: 48),
             const SizedBox(height: 16),
             const Text(
               'Unable to load warehouses',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
-            Text(
-              _error ?? 'Unknown error',
-              textAlign: TextAlign.center,
-            ),
+            Text(_error ?? 'Unknown error', textAlign: TextAlign.center),
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: _load,
@@ -756,16 +716,11 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
       decoration: BoxDecoration(
         color: Colors.red.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: Colors.red.withValues(alpha: 0.2),
-        ),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.error_outline,
-            color: Colors.red,
-          ),
+          const Icon(Icons.error_outline, color: Colors.red),
           const SizedBox(width: 10),
           Expanded(child: Text(_error!)),
           IconButton(
@@ -786,17 +741,11 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
         child: Center(
           child: Column(
             children: [
-              const Icon(
-                Icons.warehouse_outlined,
-                size: 48,
-              ),
+              const Icon(Icons.warehouse_outlined, size: 48),
               const SizedBox(height: 12),
               const Text(
                 'No active warehouse available',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -818,20 +767,13 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     );
   }
 
-  Widget _row(
-    String label,
-    String value, {
-    Color? valueColor,
-  }) {
+  Widget _row(String label, String value, {Color? valueColor}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(color: ldMute),
-            ),
+            child: Text(label, style: const TextStyle(color: ldMute)),
           ),
           Flexible(
             child: Text(
@@ -849,30 +791,19 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
     );
   }
 
-  Widget _healthRow(
-    String name,
-    String status,
-    bool healthy,
-  ) {
+  Widget _healthRow(String name, String status, bool healthy) {
     final color = healthy ? ldGreen : Colors.red;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
         children: [
-          Icon(
-            Icons.circle,
-            size: 9,
-            color: color,
-          ),
+          Icon(Icons.circle, size: 9, color: color),
           const SizedBox(width: 10),
           Expanded(child: Text(name)),
           Text(
             status,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(color: color, fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -891,4 +822,3 @@ class _WarehouseFormResult {
     required this.country,
   });
 }
-

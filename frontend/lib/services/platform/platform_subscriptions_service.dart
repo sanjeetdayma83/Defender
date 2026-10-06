@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import '../api/api_client.dart';
 import '../api/api_config.dart';
@@ -71,7 +71,7 @@ class PlatformSubscription {
 class PlatformSubscriptionsService {
   final ApiClient _client;
   const PlatformSubscriptionsService({ApiClient? client})
-      : _client = client ?? const ApiClient();
+    : _client = client ?? const ApiClient();
 
   Future<({int total, List<PlatformSubscription> items})> list({
     String search = '',
@@ -82,8 +82,9 @@ class PlatformSubscriptionsService {
       if (status != 'all') 'status': status,
       'limit': '100',
     };
-    final uri = Uri.parse('${ApiConfig.baseUrl}/platform/subscriptions')
-        .replace(queryParameters: qs);
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/platform/subscriptions',
+    ).replace(queryParameters: qs);
 
     final response = await _client.get(uri);
     final decoded = jsonDecode(response.body);
@@ -101,17 +102,17 @@ class PlatformSubscriptionsService {
     final raw = data['items'];
     final items = raw is List
         ? raw
-            .whereType<Map>()
-            .map(
-              (e) => PlatformSubscription.fromJson(
-                Map<String, dynamic>.from(e),
-              ),
-            )
-            .toList()
+              .whereType<Map>()
+              .map(
+                (e) =>
+                    PlatformSubscription.fromJson(Map<String, dynamic>.from(e)),
+              )
+              .toList()
         : <PlatformSubscription>[];
 
-    final total =
-        data['total'] is num ? (data['total'] as num).toInt() : items.length;
+    final total = data['total'] is num
+        ? (data['total'] as num).toInt()
+        : items.length;
     return (total: total, items: items);
   }
 }
