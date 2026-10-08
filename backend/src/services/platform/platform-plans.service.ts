@@ -1,4 +1,4 @@
-﻿import { prisma } from "../../config/prisma.js";
+import { prisma } from "../../config/prisma.js";
 
 function mapRow(r: any) {
   return {
@@ -68,6 +68,40 @@ export class PlatformPlansService {
       input.isCommercial !== undefined ? input.isCommercial : e.isCommercial,
       input.isActive !== undefined ? input.isActive : e.isActive);
     return mapRow(rows[0]);
+  }
+
+  async delete(id: string) {
+    try {
+      const rows = await prisma.$queryRawUnsafe<any[]>(
+        `DELETE FROM plan_configurations WHERE id = $1 RETURNING id`,
+        id,
+      );
+
+      if (!rows?.length) {
+        throw new Error("PLAN_NOT_FOUND");
+      }
+
+      return {
+        id: String(rows[0].id),
+        deleted: true,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      if (message === "PLAN_NOT_FOUND") {
+        throw error;
+      }
+
+      if (
+        message.includes("foreign key") ||
+        message.includes("violates") ||
+        message.includes("referenced")
+      ) {
+        throw new Error("PLAN_IN_USE");
+      }
+
+      throw error;
+    }
   }
 
   async setActive(id: string, isActive: boolean) {

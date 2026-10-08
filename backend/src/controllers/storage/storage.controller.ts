@@ -166,6 +166,10 @@ async function uploadEvidence(
         ? safeFileName.substring(safeFileName.lastIndexOf("."))
         : "";
 
+    const checksum = createHash("sha256")
+      .update(file.buffer)
+      .digest("hex");
+
     const date = new Date().toISOString().slice(0, 10);
 
     storageKey = [
@@ -173,12 +177,8 @@ async function uploadEvidence(
       "evidence",
       mediaType.toLowerCase(),
       date,
-      `${randomUUID()}${extension}`,
+      `${recordingId}-${checksum}${extension}`,
     ].join("/");
-
-    const checksum = createHash("sha256")
-      .update(file.buffer)
-      .digest("hex");
 
     await entitlementService.assertStorageCapacity(company.id, file.size);
     await s3.send(
@@ -196,8 +196,7 @@ async function uploadEvidence(
         },
       }),
     );
-
-    const idempotencyHeader =
+const idempotencyHeader =
       req.headers["idempotency-key"] ??
       req.headers["x-idempotency-key"];
 
@@ -231,6 +230,44 @@ async function uploadEvidence(
 
       if (!recording) {
         throw new Error("RECORDING_NOT_FOUND");
+      }
+
+      const existingSegments = await tx.$queryRawUnsafe<Array<{
+        id: string;
+        recordingId: string;
+        sequence: number;
+        b2Key: string;
+        checksum: string;
+        sizeBytes: bigint;
+        uploadedAt: Date | null;
+      }>>(
+
+        `
+            SELECT
+            "recordingId",
+            "sequence",
+            "b2Key",
+            "checksum",
+            "sizeBytes",
+            "uploadedAt"
+          FROM "RecordingSegment"
+          WHERE "recordingId" = $1
+            AND "checksum" = $2
+            AND "sizeBytes" = $3
+          ORDER BY "sequence" ASC
+          LIMIT 1
+        `,
+        recording.id,
+        checksum,
+        BigInt(file.size),
+      );
+
+      if (existingSegments[0]) {
+        return {
+          recording,
+          segment: existingSegments[0],
+          duplicate: true,
+        };
       }
 
       const sequence = recording.segmentCount + 1;
@@ -295,6 +332,7 @@ async function uploadEvidence(
       return {
         recording,
         segment: segment[0],
+        duplicate: false,
       };
     });
 
@@ -654,12 +692,3 @@ export async function getStorageUsage(
     });
   }
 }
-
-
-
-
-
-
-
-
-

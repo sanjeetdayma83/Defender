@@ -1,8 +1,16 @@
-﻿import type { Response } from "express";
+import type { Response } from "express";
 import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
 import { companyContextService } from "../../services/identity/company-context.service.js";
 import { billingService } from "../../services/billing/billing.service.js";
+function jsonSafe<T>(value: T): T {
+  return JSON.parse(
+    JSON.stringify(value, (_key, item) =>
+      typeof item === "bigint" ? Number(item) : item,
+    ),
+  ) as T;
+}
 import { invoicePdfService } from "../../services/invoice/invoice-pdf.service.js";
+import { invoiceService } from "../../services/invoice/invoice.service.js";
 
 async function getCompany(
   req: AuthenticatedRequest,
@@ -84,7 +92,7 @@ export async function createRazorpayOrder(
 
     res.status(201).json({
       success: true,
-      data: result,
+      data: jsonSafe(result),
     });
   } catch (error) {
     console.error("Razorpay order creation failed:", error);
@@ -157,7 +165,7 @@ export async function verifyRazorpayPayment(
 
     res.json({
       success: true,
-      data: result,
+      data: jsonSafe(result),
     });
   } catch (error) {
     console.error("Razorpay payment verification failed:", error);
@@ -208,7 +216,7 @@ export async function getInvoicePdf(
 
     res.json({
       success: true,
-      data: result,
+      data: jsonSafe(result),
     });
   } catch (error) {
     console.error("Invoice PDF generation failed:", error);
@@ -241,3 +249,52 @@ export async function getInvoicePdf(
   }
 }
 
+
+export async function listInvoices(
+  req: AuthenticatedRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const { company } = await getCompany(req, true);
+
+    const rawLimit = Number(req.query.limit ?? 100);
+    const limit =
+      Number.isFinite(rawLimit) && rawLimit > 0
+        ? Math.min(Math.trunc(rawLimit), 500)
+        : 100;
+
+    const items = await invoiceService.listForCompany(
+      company.id,
+      limit,
+    );
+
+    res.json({
+      success: true,
+      data: {
+        items: jsonSafe(items),
+        total: items.length,
+      },
+    });
+  } catch (error) {
+    console.error("Invoice list lookup failed:", error);
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to load invoices.";
+
+    const status =
+      message === "AUTHENTICATION_REQUIRED"
+        ? 401
+        : message === "BILLING_ADMIN_REQUIRED"
+          ? 403
+          : message === "USER_INACTIVE" || message === "COMPANY_INACTIVE"
+            ? 403
+            : 500;
+
+    res.status(status).json({
+      success: false,
+      message,
+    });
+  }
+}

@@ -1,4 +1,4 @@
-﻿import '../platform/platform_topups_screen.dart';
+import '../platform/platform_topups_screen.dart';
 import '../platform/platform_ops_screens.dart';
 import '../platform/platform_subscriptions_screen.dart';
 import '../platform/platform_plans_screen.dart';
@@ -14,9 +14,9 @@ import '../warehouse/warehouse_screen.dart';
 import '../scan_pack/scan_pack_screen.dart';
 import '../team/team_screen.dart';
 import '../evidence/evidence_screen.dart';
-import '../onboarding/onboarding_screen.dart';
 import '../profile/profile_screen.dart';
-import '../../debug/scan_integration_test.dart';
+import 'company_workspace_live_screens.dart';
+
 enum SaaSRole { platformAdmin, companyAdmin, operator }
 
 class SaaSPortalScreen extends StatefulWidget {
@@ -57,9 +57,13 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
 
   SaaSRole? _mapSessionRole(String? role) {
     final r = (role ?? '').trim().toUpperCase().replaceAll('-', '_');
-    if (((r == 'PLATFORM_ADMIN' || r == 'SUPER_ADMIN') || r == 'SUPER_ADMIN')) return SaaSRole.platformAdmin;
+    if (r == 'PLATFORM_ADMIN' || r == 'SUPER_ADMIN') {
+      return SaaSRole.platformAdmin;
+    }
     if (r == 'OPERATOR' || r == 'PACKING_OPERATOR') return SaaSRole.operator;
-    if (r.isEmpty) return null;
+    if (r.isEmpty) {
+      return null;
+    }
     return SaaSRole.companyAdmin;
   }
 
@@ -68,7 +72,7 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
       case SaaSRole.platformAdmin:
         return 'Platform Admin';
       case SaaSRole.companyAdmin:
-        return 'Company Admin';
+        return 'Company Owner';
       case SaaSRole.operator:
         return 'Packing Operator';
     }
@@ -89,11 +93,12 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
           _NavItem(Icons.history_outlined, 'Audit Logs'),
           _NavItem(Icons.settings_outlined, 'Settings'),
           _NavItem(Icons.person_outline, 'Profile'),
-          ];
+        ];
 
       case SaaSRole.companyAdmin:
         return const [
           _NavItem(Icons.dashboard_outlined, 'Dashboard'),
+          _NavItem(Icons.qr_code_scanner_outlined, 'Scan & Pack'),
           _NavItem(Icons.account_balance_wallet_outlined, 'Scan Wallet'),
           _NavItem(Icons.credit_card_outlined, 'Subscription'),
           _NavItem(Icons.receipt_long_outlined, 'Billing'),
@@ -102,7 +107,6 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
           _NavItem(Icons.inventory_2_outlined, 'Orders'),
           _NavItem(Icons.verified_outlined, 'Evidence'),
           _NavItem(Icons.extension_outlined, 'Integrations'),
-          _NavItem(Icons.rocket_launch_outlined, 'Onboarding'),
           _NavItem(Icons.person_outline, 'Profile'),
           _NavItem(Icons.settings_outlined, 'Settings'),
           _NavItem(Icons.help_outline, 'Help'),
@@ -153,45 +157,67 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
         case 'Settings':
           return const PlatformSettingsScreen();
         case 'Profile':
-          return const ProfileScreen();}
+          return const ProfileScreen();
+      }
     }
 
     if (_role == SaaSRole.companyAdmin) {
       switch (label) {
         case 'Dashboard':
-          return const _SellerDashboardPage();
+          return CompanyWorkspaceDashboardScreen(
+            onScanPack: () {
+              final target = _navigation.indexWhere(
+                (item) => item.label == 'Scan & Pack',
+              );
+
+              if (target >= 0) {
+                setState(() => _index = target);
+              }
+            },
+          );
+
+        case 'Scan & Pack':
+          return const ScanPackScreen();
+
         case 'Scan Wallet':
-          return const _ScanWalletPage();
+          return const CompanyWalletScreen();
+
         case 'Subscription':
-          return const _SellerSubscriptionPage();
+          return const CompanySubscriptionScreen();
+
         case 'Billing':
-          return const _BillingPage();
+          return const CompanyBillingScreen();
+
         case 'Team':
           return const TeamScreen();
+
         case 'Warehouses':
           return const WarehouseScreen();
+
         case 'Orders':
           return const OrdersScreen();
+
         case 'Evidence':
           return const EvidenceScreen();
+
         case 'Integrations':
           return const _IntegrationsPage();
-        case 'Onboarding':
-          return const OnboardingScreen();
+
         case 'Profile':
           return const ProfileScreen();
+
         case 'Settings':
           return const _CompanySettingsPage();
+
         case 'Help':
           return const _HelpPage();
       }
     }
-
     switch (label) {
       case 'Dashboard':
         return const _OperatorDashboardPage();
       case 'Scan & Pack':
-          return const ScanPackScreen();
+        return const ScanPackScreen();
       case 'My Sessions':
         return const _SessionsPage();
       case 'Recordings':
@@ -199,12 +225,42 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
       case 'Evidence':
         return const _OperatorEvidencePage();
       case 'Profile':
-          return const ProfileScreen();
+        return const ProfileScreen();
       case 'Help':
         return const _HelpPage();
     }
 
-    return const _AdminDashboardPage();
+    return const _OperatorDashboardPage();
+  }
+
+  Future<void> _logout() async {
+    final shouldLogout =
+        await showDialog<bool>(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text('Logout'),
+              content: const Text('Are you sure you want to logout?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Logout'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+
+    if (!shouldLogout || !mounted) {
+      return;
+    }
+
+    await context.read<SessionProvider>().signOut();
   }
 
   void _select(int index) {
@@ -250,6 +306,10 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
   }
 
   Widget _sidebar() {
+    final sessionUser = context.watch<SessionProvider>().user;
+    final isPlatform = sessionUser?.isPlatformAdmin == true;
+    final companyName = sessionUser?.company?.name.trim() ?? '';
+
     return Container(
       width: 252,
       color: _navy,
@@ -287,7 +347,6 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
                 ],
               ),
             ),
-            // Role switcher disabled — real PLATFORM_ADMIN session
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14),
               child: Container(
@@ -297,14 +356,41 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.white.withAlpha(15)),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.admin_panel_settings_outlined, color: Colors.white70, size: 19),
-                    SizedBox(width: 9),
+                    Icon(
+                      isPlatform
+                          ? Icons.admin_panel_settings_outlined
+                          : Icons.business_center_outlined,
+                      color: Colors.white70,
+                      size: 19,
+                    ),
+                    const SizedBox(width: 9),
                     Expanded(
-                      child: Text(
-                        'Platform Admin',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isPlatform ? 'Platform Admin' : 'Company Owner',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                          if (companyName.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              companyName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ],
@@ -316,7 +402,7 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
               child: ListView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 itemCount: _navigation.length,
-                                itemBuilder: (context, index) {
+                itemBuilder: (context, index) {
                   final item = _navigation[index];
                   final selected = index == _index;
 
@@ -351,6 +437,23 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
                 },
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _logout,
+                  icon: const Icon(Icons.logout_rounded, size: 18),
+                  label: const Text('Logout'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: BorderSide(color: Colors.white.withAlpha(55)),
+                    alignment: Alignment.centerLeft,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 5),
             Container(
               margin: const EdgeInsets.all(14),
               padding: const EdgeInsets.all(12),
@@ -382,6 +485,17 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
 
   Widget _topbar() {
     final title = _navigation[_index].label;
+    final user = context.watch<SessionProvider>().user;
+
+    final avatarText =
+        (user?.name.trim().isNotEmpty == true
+                ? user!.name.trim()
+                : user?.email.trim().isNotEmpty == true
+                ? user!.email.trim()
+                : 'U')
+            .characters
+            .first
+            .toUpperCase();
 
     return Container(
       height: 72,
@@ -433,19 +547,12 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
             ),
           ),
           const SizedBox(width: 10),
-          IconButton(
-            tooltip: 'Run Scan Integration Test',
-            onPressed: () async {
-              await ScanIntegrationTest.run();
-            },
-            icon: const Icon(Icons.bug_report_outlined),
-          ),
           CircleAvatar(
             radius: 18,
             backgroundColor: _navy,
-            child: const Text(
-              'S',
-              style: TextStyle(
+            child: Text(
+              avatarText,
+              style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w800,
               ),
@@ -512,7 +619,7 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
             Expanded(
               child: ListView.builder(
                 itemCount: _navigation.length,
-                                itemBuilder: (context, index) {
+                itemBuilder: (context, index) {
                   final item = _navigation[index];
                   final selected = index == _index;
 
@@ -554,390 +661,6 @@ class _SaaSPortalScreenState extends State<SaaSPortalScreen> {
   }
 }
 
-class _AdminDashboardPage extends StatelessWidget {
-  const _AdminDashboardPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return _Page(
-      title: 'Platform Overview',
-      subtitle: 'Monitor the entire Loss Defender SaaS platform.',
-      action: _PrimaryButton(
-        label: 'View Analytics',
-        icon: Icons.analytics_outlined,
-        onPressed: () {},
-      ),
-      children: [
-        _ResponsiveGrid(
-          children: const [
-            _MetricCard(
-              title: 'Companies',
-              value: '248',
-              change: '+18 this month',
-              icon: Icons.business_outlined,
-              color: _blue,
-            ),
-            _MetricCard(
-              title: 'Total Users',
-              value: '1,842',
-              change: '+126 this month',
-              icon: Icons.people_outline,
-              color: _cyan,
-            ),
-            _MetricCard(
-              title: 'Scans',
-              value: '1.28M',
-              change: '+8.4% this month',
-              icon: Icons.qr_code_scanner_rounded,
-              color: _green,
-            ),
-            _MetricCard(
-              title: 'Storage',
-              value: '2.84 TB',
-              change: '+184 GB this month',
-              icon: Icons.cloud_outlined,
-              color: _amber,
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        _ResponsiveGrid(
-          children: const [
-            _MetricCard(
-              title: 'Active Subscriptions',
-              value: '219',
-              change: '88.3% of companies',
-              icon: Icons.credit_card_outlined,
-              color: _blue,
-            ),
-            _MetricCard(
-              title: 'Evidence',
-              value: '1.24M',
-              change: 'Videos + photos',
-              icon: Icons.verified_outlined,
-              color: _green,
-            ),
-            _MetricCard(
-              title: 'Packing Operators',
-              value: '1,426',
-              change: 'Across 248 companies',
-              icon: Icons.badge_outlined,
-              color: _cyan,
-            ),
-            _MetricCard(
-              title: 'Monthly Revenue',
-              value: '₹8.42L',
-              change: '+12.7%',
-              icon: Icons.currency_rupee_rounded,
-              color: _green,
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        _SectionCard(
-          title: 'Platform Activity',
-          subtitle: 'Latest events across the platform.',
-          child: Column(
-            children: const [
-              _ActivityRow(
-                icon: Icons.person_add_alt_1_outlined,
-                title: 'New company registered',
-                subtitle: 'Nova Retail • Business plan',
-                time: '4 min ago',
-                color: _blue,
-              ),
-              _ActivityRow(
-                icon: Icons.qr_code_scanner_rounded,
-                title: '10,000 scans processed',
-                subtitle: 'ABC Traders • Main Warehouse',
-                time: '18 min ago',
-                color: _green,
-              ),
-              _ActivityRow(
-                icon: Icons.cloud_upload_outlined,
-                title: 'Evidence storage increased',
-                subtitle: 'XYZ Enterprises • +4.8 GB',
-                time: '42 min ago',
-                color: _cyan,
-              ),
-              _ActivityRow(
-                icon: Icons.credit_card_outlined,
-                title: 'Subscription renewed',
-                subtitle: 'Prime Distribution • Enterprise',
-                time: '1 hr ago',
-                color: _amber,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-
-class _SellerDashboardPage extends StatelessWidget {
-  const _SellerDashboardPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return _Page(
-      title: 'Company Dashboard',
-      subtitle: 'ABC Traders • Main Warehouse',
-      action: _PrimaryButton(
-        label: 'Start Packing',
-        icon: Icons.qr_code_scanner_rounded,
-        onPressed: () {},
-      ),
-      children: [
-        _ResponsiveGrid(
-          children: const [
-            _MetricCard(
-              title: 'Scans Remaining',
-              value: '3,518',
-              change: 'of 10,000',
-              icon: Icons.qr_code_scanner_rounded,
-              color: _blue,
-            ),
-            _MetricCard(
-              title: 'Orders Today',
-              value: '428',
-              change: '+12.4%',
-              icon: Icons.inventory_2_outlined,
-              color: _cyan,
-            ),
-            _MetricCard(
-              title: 'Evidence',
-              value: '6,492',
-              change: 'This month',
-              icon: Icons.verified_outlined,
-              color: _green,
-            ),
-            _MetricCard(
-              title: 'Storage',
-              value: '36 GB',
-              change: 'of 100 GB',
-              icon: Icons.cloud_outlined,
-              color: _amber,
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        _ResponsiveGrid(
-          children: const [
-            _ChartCard(
-              title: 'Packing Volume',
-              subtitle: 'Today vs previous 7 days',
-            ),
-            _ChartCard(
-              title: 'Scan Usage',
-              subtitle: 'Subscription consumption',
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _ScanWalletPage extends StatelessWidget {
-  const _ScanWalletPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return _Page(
-      title: 'Scan Wallet',
-      subtitle: 'Track subscription scans and purchased top-ups.',
-      action: _PrimaryButton(
-        label: 'Buy Top-Up',
-        icon: Icons.add_card_outlined,
-        onPressed: () {},
-      ),
-      children: [
-        _ResponsiveGrid(
-          children: const [
-            _MetricCard(
-              title: 'Allocated',
-              value: '10,000',
-              change: 'Business plan',
-              icon: Icons.account_balance_wallet_outlined,
-              color: _blue,
-            ),
-            _MetricCard(
-              title: 'Used',
-              value: '6,482',
-              change: '64.8%',
-              icon: Icons.qr_code_scanner_rounded,
-              color: _cyan,
-            ),
-            _MetricCard(
-              title: 'Top-Ups',
-              value: '10,000',
-              change: 'Purchased',
-              icon: Icons.add_card_outlined,
-              color: _amber,
-            ),
-            _MetricCard(
-              title: 'Remaining',
-              value: '3,518',
-              change: 'Available',
-              icon: Icons.check_circle_outline,
-              color: _green,
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        _SectionCard(
-          title: 'Wallet Ledger',
-          child: _DataTableCard(
-            columns: const [
-              'Date',
-              'Type',
-              'Description',
-              'Credit',
-              'Debit',
-              'Balance',
-            ],
-            rows: const [
-              ['26 Sep', 'Usage', 'Packing scans', '-', '428', '3,518'],
-              ['25 Sep', 'Usage', 'Packing scans', '-', '512', '3,946'],
-              ['22 Sep', 'Top-Up', '10K package', '10,000', '-', '4,458'],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SellerSubscriptionPage extends StatelessWidget {
-  const _SellerSubscriptionPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return _Page(
-      title: 'Subscription',
-      subtitle: 'Manage your current plan and usage limits.',
-      children: [
-        _SectionCard(
-          title: 'Business Plan',
-          subtitle: 'Active subscription',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: const [
-                  Text(
-                    '₹2,999',
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.w900,
-                      color: _navy,
-                    ),
-                  ),
-                  SizedBox(width: 8),
-                  Text('/ month', style: TextStyle(color: _muted)),
-                  Spacer(),
-                  _StatusBadge(text: 'ACTIVE', color: _green),
-                ],
-              ),
-              const SizedBox(height: 20),
-              const _UsageBar(
-                label: 'Scans',
-                used: '6,482',
-                total: '10,000',
-                value: .648,
-              ),
-              const SizedBox(height: 14),
-              const _UsageBar(
-                label: 'Storage',
-                used: '36 GB',
-                total: '100 GB',
-                value: .36,
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Started: 15 Sep 2026',
-                style: TextStyle(color: _muted),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Renewal: 15 Oct 2026',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _BillingPage extends StatelessWidget {
-  const _BillingPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return _Page(
-      title: 'Billing',
-      subtitle: 'Invoices, payments and transaction history.',
-      action: _PrimaryButton(
-        label: 'Download Statement',
-        icon: Icons.download_outlined,
-        onPressed: () {},
-      ),
-      children: [
-        _ResponsiveGrid(
-          children: const [
-            _MetricCard(
-              title: 'Current Plan',
-              value: '₹2,999',
-              change: 'Monthly',
-              icon: Icons.credit_card_outlined,
-              color: _blue,
-            ),
-            _MetricCard(
-              title: 'Top-Ups',
-              value: '₹999',
-              change: 'This month',
-              icon: Icons.add_card_outlined,
-              color: _cyan,
-            ),
-            _MetricCard(
-              title: 'Total',
-              value: '₹3,998',
-              change: 'September',
-              icon: Icons.currency_rupee_rounded,
-              color: _green,
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        _SectionCard(
-          title: 'Invoices',
-          child: _DataTableCard(
-            columns: const [
-              'Invoice',
-              'Date',
-              'Description',
-              'Amount',
-              'Status',
-            ],
-            rows: const [
-              ['INV-2026-0915', '15 Sep', 'Business Plan', '₹2,999', 'PAID'],
-              ['TOP-2026-0922', '22 Sep', '10K Scan Top-Up', '₹499', 'PAID'],
-              ['TOP-2026-0925', '25 Sep', '25K Scan Top-Up', '₹999', 'PAID'],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-
-
-
 class _IntegrationsPage extends StatelessWidget {
   const _IntegrationsPage();
 
@@ -974,7 +697,6 @@ class _IntegrationsPage extends StatelessWidget {
     );
   }
 }
-
 
 class _OperatorDashboardPage extends StatelessWidget {
   const _OperatorDashboardPage();
@@ -1175,7 +897,6 @@ class _OperatorEvidencePage extends StatelessWidget {
     );
   }
 }
-
 
 class _CompanySettingsPage extends StatelessWidget {
   const _CompanySettingsPage();
@@ -1437,10 +1158,9 @@ class _MetricCard extends StatelessWidget {
 
 class _SectionCard extends StatelessWidget {
   final String? title;
-  final String? subtitle;
   final Widget child;
 
-  const _SectionCard({this.title, this.subtitle, required this.child});
+  const _SectionCard({this.title, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -1471,13 +1191,7 @@ class _SectionCard extends StatelessWidget {
                 color: _navy,
               ),
             ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                subtitle!,
-                style: const TextStyle(color: _muted, fontSize: 11),
-              ),
-            ],
+
             const SizedBox(height: 16),
           ],
           child,
@@ -1660,179 +1374,6 @@ class _IntegrationCard extends StatelessWidget {
   }
 }
 
-
-class _ChartCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-
-  const _ChartCard({required this.title, required this.subtitle});
-
-  @override
-  Widget build(BuildContext context) {
-    return _SectionCard(
-      title: title,
-      subtitle: subtitle,
-      child: SizedBox(
-        height: 180,
-        child: CustomPaint(
-          painter: _MiniChartPainter(),
-          child: const Center(
-            child: Text(
-              'Live analytics',
-              style: TextStyle(color: _muted, fontSize: 11),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MiniChartPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final gridPaint = Paint()
-      ..color = _border
-      ..strokeWidth = 1;
-
-    final linePaint = Paint()
-      ..color = _blue
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    for (var i = 1; i < 5; i++) {
-      final y = size.height * i / 5;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-
-    final points = [
-      Offset(0, size.height * .72),
-      Offset(size.width * .12, size.height * .58),
-      Offset(size.width * .25, size.height * .66),
-      Offset(size.width * .38, size.height * .35),
-      Offset(size.width * .50, size.height * .47),
-      Offset(size.width * .64, size.height * .26),
-      Offset(size.width * .78, size.height * .38),
-      Offset(size.width * .90, size.height * .18),
-      Offset(size.width, size.height * .24),
-    ];
-
-    final path = Path()..moveTo(points.first.dx, points.first.dy);
-
-    for (var i = 1; i < points.length; i++) {
-      path.lineTo(points[i].dx, points[i].dy);
-    }
-
-    canvas.drawPath(path, linePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    return false;
-  }
-}
-
-class _UsageBar extends StatelessWidget {
-  final String label;
-  final String used;
-  final String total;
-  final double value;
-
-  const _UsageBar({
-    required this.label,
-    required this.used,
-    required this.total,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-            const Spacer(),
-            Text(
-              '$used / $total',
-              style: const TextStyle(color: _muted, fontSize: 11),
-            ),
-          ],
-        ),
-        const SizedBox(height: 7),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: LinearProgressIndicator(
-            value: value,
-            minHeight: 8,
-            backgroundColor: _border,
-            valueColor: const AlwaysStoppedAnimation(_blue),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ActivityRow extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String time;
-  final Color color;
-
-  const _ActivityRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.time,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 13),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: color.withAlpha(18),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 19),
-          ),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: const TextStyle(color: _muted, fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-          Text(time, style: const TextStyle(color: _muted, fontSize: 10)),
-        ],
-      ),
-    );
-  }
-}
-
 class _SettingTile extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -1983,34 +1524,3 @@ const _red = Color(0xFFDC2626);
 const _bg = Color(0xFFF8FAFC);
 const _border = Color(0xFFE2E8F0);
 const _muted = Color(0xFF64748B);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

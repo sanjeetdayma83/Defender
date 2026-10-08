@@ -1,4 +1,4 @@
-﻿import type { Response } from "express";
+import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middleware/firebase-auth.middleware.js";
 import {
   WarehouseService,
@@ -342,6 +342,3 @@ export async function getWarehouseStats(
     });
   }
 }
-
-
-

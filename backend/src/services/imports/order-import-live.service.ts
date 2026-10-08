@@ -1,4 +1,4 @@
-﻿import { randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { prisma } from "../../config/prisma.js";
 
 export type LiveImportRow = {
@@ -142,18 +142,23 @@ export class OrderImportLiveService {
         const val = String(ident.value ?? "").trim();
         if (!val) continue;
 
-        const found = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-          `SELECT id::text AS id FROM order_identifiers
+        const found = await prisma.$queryRawUnsafe<Array<{ id: string; order_id: string }>>(
+          `SELECT id::text AS id, order_id::text AS order_id
+           FROM order_identifiers
            WHERE company_id = $1
-             AND order_id = $2
-             AND identifier_type = $3
-             AND lower(trim(coalesce(normalized_value, identifier_value, ''))) = lower(trim($4))
+             AND identifier_type = $2
+             AND lower(trim(coalesce(normalized_value, identifier_value, ''))) = lower(trim($3))
            LIMIT 1`,
           companyId,
-          orderId,
           ident.type,
           val,
         );
+
+        if (found[0] && found[0].order_id !== orderId) {
+          throw new Error(
+            `IDENTIFIER_CONFLICT:${ident.type}:${val}`,
+          );
+        }
 
         if (!found[0]) {
           await prisma.$executeRawUnsafe(

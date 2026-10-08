@@ -1,4 +1,4 @@
-﻿import { randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { prisma } from "../../config/prisma.js";
 
 type BillingPaymentRow = {
@@ -381,6 +381,44 @@ export class InvoiceService {
     return invoice;
   }
 
+  async listForCompany(
+    companyId: string,
+    limit = 100,
+  ): Promise<InvoiceRow[]> {
+    const safeLimit = Math.min(
+      Math.max(Math.trunc(limit), 1),
+      500,
+    );
+
+    return prisma.$queryRawUnsafe<InvoiceRow[]>(
+      `
+      SELECT
+        "id",
+        "companyId",
+        "billingPaymentId",
+        "invoiceNumber",
+        "status",
+        "currency",
+        "customerLegalName",
+        "customerDisplayName",
+        "customerGstin",
+        "customerPan",
+        "customerBillingEmail",
+        "customerBillingPhone",
+        "subtotalPaise",
+        "gstPaise",
+        "totalPaise",
+        "issuedAt",
+        "paidAt"
+      FROM "invoices"
+      WHERE "companyId" = $1
+      ORDER BY COALESCE("issuedAt", "createdAt") DESC
+      LIMIT $2
+      `,
+      companyId,
+      safeLimit,
+    );
+  }
   async getById(companyId: string, invoiceId: string): Promise<InvoiceRow | null> {
     const rows = await prisma.$queryRawUnsafe<InvoiceRow[]>(`
       SELECT
@@ -444,16 +482,3 @@ export class InvoiceService {
 }
 
 export const invoiceService = new InvoiceService();
-
-
-
-
-
-
-
-
-
-
-
-
-

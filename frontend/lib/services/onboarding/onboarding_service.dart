@@ -17,52 +17,33 @@ class OnboardingService {
     return _decode(response, 'Unable to load onboarding status.');
   }
 
-  Future<Map<String, dynamic>> updateProfile(String name) async {
-    final response = await _apiClient.put(
-      Uri.parse('${ApiConfig.baseUrl}/onboarding/profile'),
-      body: jsonEncode(<String, dynamic>{'name': name}),
-    );
-
-    return _decode(response, 'Unable to update profile.');
-  }
-
-  Future<Map<String, dynamic>> updateCompany({
+  Future<Map<String, dynamic>> complete({
     required String name,
-    String? code,
+    required String phone,
+    required String companyName,
+    required String address,
+    required String city,
+    required String state,
+    required String pin,
+    required String warehouseName,
+    required String warehouseCode,
   }) async {
-    final response = await _apiClient.put(
-      Uri.parse('${ApiConfig.baseUrl}/onboarding/company'),
-      body: jsonEncode(<String, dynamic>{
-        'name': name,
-        if (code != null && code.trim().isNotEmpty) 'code': code.trim(),
-      }),
-    );
-
-    return _decode(response, 'Unable to update company.');
-  }
-
-  Future<Map<String, dynamic>> createWarehouse({
-    required String name,
-    String? code,
-  }) async {
-    final response = await _apiClient.post(
-      Uri.parse('${ApiConfig.baseUrl}/onboarding/warehouse'),
-      body: jsonEncode(<String, dynamic>{
-        'name': name,
-        if (code != null && code.trim().isNotEmpty) 'code': code.trim(),
-      }),
-    );
-
-    return _decode(response, 'Unable to create warehouse.');
-  }
-
-  Future<Map<String, dynamic>> complete() async {
     final response = await _apiClient.post(
       Uri.parse('${ApiConfig.baseUrl}/onboarding/complete'),
-      body: jsonEncode(<String, dynamic>{}),
+      body: jsonEncode(<String, dynamic>{
+        'name': name,
+        'phone': phone,
+        'companyName': companyName,
+        'address': address,
+        'city': city,
+        'state': state,
+        'pin': pin,
+        'warehouseName': warehouseName,
+        'warehouseCode': warehouseCode,
+      }),
     );
 
-    return _decode(response, 'Unable to complete onboarding.');
+    return _decode(response, 'Unable to complete company setup.');
   }
 
   Map<String, dynamic> _decode(dynamic response, String fallback) {
@@ -84,6 +65,7 @@ class OnboardingService {
     }
 
     final data = decoded['data'];
+
     return data is Map<String, dynamic> ? data : decoded;
   }
 }

@@ -1,4 +1,4 @@
-﻿import * as XLSX from "xlsx";
+import * as XLSX from "xlsx";
 
 import { prisma } from "../../config/prisma.js";
 import {
@@ -124,6 +124,63 @@ function clean(value: unknown): string {
   return String(value ?? "").trim();
 }
 
+function expandScientificNotation(value: string): string {
+  const match = value.match(
+    /^([+-]?)(\d+)(?:\.(\d*))?[eE]([+-]?\d+)$/,
+  );
+
+  if (!match) {
+    return value;
+  }
+
+  const sign = match[1] ?? "";
+  const integerPart = match[2] ?? "";
+  const fractionalPart = match[3] ?? "";
+  const exponent = Number(match[4]);
+
+  if (!Number.isInteger(exponent)) {
+    return value;
+  }
+
+  const digits = `${integerPart}${fractionalPart}`;
+  const decimalPosition = integerPart.length + exponent;
+
+  let expanded: string;
+
+  if (decimalPosition <= 0) {
+    expanded = `0.${"0".repeat(Math.abs(decimalPosition))}${digits}`;
+  } else if (decimalPosition >= digits.length) {
+    expanded = `${digits}${"0".repeat(decimalPosition - digits.length)}`;
+  } else {
+    expanded =
+      `${digits.slice(0, decimalPosition)}.${digits.slice(decimalPosition)}`;
+  }
+
+  if (expanded.includes(".")) {
+    expanded = expanded.replace(/\.0+$/, "");
+  }
+
+  return `${sign}${expanded}`;
+}
+
+function normalizeAwb(value: unknown): string {
+  const raw = clean(value);
+
+  if (!raw) {
+    return "";
+  }
+
+  if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)[eE][+-]?\d+$/.test(raw)) {
+    return expandScientificNotation(raw);
+  }
+
+  if (/^\d+\.0+$/.test(raw)) {
+    return raw.split(".")[0];
+  }
+
+  return raw;
+}
+
 function normalizeHeader(value: string): string {
   return value
     .toLowerCase()
@@ -216,7 +273,7 @@ function applyMapping(
   };
 
   const orderId = valueFor("orderId");
-  const awb = valueFor("awb");
+  const awb = normalizeAwb(valueFor("awb"));
   const sku = valueFor("sku");
   const productName = valueFor("productName");
   const quantityText = valueFor("quantity");
@@ -698,8 +755,3 @@ export class OrderImportService {
 }
 
 export const orderImportService = new OrderImportService();
-
-
-
-
-

@@ -1,11 +1,16 @@
-import { Router } from "express";
-import { firebaseAuthMiddleware } from "../middleware/firebase-auth.middleware.js";
+﻿import { Router } from "express";
+
 import { lookupScan } from "../controllers/scan/scan.controller.js";
+import { authorize } from "../middleware/authorize.js";
+import { loadAppUser } from "../middleware/load-app-user.middleware.js";
 
 const router = Router();
 
-router.use(firebaseAuthMiddleware);
-
-router.post("/lookup", lookupScan);
+router.post(
+  "/lookup",
+  loadAppUser,
+  authorize("scan.lookup"),
+  lookupScan,
+);
 
 export default router;

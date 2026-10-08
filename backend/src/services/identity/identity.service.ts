@@ -14,15 +14,17 @@ export class IdentityService {
         u.status::text AS status,
         u."companyId",
         c."companyName" AS "companyName",
+        c.email AS "companyEmail",
+        c.phone AS "companyPhone",
         c.status::text AS "companyStatus"
       FROM "User" u
-      LEFT JOIN "Company" c ON c.id = u."companyId"
+      LEFT JOIN "Company" c
+        ON c.id = u."companyId"
       WHERE u."firebaseUid" = ${firebaseUid}
       LIMIT 1
     `);
 
     if (!rows.length) {
-      console.warn("[identity] no user for firebaseUid=", firebaseUid);
       return null;
     }
 
@@ -38,15 +40,13 @@ export class IdentityService {
         w.city,
         w.state,
         w.country,
+        w.timezone,
         w.status::text AS status,
         w."createdAt"
       FROM "Warehouse" w
       WHERE w."companyId" = ${row.companyId}
-      ORDER BY w.name ASC
+      ORDER BY w."createdAt" ASC, w.name ASC
     `);
-
-    const status = String(row.status ?? "").toLowerCase();
-    const companyStatus = String(row.companyStatus ?? "").toLowerCase();
 
     return {
       id: row.id,
@@ -55,25 +55,41 @@ export class IdentityService {
       name: row.name,
       phone: row.phone,
       role: row.role,
-      isActive: status === "active",
+      isActive: String(row.status ?? "").toLowerCase() === "active",
       status: row.status,
       companyId: row.companyId,
       company: {
         id: row.companyId,
         name: row.companyName,
-        code: null,
-        isActive: companyStatus === "active",
-        warehouses: (warehouses ?? []).map((w: any) => ({
-          ...w,
-          isActive: String(w.status ?? "").toLowerCase() === "active",
-        })),
+        code: "",
+        email: row.companyEmail,
+        phone: row.companyPhone,
+        isActive:
+          String(row.companyStatus ?? "").toLowerCase() === "active",
       },
+      warehouses: (warehouses ?? []).map((w: any) => ({
+        id: w.id,
+        companyId: w.companyId,
+        name: w.name,
+        code: w.code,
+        address: w.address,
+        city: w.city,
+        state: w.state,
+        country: w.country,
+        timezone: w.timezone,
+        status: w.status,
+        isActive: String(w.status ?? "").toLowerCase() === "active",
+      })),
     };
   }
 
   async getByFirebaseUid(firebaseUid: string) {
     const user = await this.getUserByFirebaseUid(firebaseUid);
-    if (!user) throw new Error("USER_NOT_FOUND");
+
+    if (!user) {
+      throw new Error("USER_NOT_FOUND");
+    }
+
     return user;
   }
 
@@ -83,38 +99,57 @@ export class IdentityService {
     name?: string;
   }) {
     const existing = await this.getUserByFirebaseUid(input.firebaseUid);
-    if (existing) return existing;
 
-    const email = input.email.trim().toLowerCase();
-    console.warn("[identity] bootstrap email lookup=", email);
-
-    const existingByEmail = await prisma.$queryRaw<any[]>(Prisma.sql`
-      SELECT id FROM "User" WHERE lower(email) = ${email} LIMIT 1
-    `);
-
-    if (existingByEmail.length) {
-      await prisma.$executeRaw(Prisma.sql`
-        UPDATE "User"
-        SET "firebaseUid" = ${input.firebaseUid},
-            "updatedAt" = NOW()
-        WHERE id = ${existingByEmail[0].id}
-      `);
-      return this.getByFirebaseUid(input.firebaseUid);
+    if (existing) {
+      return existing;
     }
 
-    throw new Error("USER_NOT_REGISTERED");
+    const email = input.email.trim().toLowerCase();
+
+    const existingByEmail = await prisma.$queryRaw<any[]>(Prisma.sql`
+      SELECT
+        id,
+        "firebaseUid"
+      FROM "User"
+      WHERE lower(email) = ${email}
+      LIMIT 1
+    `);
+
+    if (!existingByEmail.length) {
+      throw new Error("USER_NOT_REGISTERED");
+    }
+
+    const existingUid = existingByEmail[0].firebaseUid;
+
+    if (existingUid && existingUid !== input.firebaseUid) {
+      throw new Error("ACCOUNT_ALREADY_LINKED");
+    }
+
+    await prisma.$executeRaw(Prisma.sql`
+      UPDATE "User"
+      SET
+        "firebaseUid" = ${input.firebaseUid},
+        "updatedAt" = NOW()
+      WHERE id = ${existingByEmail[0].id}
+    `);
+
+    return this.getByFirebaseUid(input.firebaseUid);
   }
 
   async updateProfile(firebaseUid: string, input: { name?: string }) {
-    if (input.name !== undefined) {
+    const name = input.name?.trim();
+
+    if (name) {
       await prisma.$executeRaw(Prisma.sql`
         UPDATE "User"
-        SET name = ${input.name.trim()},
-            "updatedAt" = NOW()
+        SET
+          name = ${name},
+          "updatedAt" = NOW()
         WHERE "firebaseUid" = ${firebaseUid}
       `);
     }
-    return this.getUserByFirebaseUid(firebaseUid);
+
+    return this.getByFirebaseUid(firebaseUid);
   }
 }
 

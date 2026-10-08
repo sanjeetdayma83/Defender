@@ -1,4 +1,4 @@
-import type { Response } from "express";
+﻿import type { Response } from "express";
 import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
 import { onboardingService } from "../../services/onboarding/onboarding.service.js";
 
@@ -20,13 +20,18 @@ function messageFor(error: unknown): string {
   const messages: Record<string, string> = {
     AUTH_REQUIRED: "Authentication required.",
     USER_NOT_FOUND: "User profile not found.",
-    NAME_REQUIRED: "Name is required.",
+    NAME_REQUIRED: "Your name is required.",
+    EMAIL_REQUIRED: "Your email is required.",
+    PHONE_REQUIRED: "Mobile number is required.",
     COMPANY_NAME_REQUIRED: "Company name is required.",
-    COMPANY_CODE_EXISTS: "Company code already exists.",
-    COMPANY_NOT_FOUND: "Company not found.",
+    ADDRESS_REQUIRED: "Company address is required.",
+    CITY_REQUIRED: "City is required.",
+    STATE_REQUIRED: "State is required.",
+    PIN_REQUIRED: "PIN code is required.",
     WAREHOUSE_NAME_REQUIRED: "Warehouse name is required.",
     WAREHOUSE_CODE_EXISTS: "Warehouse code already exists.",
-    WAREHOUSE_REQUIRED: "At least one warehouse is required.",
+    ACCOUNT_ALREADY_PROVISIONED:
+      "This email is already associated with a Loss Defender account. Please sign in with that account.",
   };
 
   return messages[error.message] ?? error.message;
@@ -37,31 +42,19 @@ function statusFor(error: unknown): number {
     return 500;
   }
 
-  const badRequest = [
-    "NAME_REQUIRED",
-    "COMPANY_NAME_REQUIRED",
-    "COMPANY_CODE_EXISTS",
-    "WAREHOUSE_NAME_REQUIRED",
-    "WAREHOUSE_CODE_EXISTS",
-    "WAREHOUSE_REQUIRED",
-  ];
-
-  if (badRequest.includes(error.message)) {
-    return 400;
-  }
-
-  if (
-    error.message === "USER_NOT_FOUND" ||
-    error.message === "COMPANY_NOT_FOUND"
-  ) {
-    return 404;
-  }
-
   if (error.message === "AUTH_REQUIRED") {
     return 401;
   }
 
-  return 500;
+  if (error.message === "USER_NOT_FOUND") {
+    return 404;
+  }
+
+  if (error.message === "ACCOUNT_ALREADY_PROVISIONED") {
+    return 409;
+  }
+
+  return 400;
 }
 
 export async function getOnboardingStatus(
@@ -69,15 +62,12 @@ export async function getOnboardingStatus(
   res: Response,
 ): Promise<void> {
   try {
-    const result = await onboardingService.getStatus(firebaseUid(req));
-
     res.json({
       success: true,
-      data: result,
+      data: await onboardingService.getStatus(firebaseUid(req)),
     });
   } catch (error) {
     console.error("[Onboarding] status failed:", error);
-
     res.status(statusFor(error)).json({
       success: false,
       message: messageFor(error),
@@ -90,17 +80,14 @@ export async function updateProfile(
   res: Response,
 ): Promise<void> {
   try {
-    const result = await onboardingService.updateProfile(firebaseUid(req), {
-      name: req.body?.name,
-    });
-
     res.json({
       success: true,
-      data: result,
+      data: await onboardingService.updateProfile(firebaseUid(req), {
+        name: req.body?.name,
+      }),
     });
   } catch (error) {
     console.error("[Onboarding] profile update failed:", error);
-
     res.status(statusFor(error)).json({
       success: false,
       message: messageFor(error),
@@ -113,18 +100,19 @@ export async function updateCompany(
   res: Response,
 ): Promise<void> {
   try {
-    const result = await onboardingService.updateCompany(firebaseUid(req), {
-      name: req.body?.name,
-      code: req.body?.code,
-    });
-
     res.json({
       success: true,
-      data: result,
+      data: await onboardingService.updateCompany(firebaseUid(req), {
+        name: req.body?.name,
+        phone: req.body?.phone,
+        address: req.body?.address,
+        city: req.body?.city,
+        state: req.body?.state,
+        pin: req.body?.pin,
+      }),
     });
   } catch (error) {
     console.error("[Onboarding] company update failed:", error);
-
     res.status(statusFor(error)).json({
       success: false,
       message: messageFor(error),
@@ -137,18 +125,18 @@ export async function createWarehouse(
   res: Response,
 ): Promise<void> {
   try {
-    const result = await onboardingService.createWarehouse(firebaseUid(req), {
-      name: req.body?.name,
-      code: req.body?.code,
-    });
-
     res.status(201).json({
       success: true,
-      data: result,
+      data: await onboardingService.createWarehouse(firebaseUid(req), {
+        name: req.body?.name,
+        code: req.body?.code,
+        address: req.body?.address,
+        city: req.body?.city,
+        state: req.body?.state,
+      }),
     });
   } catch (error) {
     console.error("[Onboarding] warehouse creation failed:", error);
-
     res.status(statusFor(error)).json({
       success: false,
       message: messageFor(error),
@@ -161,15 +149,23 @@ export async function completeOnboarding(
   res: Response,
 ): Promise<void> {
   try {
-    const result = await onboardingService.complete(firebaseUid(req));
-
-    res.json({
+    res.status(201).json({
       success: true,
-      data: result,
+      data: await onboardingService.complete(firebaseUid(req), {
+        name: req.body?.name,
+        email: req.firebaseUser?.email,
+        phone: req.body?.phone,
+        companyName: req.body?.companyName,
+        address: req.body?.address,
+        city: req.body?.city,
+        state: req.body?.state,
+        pin: req.body?.pin,
+        warehouseName: req.body?.warehouseName,
+        warehouseCode: req.body?.warehouseCode,
+      }),
     });
   } catch (error) {
     console.error("[Onboarding] completion failed:", error);
-
     res.status(statusFor(error)).json({
       success: false,
       message: messageFor(error),

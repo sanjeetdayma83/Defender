@@ -1,16 +1,19 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+
 import '../../services/platform/platform_companies_service.dart';
 
 class PlatformCompaniesScreen extends StatefulWidget {
   const PlatformCompaniesScreen({super.key});
 
   @override
-  State<PlatformCompaniesScreen> createState() => _PlatformCompaniesScreenState();
+  State<PlatformCompaniesScreen> createState() =>
+      _PlatformCompaniesScreenState();
 }
 
 class _PlatformCompaniesScreenState extends State<PlatformCompaniesScreen> {
-  final _svc = const PlatformCompaniesService();
+  final _service = const PlatformCompaniesService();
   final _search = TextEditingController();
+
   Future<List<PlatformCompany>>? _future;
 
   @override
@@ -27,8 +30,32 @@ class _PlatformCompaniesScreenState extends State<PlatformCompaniesScreen> {
 
   void _reload() {
     setState(() {
-      _future = _svc.list(search: _search.text);
+      _future = _service.list(search: _search.text);
     });
+  }
+
+  Future<void> _toggle(PlatformCompany company) async {
+    try {
+      await _service.setActive(company.id, !company.isActive);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            company.isActive ? 'Company suspended.' : 'Company activated.',
+          ),
+        ),
+      );
+
+      _reload();
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$error')));
+    }
   }
 
   @override
@@ -43,13 +70,15 @@ class _PlatformCompaniesScreenState extends State<PlatformCompaniesScreen> {
               Expanded(
                 child: TextField(
                   controller: _search,
-                  decoration: InputDecoration(
-                    hintText: 'Search company…',
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    isDense: true,
-                  ),
                   onSubmitted: (_) => _reload(),
+                  decoration: InputDecoration(
+                    hintText: 'Search company...',
+                    prefixIcon: const Icon(Icons.search),
+                    isDense: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -64,40 +93,50 @@ class _PlatformCompaniesScreenState extends State<PlatformCompaniesScreen> {
         Expanded(
           child: FutureBuilder<List<PlatformCompany>>(
             future: _future,
-            builder: (context, snap) {
-              if (snap.connectionState == ConnectionState.waiting) {
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
-              if (snap.hasError) {
+
+              if (snapshot.hasError) {
                 return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('${snap.error}', textAlign: TextAlign.center),
-                        const SizedBox(height: 12),
-                        FilledButton(onPressed: _reload, child: const Text('Retry')),
-                      ],
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          '${snapshot.error}',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      FilledButton(
+                        onPressed: _reload,
+                        child: const Text('Retry'),
+                      ),
+                    ],
                   ),
                 );
               }
-              final items = snap.data ?? [];
-              if (items.isEmpty) {
+
+              final companies = snapshot.data ?? const <PlatformCompany>[];
+
+              if (companies.isEmpty) {
                 return const Center(
                   child: Text(
-                    'No companies in database yet.\nNew tenants appear here after registration.',
+                    'No companies found in the database.',
                     textAlign: TextAlign.center,
                   ),
                 );
               }
+
               return ListView.separated(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                itemCount: items.length,
+                itemCount: companies.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (_, i) {
-                  final c = items[i];
+                itemBuilder: (context, index) {
+                  final company = companies[index];
+
                   return Material(
                     color: Colors.white,
                     shape: RoundedRectangleBorder(
@@ -105,30 +144,31 @@ class _PlatformCompaniesScreenState extends State<PlatformCompaniesScreen> {
                       side: const BorderSide(color: Color(0xFFE2E8F0)),
                     ),
                     child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                      subtitle: Text(
-                        [
-                          if (c.code != null) c.code!,
-                          '${c.usersCount} users',
-                          '${c.warehousesCount} WH',
-                          c.isActive ? 'Active' : 'Suspended',
-                        ].join(' · '),
+                      contentPadding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+                      title: Text(
+                        company.name,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          [
+                            if (company.code != null &&
+                                company.code!.isNotEmpty)
+                              company.code!,
+                            if (company.planName != null &&
+                                company.planName!.isNotEmpty)
+                              company.planName!,
+                            '${company.usersCount} users',
+                            '${company.warehousesCount} WH',
+                            '${company.ordersCount} orders this month',
+                            company.isActive ? 'Active' : 'Suspended',
+                          ].join(' · '),
+                        ),
                       ),
                       trailing: TextButton(
-                        onPressed: () async {
-                          try {
-                            await _svc.setActive(c.id, !c.isActive);
-                            _reload();
-                          } catch (e) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('$e')),
-                              );
-                            }
-                          }
-                        },
-                        child: Text(c.isActive ? 'Suspend' : 'Activate'),
+                        onPressed: () => _toggle(company),
+                        child: Text(company.isActive ? 'Suspend' : 'Activate'),
                       ),
                     ),
                   );

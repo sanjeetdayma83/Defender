@@ -108,6 +108,35 @@ export async function updatePlatformPlan(req: AuthenticatedRequest, res: Respons
     res.status(e?.message === "PLAN_NOT_FOUND" ? 404 : 400).json({ success: false, message: e?.message ?? "Update failed" });
   }
 }
+export async function deletePlatformPlan(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (!(await requirePlatformAdmin(req, res))) return;
+
+    const data = await plans.delete(routeParam(req.params.id));
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (e: any) {
+    const message = e?.message ?? "Delete failed";
+    const status = message === "PLAN_NOT_FOUND"
+        ? 404
+        : message === "PLAN_IN_USE"
+            ? 409
+            : 400;
+
+    res.status(status).json({
+      success: false,
+      code: message,
+      message:
+          message === "PLAN_IN_USE"
+              ? "This plan is linked to existing records and cannot be deleted."
+              : message,
+    });
+  }
+}
+
 export async function setPlanActive(req: AuthenticatedRequest, res: Response) {
   try {
     if (!(await requirePlatformAdmin(req, res))) return;
@@ -136,19 +165,84 @@ export async function listPlatformSubscriptions(req: AuthenticatedRequest, res: 
 export async function listTopups(req: AuthenticatedRequest, res: Response) {
   try {
     if (!(await requirePlatformAdmin(req, res))) return;
-    res.json({ success: true, data: await topups.list() });
-  } catch (e) {
-    res.json({ success: true, data: { total: 0, items: [] } });
+
+    res.json({
+      success: true,
+      data: await topups.list(),
+    });
+  } catch (e: any) {
+    const message = e?.message ?? "Unable to load top-up packs.";
+
+    res.status(500).json({
+      success: false,
+      code: message,
+      message,
+    });
   }
 }
 export async function createTopup(req: AuthenticatedRequest, res: Response) {
   try {
     if (!(await requirePlatformAdmin(req, res))) return;
-    res.status(201).json({ success: true, data: await topups.create(req.body ?? {}) });
+
+    res.status(201).json({
+      success: true,
+      data: await topups.create(req.body ?? {}),
+    });
   } catch (e: any) {
-    res.status(400).json({ success: false, message: e?.message ?? "Create failed" });
+    const message = e?.message ?? "Create failed";
+
+    res.status(400).json({
+      success: false,
+      code: message,
+      message,
+    });
   }
 }
+export async function updatePlatformTopup(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (!(await requirePlatformAdmin(req, res))) return;
+
+    const data = await topups.update(routeParam(req.params.id), req.body ?? {});
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (e: any) {
+    const message = e?.message ?? "Update failed";
+
+    res.status(message === "TOPUP_NOT_FOUND" ? 404 : 400).json({
+      success: false,
+      code: message,
+      message,
+    });
+  }
+}
+
+export async function deletePlatformTopup(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (!(await requirePlatformAdmin(req, res))) return;
+
+    const data = await topups.delete(routeParam(req.params.id));
+
+    res.json({
+      success: true,
+      data,
+    });
+  } catch (e: any) {
+    const message = e?.message ?? "Delete failed";
+
+    res.status(message === "TOPUP_NOT_FOUND" ? 404 : 409).json({
+      success: false,
+      code: message,
+      message:
+        message === "TOPUP_NOT_FOUND"
+            ? "Top-up pack not found."
+            : "Top-up pack could not be deleted.",
+    });
+  }
+}
+
 export async function setTopupActive(req: AuthenticatedRequest, res: Response) {
   try {
     if (!(await requirePlatformAdmin(req, res))) return;

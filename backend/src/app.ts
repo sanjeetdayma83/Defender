@@ -29,6 +29,22 @@ import billingWebhookRoutes from "./routes/billing-webhook.routes.js";
 dotenv.config();
 
 export const app = express();
+//
+// LOSS_DEFENDER_API_CACHE_POLICY_V1
+// API responses are dynamic, authenticated and tenant-scoped.
+// Do not let the browser/proxies reuse stale API representations.
+//
+app.disable("etag");
+
+app.use("/api/v1", (_req, res, next) => {
+  res.setHeader(
+    "Cache-Control",
+    "no-store, no-cache, must-revalidate, proxy-revalidate",
+  );
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  next();
+});
 
 app.use(cors());
 app.use(helmet());
@@ -118,14 +134,3 @@ app.use(
     });
   },
 );
-
-
-
-
-
-
-
-
-
-
-

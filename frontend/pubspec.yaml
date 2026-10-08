@@ -1,4 +1,4 @@
-﻿name: loss_defender_frontend
+name: loss_defender_frontend
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -43,6 +43,8 @@ dependencies:
   firebase_auth: ^6.7.0
   provider: ^6.1.5+1
   file_picker: ^13.1.0
+  idb_shim: ^2.9.11
+  dio: ^5.11.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

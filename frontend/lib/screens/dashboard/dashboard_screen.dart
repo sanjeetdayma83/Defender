@@ -319,7 +319,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       rows.add(
         Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: chunk
               .map(
                 (widget) => Expanded(

@@ -1,10 +1,20 @@
 ﻿import type { Response } from "express";
+
+import {
+  permissionsForRole,
+} from "../../auth/permissions.js";
+import {
+  toRole,
+} from "../../auth/roles.js";
 import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
 import { IdentityService } from "../../services/identity/identity.service.js";
 
 const identityService = new IdentityService();
 
-export async function getCurrentUser(req: AuthenticatedRequest, res: Response) {
+export async function getCurrentUser(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
   try {
     const firebaseUid = req.firebaseUser?.uid;
 
@@ -17,10 +27,12 @@ export async function getCurrentUser(req: AuthenticatedRequest, res: Response) {
     }
 
     let user;
+
     try {
       user = await identityService.getByFirebaseUid(firebaseUid);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+
       if (msg === "USER_NOT_FOUND") {
         res.status(404).json({
           success: false,
@@ -29,6 +41,7 @@ export async function getCurrentUser(req: AuthenticatedRequest, res: Response) {
         });
         return;
       }
+
       throw e;
     }
 
@@ -41,6 +54,9 @@ export async function getCurrentUser(req: AuthenticatedRequest, res: Response) {
       return;
     }
 
+    const role = toRole(user.role);
+    const permissions = permissionsForRole(role);
+
     res.json({
       success: true,
       data: {
@@ -48,7 +64,8 @@ export async function getCurrentUser(req: AuthenticatedRequest, res: Response) {
         firebaseUid: user.firebaseUid,
         email: user.email,
         name: user.name,
-        role: user.role,
+        role,
+        permissions,
         isActive: user.isActive,
         company: {
           id: user.company.id,
@@ -56,7 +73,7 @@ export async function getCurrentUser(req: AuthenticatedRequest, res: Response) {
           code: user.company.code,
           isActive: user.company.isActive,
         },
-        warehouses: user.company.warehouses,
+        warehouses: user.warehouses,
       },
     });
   } catch (error) {
@@ -101,6 +118,9 @@ export async function bootstrapCurrentUser(
       name: req.firebaseUser?.name,
     });
 
+    const role = toRole(user.role);
+    const permissions = permissionsForRole(role);
+
     res.status(201).json({
       success: true,
       data: {
@@ -108,17 +128,19 @@ export async function bootstrapCurrentUser(
         firebaseUid: user.firebaseUid,
         email: user.email,
         name: user.name,
-        role: user.role,
+        role,
+        permissions,
         company: {
           id: user.company.id,
           name: user.company.name,
           code: user.company.code,
         },
-        warehouses: user.company.warehouses,
+        warehouses: user.warehouses,
       },
     });
   } catch (error) {
     console.error("User bootstrap failed:", error);
+
     const msg = error instanceof Error ? error.message : String(error);
 
     if (msg === "USER_NOT_REGISTERED") {

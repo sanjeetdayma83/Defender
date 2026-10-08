@@ -31,6 +31,8 @@ class ApiClient {
     return <String, String>{
       'Authorization': 'Bearer $token',
       'Accept': 'application/json',
+      'Cache-Control': 'no-cache, no-store, max-age=0',
+      'Pragma': 'no-cache',
       ...?additional,
     };
   }
@@ -85,10 +87,6 @@ class ApiClient {
     );
   }
 
-  Future<http.Response> delete(Uri uri, {Map<String, String>? headers}) async {
-    return http.delete(uri, headers: await _headers(additional: headers));
-  }
-
   Future<http.Response> patch(
     Uri uri, {
     Map<String, String>? headers,
@@ -106,6 +104,10 @@ class ApiClient {
     );
   }
 
+  Future<http.Response> delete(Uri uri, {Map<String, String>? headers}) async {
+    return http.delete(uri, headers: await _headers(additional: headers));
+  }
+
   Future<http.StreamedResponse> sendMultipart(
     http.MultipartRequest request,
   ) async {
@@ -113,6 +115,8 @@ class ApiClient {
 
     request.headers['Authorization'] = 'Bearer $token';
     request.headers['Accept'] = 'application/json';
+    request.headers['Cache-Control'] = 'no-cache, no-store, max-age=0';
+    request.headers['Pragma'] = 'no-cache';
 
     return request.send();
   }

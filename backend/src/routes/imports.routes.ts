@@ -1,10 +1,12 @@
-import { Router } from "express";
+﻿import { Router } from "express";
 import multer from "multer";
 
 import {
   importOrders,
   previewOrdersImport,
 } from "../controllers/imports/import.controller.js";
+import { authorize } from "../middleware/authorize.js";
+import { loadAppUser } from "../middleware/load-app-user.middleware.js";
 
 const router = Router();
 
@@ -15,8 +17,20 @@ const upload = multer({
   },
 });
 
-router.post("/preview", upload.single("file"), previewOrdersImport);
+router.post(
+  "/preview",
+  loadAppUser,
+  authorize("order.import"),
+  upload.single("file"),
+  previewOrdersImport,
+);
 
-router.post("/orders", upload.single("file"), importOrders);
+router.post(
+  "/orders",
+  loadAppUser,
+  authorize("order.import"),
+  upload.single("file"),
+  importOrders,
+);
 
 export default router;

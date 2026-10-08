@@ -1,4 +1,4 @@
-﻿import { randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { prisma } from "../../config/prisma.js";
 import { scanWalletService } from "../scan-wallet/scan-wallet.service.js";
 
@@ -130,8 +130,10 @@ export class PackingService {
         FROM "User" u
         JOIN "Warehouse" w
           ON w.id = $2
+         AND w."companyId" = u."companyId"
         JOIN "Order" o
           ON o.awb = $3
+         AND o."companyId" = u."companyId"
         WHERE u."firebaseUid" = $1
         LIMIT 1
       `,

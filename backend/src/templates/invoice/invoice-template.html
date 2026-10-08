@@ -437,7 +437,7 @@ body { padding:22px; font-size:9px; }
 
         <div class="meta-item">
             <span class="label">Payment Date</span>
-            <span class="value" id="paymentDate">{{invoiceDate}}</span>
+            <span class="value" id="paymentDate">{{paymentDate}}</span>
         </div>
 
         <div class="meta-item">
@@ -618,7 +618,7 @@ body { padding:22px; font-size:9px; }
 
             <div class="total-row" id="sgstRow">
                 <span class="total-label">SGST @ {{sgstRate}}</span>
-                <span class="total-value">{{cgstAmount}}</span>
+                <span class="total-value">{{sgstAmount}}</span>
             </div>
 
             <div class="total-row" id="igstRow" style="display:none">
@@ -668,11 +668,11 @@ body { padding:22px; font-size:9px; }
 
                     <td class="center">{{cgstRate}}</td>
 
-                    <td class="right">{{sgstAmount}}</td>
+                    <td class="right">{{cgstAmount}}</td>
 
                     <td class="center">{{sgstRate}}</td>
 
-                    <td class="right">{{cgstAmount}}</td>
+                    <td class="right">{{sgstAmount}}</td>
 
                     <td class="center">{{igstRate}}</td>
 
@@ -712,7 +712,7 @@ body { padding:22px; font-size:9px; }
                 {{grandTotal}}<br>
 
                 <strong>Balance Due:</strong>
-                {{igstAmount}}
+                {{balanceDue}}
 
             </div>
 

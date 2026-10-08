@@ -55,19 +55,6 @@ class FirebaseAuthService {
     await _auth.signInWithProvider(provider);
   }
 
-  Future<void> signInWithMicrosoft() async {
-    final provider = OAuthProvider('microsoft.com');
-
-    provider.setCustomParameters({'prompt': 'select_account'});
-
-    if (kIsWeb) {
-      await _auth.signInWithPopup(provider);
-      return;
-    }
-
-    await _auth.signInWithProvider(provider);
-  }
-
   Future<void> sendPasswordResetEmail({required String email}) async {
     await _auth.sendPasswordResetEmail(email: email.trim());
   }
