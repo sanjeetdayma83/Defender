@@ -124,6 +124,14 @@ const invitationController = {
         });
       }
 
+      if (firebaseUser.emailVerified !== true) {
+        return res.status(403).json({
+          success: false,
+          code: "EMAIL_NOT_VERIFIED",
+          message: "Verify your email address before accepting this invitation.",
+        });
+      }
+
       if (!firebaseUser.email) {
         return res.status(400).json({
           success: false,

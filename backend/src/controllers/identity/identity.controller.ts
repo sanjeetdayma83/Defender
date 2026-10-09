@@ -102,6 +102,15 @@ export async function bootstrapCurrentUser(
       return;
     }
 
+    if (req.firebaseUser?.emailVerified !== true) {
+      res.status(403).json({
+        success: false,
+        code: "EMAIL_NOT_VERIFIED",
+        message: "Verify your email address before activating your account.",
+      });
+      return;
+    }
+
     const email = req.firebaseUser?.email?.trim().toLowerCase();
 
     if (!email) {

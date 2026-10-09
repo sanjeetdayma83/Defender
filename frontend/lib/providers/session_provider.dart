@@ -9,7 +9,14 @@ import '../services/identity/identity_service.dart';
 import '../services/api/api_client.dart';
 import '../services/api/api_config.dart';
 
-enum SessionStatus { signedOut, loading, authenticated, onboarding, error }
+enum SessionStatus {
+  signedOut,
+  loading,
+  authenticated,
+  onboarding,
+  emailVerificationRequired,
+  error,
+}
 
 class SessionProvider extends ChangeNotifier {
   final IdentityService _identityService;
@@ -86,6 +93,18 @@ class SessionProvider extends ChangeNotifier {
     }
 
     try {
+      await fbUser.reload();
+
+      final refreshedFirebaseUser = FirebaseAuth.instance.currentUser;
+
+      if (refreshedFirebaseUser?.emailVerified != true) {
+        _user = null;
+        _error = null;
+        _status = SessionStatus.emailVerificationRequired;
+        notifyListeners();
+        return;
+      }
+
       final user = await _identityService.getMe();
 
       if (user != null) {

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../providers/session_provider.dart';
 import '../../models/identity/current_user.dart';
 import '../auth/login_screen.dart';
+import '../auth/verify_email_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../saas/saas_portal_screen.dart';
 
@@ -41,6 +42,9 @@ class _LDSessionGateState extends State<LDSessionGate> {
               message: session.error ?? 'Unable to load your workspace.',
               onRetry: session.refresh,
             );
+
+          case SessionStatus.emailVerificationRequired:
+            return const VerifyEmailScreen();
 
           case SessionStatus.onboarding:
             return const OnboardingScreen();

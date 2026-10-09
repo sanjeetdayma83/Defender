@@ -7,6 +7,7 @@ export interface AuthenticatedRequest extends Request {
     email?: string;
     name?: string;
     picture?: string;
+    emailVerified?: boolean;
   };
 }
 
@@ -43,6 +44,7 @@ export async function firebaseAuthMiddleware(
       email: decodedToken.email,
       name: decodedToken.name,
       picture: decodedToken.picture,
+      emailVerified: decodedToken.email_verified === true,
     };
 
     next();

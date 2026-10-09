@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../providers/session_provider.dart';
 import '../../services/firebase_auth_service.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
@@ -93,7 +96,12 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
 
     final refreshed = FirebaseAuth.instance.currentUser;
 
-    if (refreshed?.emailVerified == true) {
+    if (refreshed != null && refreshed.emailVerified) {
+      final sessionProvider = context.read<SessionProvider>();
+      await refreshed.getIdToken(true);
+      await sessionProvider.refresh();
+
+      if (!mounted) return;
       Navigator.maybePop(context);
     } else {
       setState(
