@@ -1,21 +1,22 @@
-﻿import { prisma } from "../../config/prisma.js";
+import { prisma } from "../../config/prisma.js";
 
 export class CompanyContextService {
   async getUser(firebaseUid: string) {
+    // Use the verified legacy production schema.
     const rows = await prisma.$queryRawUnsafe<any[]>(
       `SELECT
         u.id,
-        u."firebaseUid" AS "firebaseUid",
+        u."firebaseUid",
         u.email,
         u.name,
-        u.phone,
-        u.role,
-        u.status,
+        u.role::text AS role,
+        u."isActive" AS "userIsActive",
         u."companyId",
-        c."companyName" AS "companyName",
-        c.status AS "companyStatus"
-       FROM "User" u
-       LEFT JOIN "Company" c ON c.id = u."companyId"
+        c.name AS "companyName",
+        c.code AS "companyCode",
+        c."isActive" AS "companyIsActive"
+       FROM public.users u
+       INNER JOIN public.companies c ON c.id = u."companyId"
        WHERE u."firebaseUid" = $1
        LIMIT 1`,
       firebaseUid,
@@ -27,41 +28,78 @@ export class CompanyContextService {
 
     const row = rows[0];
 
-    const warehouses = await prisma.$queryRawUnsafe<any[]>(
-      `SELECT
-        w.id,
-        w."companyId",
-        w.name,
-        w.code,
-        w.address,
-        w.city,
-        w.state,
-        w.country,
-        w.timezone,
-        w.status,
-        w."createdAt"
-       FROM "Warehouse" w
-       WHERE w."companyId" = $1
-       ORDER BY w.name ASC`,
-      row.companyId,
-    );
+    const role = String(row.role ?? "").trim().toUpperCase();
+    const isWarehouseScopedRole = [
+      "MANAGER",
+      "OPERATOR",
+      "WAREHOUSE_MANAGER",
+      "PACKING_OPERATOR",
+    ].includes(role);
+
+    const warehouses = isWarehouseScopedRole
+      ? await prisma.$queryRawUnsafe<any[]>(
+          `SELECT
+            w.id,
+            w."companyId",
+            w.name,
+            w.code,
+            w.address,
+            w.city,
+            w.state,
+            w.country,
+            w."isActive" AS "isActive",
+            w."createdAt"
+           FROM public.user_warehouse_assignments uwa
+           INNER JOIN public.warehouses w
+             ON w.id = uwa."warehouseId"
+           WHERE uwa."userId" = $1
+             AND w."companyId" = $2
+             AND w."isActive" = TRUE
+           ORDER BY w."createdAt" ASC, w.name ASC`,
+          row.id,
+          row.companyId,
+        )
+      : await prisma.$queryRawUnsafe<any[]>(
+          `SELECT
+            w.id,
+            w."companyId",
+            w.name,
+            w.code,
+            w.address,
+            w.city,
+            w.state,
+            w.country,
+            w."isActive" AS "isActive",
+            w."createdAt"
+           FROM public.warehouses w
+           WHERE w."companyId" = $1
+           ORDER BY w.name ASC`,
+          row.companyId,
+        );
+
+    const normalizedWarehouses = warehouses.map((warehouse: any) => ({
+      ...warehouse,
+      timezone: null,
+      status: warehouse.isActive ? "active" : "suspended",
+      isActive: Boolean(warehouse.isActive),
+    }));
 
     return {
       id: row.id,
       firebaseUid: row.firebaseUid,
       email: row.email,
       name: row.name,
-      phone: row.phone,
+      phone: null,
       role: row.role,
-      status: row.status,
-      isActive: String(row.status).toLowerCase() === "active",
+      status: row.userIsActive ? "active" : "suspended",
+      isActive: Boolean(row.userIsActive),
       companyId: row.companyId,
       company: {
         id: row.companyId,
         name: row.companyName,
-        code: null,
-        isActive: String(row.companyStatus).toLowerCase() === "active",
-        warehouses,
+        code: row.companyCode,
+        isActive: Boolean(row.companyIsActive),
+        warehouses: normalizedWarehouses,
       },
     };
   }
@@ -76,5 +114,3 @@ export class CompanyContextService {
 }
 
 export const companyContextService = new CompanyContextService();
-
-

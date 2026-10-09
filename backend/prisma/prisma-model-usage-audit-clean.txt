@@ -1,0 +1,86 @@
+﻿LOSS DEFENDER PRO - CLEAN APPLICATION PRISMA USAGE AUDIT
+Generated: 2026-10-08 18:49:23
+
+Excluded:
+  src/generated/prisma
+  backup files
+  .bak files
+  test/spec files
+
+PRODUCTION MODELS
+  AuditLog
+  BillingPayment
+  BillingSubscription
+  BillingWebhookEvent
+  Claim
+  Company
+  Evidence
+  InviteToken
+  Invoice
+  InvoiceItem
+  InvoiceSequence
+  MarketplaceAccount
+  Notification
+  Order
+  order_identifiers
+  plan_configurations
+  Recording
+  RecordingSegment
+  Return
+  ScanTransaction
+  ScanWallet
+  Session
+  Station
+  User
+  Warehouse
+
+USED MODELS
+  EvidenceMedia
+  Payment
+  Plan
+  Product
+  Shipment
+  StorageObject
+  User
+
+USED + PRESENT
+  User
+
+USED BUT MISSING
+  EvidenceMedia
+  Payment
+  Plan
+  Product
+  Shipment
+  StorageObject
+
+USAGE DETAILS
+
+[EvidenceMedia]
+  src\controllers\storage\storage.controller.ts :: evidenceMedia.findMany
+
+[Payment]
+  src\services\billing\billing.service.before-live-db.ts :: payment.create
+  src\services\billing\billing.service.before-live-db.ts :: payment.findFirst
+  src\services\billing\billing.service.before-live-db.ts :: payment.update
+
+[Plan]
+  src\services\billing\billing.service.before-live-db.ts :: plan.findFirst
+
+[Product]
+  src\services\products\product.service.ts :: product.findFirst
+  src\services\products\product.service.ts :: product.findMany
+
+[Shipment]
+  src\controllers\shipments\shipment.controller.ts :: shipment.findFirst
+  src\controllers\shipments\shipment.controller.ts :: shipment.findMany
+
+[StorageObject]
+  src\controllers\storage\storage.controller.ts :: storageObject.aggregate
+  src\controllers\storage\storage.controller.ts :: storageObject.count
+  src\controllers\storage\storage.controller.ts :: storageObject.findFirst
+  src\controllers\storage\storage.controller.ts :: storageObject.groupBy
+
+[User]
+  src\services\users\user.service.ts :: user.findMany
+  src\services\users\user.service.ts :: user.findUnique

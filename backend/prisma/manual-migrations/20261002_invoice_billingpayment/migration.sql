@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS "invoices" (
     CONSTRAINT "invoices_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "invoices_invoiceNumber_key" UNIQUE ("invoiceNumber"),
     CONSTRAINT "invoices_companyId_fkey"
-        FOREIGN KEY ("companyId") REFERENCES "Company"("id")
+        FOREIGN KEY ("companyId") REFERENCES public.companies(id)
         ON DELETE CASCADE ON UPDATE CASCADE
 );
 

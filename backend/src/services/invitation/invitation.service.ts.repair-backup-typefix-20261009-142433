@@ -1,0 +1,293 @@
+﻿import crypto from "node:crypto";
+import { prisma } from "../../config/prisma.js";
+
+const INVITE_TTL_DAYS = 7;
+
+export type InvitationRole = "ADMIN" | "MANAGER" | "OPERATOR" | "VIEWER";
+
+function normalizeRole(value: string): InvitationRole {
+  const role = String(value ?? "").trim().toUpperCase();
+  if (["ADMIN", "MANAGER", "OPERATOR", "VIEWER"].includes(role)) {
+    return role as InvitationRole;
+  }
+  if (role === "COMPANY_ADMIN") return "ADMIN";
+  if (role === "WAREHOUSE_MANAGER") return "MANAGER";
+  if (role === "PACKING_OPERATOR") return "OPERATOR";
+  throw new Error("INVALID_ROLE");
+}
+
+function hashToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+function newId(): string {
+  return crypto.randomUUID();
+}
+
+export class InvitationService {
+  async validateToken(token: string) {
+    const cleanToken = String(token ?? "").trim();
+    if (!cleanToken) throw new Error("INVALID_INVITATION");
+
+    const rows = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT
+         i.id AS "invitationId", i.email, i.name, i.role,
+         i."company_id" AS "companyId",
+         i."warehouse_id" AS "warehouseId",
+         i."expires_at" AS "expiresAt",
+         i."accepted_at" AS "acceptedAt",
+         c.name AS "companyName",
+         c."isActive" AS "companyIsActive",
+         w.name AS "warehouseName",
+         w.code AS "warehouseCode",
+         w."isActive" AS "warehouseIsActive"
+       FROM public.user_invitations i
+       JOIN public.companies c ON c.id = i.company_id
+       LEFT JOIN public.warehouses w ON w.id = i.warehouse_id
+       WHERE i.token_hash = $1
+       LIMIT 1`,
+      hashToken(cleanToken),
+    );
+
+    const row = rows[0];
+    if (!row) throw new Error("INVALID_INVITATION");
+    if (row.acceptedAt) throw new Error("INVITATION_USED");
+
+    const expiresAt = new Date(row.expiresAt);
+    if (!Number.isFinite(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
+      throw new Error("INVITATION_EXPIRED");
+    }
+    if (!row.companyIsActive) throw new Error("COMPANY_INACTIVE");
+    if (row.warehouseId && !row.warehouseIsActive) {
+      throw new Error("WAREHOUSE_INACTIVE");
+    }
+
+    return {
+      valid: true,
+      invitation: {
+        id: row.invitationId,
+        name: row.name,
+        email: row.email,
+        role: normalizeRole(row.role),
+        companyId: row.companyId,
+        companyName: row.companyName,
+        warehouseId: row.warehouseId ?? null,
+        warehouseName: row.warehouseName ?? null,
+        warehouseCode: row.warehouseCode ?? null,
+        expiresAt: expiresAt.toISOString(),
+      },
+    };
+  }
+
+  async createInvitation(input: {
+    actorFirebaseUid: string;
+    email: string;
+    name: string;
+    role: string;
+    companyId?: string | null;
+    warehouseId?: string | null;
+    phone?: string | null;
+  }) {
+    const email = String(input.email ?? "").trim().toLowerCase();
+    const name = String(input.name ?? "").trim();
+    if (!email) throw new Error("EMAIL_REQUIRED");
+    if (!name) throw new Error("NAME_REQUIRED");
+    if (email.length > 254 || name.length > 200) throw new Error("INVALID_INPUT");
+
+    const role = normalizeRole(input.role);
+
+    const actors = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT id, role::text AS role, "companyId", "isActive"
+       FROM public.users
+       WHERE "firebaseUid" = $1
+       LIMIT 1`,
+      input.actorFirebaseUid,
+    );
+    const actor = actors[0];
+    if (!actor) throw new Error("ACTOR_NOT_REGISTERED");
+    if (!actor.isActive) throw new Error("ACTOR_INACTIVE");
+
+    const actorRole = String(actor.role).toUpperCase();
+    const isPlatformAdmin = actorRole === "PLATFORM_ADMIN";
+    if (!isPlatformAdmin && !["OWNER", "ADMIN"].includes(actorRole)) {
+      throw new Error("INVITATION_PERMISSION_DENIED");
+    }
+
+    const companyId = isPlatformAdmin
+      ? String(input.companyId ?? "").trim()
+      : String(actor.companyId ?? "");
+    if (!companyId) throw new Error("COMPANY_REQUIRED");
+
+    const companies = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT id, name, "isActive"
+       FROM public.companies
+       WHERE id = $1
+       LIMIT 1`,
+      companyId,
+    );
+    if (!companies.length) throw new Error("COMPANY_NOT_FOUND");
+    if (!companies[0].isActive) throw new Error("COMPANY_INACTIVE");
+
+    let warehouseId = String(input.warehouseId ?? "").trim() || null;
+    if (["MANAGER", "OPERATOR"].includes(role) && !warehouseId) {
+      throw new Error("WAREHOUSE_REQUIRED");
+    }
+
+    if (warehouseId) {
+      const warehouses = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT id, "isActive"
+         FROM public.warehouses
+         WHERE id = $1 AND "companyId" = $2
+         LIMIT 1`,
+        warehouseId,
+        companyId,
+      );
+      if (!warehouses.length) throw new Error("WAREHOUSE_NOT_IN_COMPANY");
+      if (!warehouses[0].isActive) throw new Error("WAREHOUSE_INACTIVE");
+    }
+
+    const existingUsers = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT id FROM public.users WHERE lower(email) = $1 LIMIT 1`,
+      email,
+    );
+    if (existingUsers.length) throw new Error("USER_ALREADY_ACTIVE");
+
+    const existingInvites = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT id FROM public.user_invitations
+       WHERE company_id = $1 AND lower(email) = $2
+         AND accepted_at IS NULL AND expires_at > now()
+       LIMIT 1`,
+      companyId,
+      email,
+    );
+    if (existingInvites.length) throw new Error("INVITATION_ALREADY_PENDING");
+
+    const id = newId();
+    const token = crypto.randomBytes(32).toString("base64url");
+    const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 86400000);
+
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO public.user_invitations
+         (id, email, name, role, company_id, warehouse_id,
+          invited_by_user_id, token_hash, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      id,
+      email,
+      name,
+      role,
+      companyId,
+      warehouseId,
+      actor.id,
+      hashToken(token),
+      expiresAt,
+    );
+
+    return {
+      success: true,
+      invitationId: id,
+      token,
+      url: `/invite/${token}`,
+      expiresAt: expiresAt.toISOString(),
+      role,
+      companyId,
+      warehouseId,
+    };
+  }
+
+  async acceptInvitation(input: {
+    token: string;
+    firebaseUid: string;
+    firebaseEmail: string;
+  }) {
+    const token = String(input.token ?? "").trim();
+    const firebaseUid = String(input.firebaseUid ?? "").trim();
+    const firebaseEmail = String(input.firebaseEmail ?? "").trim().toLowerCase();
+
+    if (!token || !firebaseUid || !firebaseEmail) {
+      throw new Error("INVALID_INVITATION");
+    }
+
+    return prisma.$transaction(async (tx: any) => {
+      const rows = await tx.$queryRawUnsafe<any[]>(
+        `SELECT i.*, c."isActive" AS "companyIsActive",
+                w."isActive" AS "warehouseIsActive"
+         FROM public.user_invitations i
+         JOIN public.companies c ON c.id = i.company_id
+         LEFT JOIN public.warehouses w ON w.id = i.warehouse_id
+         WHERE i.token_hash = $1
+         FOR UPDATE OF i`,
+        hashToken(token),
+      );
+
+      const invitation = rows[0];
+      if (!invitation) throw new Error("INVALID_INVITATION");
+      if (invitation.accepted_at) throw new Error("INVITATION_USED");
+      if (new Date(invitation.expires_at).getTime() <= Date.now()) {
+        throw new Error("INVITATION_EXPIRED");
+      }
+      if (!invitation.companyIsActive) throw new Error("COMPANY_INACTIVE");
+      if (invitation.warehouse_id && !invitation.warehouseIsActive) {
+        throw new Error("WAREHOUSE_INACTIVE");
+      }
+      if (firebaseEmail !== String(invitation.email).toLowerCase()) {
+        throw new Error("INVITATION_EMAIL_MISMATCH");
+      }
+
+      const linked = await tx.$queryRawUnsafe<any[]>(
+        `SELECT id FROM public.users WHERE "firebaseUid" = $1 LIMIT 1`,
+        firebaseUid,
+      );
+      if (linked.length) throw new Error("USER_ALREADY_LINKED");
+
+      const existingEmail = await tx.$queryRawUnsafe<any[]>(
+        `SELECT id FROM public.users WHERE lower(email) = $1 LIMIT 1`,
+        firebaseEmail,
+      );
+      if (existingEmail.length) throw new Error("USER_ALREADY_ACTIVE");
+
+      const userId = newId();
+      await tx.$executeRawUnsafe(
+        `INSERT INTO public.users
+           (id, "firebaseUid", email, name, role, "isActive",
+            "companyId", "createdAt", "updatedAt")
+         VALUES ($1, $2, $3, $4, $5::"UserRole", TRUE, $6, now(), now())`,
+        userId,
+        firebaseUid,
+        firebaseEmail,
+        invitation.name,
+        normalizeRole(invitation.role),
+        invitation.company_id,
+      );
+
+      if (invitation.warehouse_id) {
+        await tx.$executeRawUnsafe(
+          `INSERT INTO public.user_warehouse_assignments
+             (id, "userId", "warehouseId")
+           VALUES ($1, $2, $3)
+           ON CONFLICT ("userId", "warehouseId") DO NOTHING`,
+          newId(),
+          userId,
+          invitation.warehouse_id,
+        );
+      }
+
+      const consumed = await tx.$executeRawUnsafe(
+        `UPDATE public.user_invitations
+         SET accepted_at = now()
+         WHERE id = $1 AND accepted_at IS NULL`,
+        invitation.id,
+      );
+      if (consumed !== 1) throw new Error("INVITATION_USED");
+
+      return {
+        success: true,
+        alreadyAccepted: false,
+        role: normalizeRole(invitation.role),
+        companyId: invitation.company_id,
+        warehouseId: invitation.warehouse_id ?? null,
+      };
+    });
+  }
+}
+
+export default new InvitationService();

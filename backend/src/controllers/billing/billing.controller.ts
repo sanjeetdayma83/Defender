@@ -1,6 +1,7 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
 import { companyContextService } from "../../services/identity/company-context.service.js";
+import { toRole } from "../../auth/roles.js";
 import { billingService } from "../../services/billing/billing.service.js";
 function jsonSafe<T>(value: T): T {
   return JSON.parse(
@@ -12,6 +13,13 @@ function jsonSafe<T>(value: T): T {
 import { invoicePdfService } from "../../services/invoice/invoice-pdf.service.js";
 import { invoiceService } from "../../services/invoice/invoice.service.js";
 
+function isBillingAdminRole(rawRole: unknown): boolean {
+  try {
+    return toRole(rawRole) === "SELLER_ADMIN";
+  } catch {
+    return false;
+  }
+}
 async function getCompany(
   req: AuthenticatedRequest,
   requireBillingAdmin = false,
@@ -34,7 +42,7 @@ async function getCompany(
 
   if (
     requireBillingAdmin &&
-    String(context.user.role).toLowerCase() !== "company_admin"
+    !isBillingAdminRole(context.user.role)
   ) {
     throw new Error("BILLING_ADMIN_REQUIRED");
   }

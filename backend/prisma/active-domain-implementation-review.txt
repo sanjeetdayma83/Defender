@@ -1,0 +1,1497 @@
+﻿
+============================================================
+FILE: .\src\controllers\storage\storage.controller.ts
+============================================================
+
+--- lines 11-22 ---
+   11: 
+   12: import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
+   13: import { companyContextService } from "../../services/identity/company-context.service.js";
+   14: import { prisma } from "../../config/prisma.js";
+   15: import { b2Config } from "../../config/b2.config.js";
+   16: 
+   17: const s3 = new S3Client({
+   18:   region: b2Config.region,
+   19:   endpoint: b2Config.endpoint,
+   20:   credentials: {
+   21:     accessKeyId: b2Config.keyId,
+   22:     secretAccessKey: b2Config.applicationKey,
+
+--- lines 24-35 ---
+   24: });
+   25: 
+   26: function requireFirebaseUid(req: AuthenticatedRequest): string {
+   27:   const uid = req.firebaseUser?.uid;
+   28: 
+   29:   if (!uid) {
+   30:     throw new Error("AUTHENTICATION_REQUIRED");
+   31:   }
+   32: 
+   33:   return uid;
+   34: }
+   35: 
+
+--- lines 79-90 ---
+   79:   recordingId: string,
+   80:   companyId: string,
+   81: ) {
+   82:   const rows = await prisma.$queryRawUnsafe<Array<{
+   83:     id: string;
+   84:     companyId: string;
+   85:     operatorId: string;
+   86:     orderId: string | null;
+   87:     status: string;
+   88:     mode: string;
+   89:     segmentCount: number;
+   90:     b2KeyPrefix: string | null;
+
+--- lines 131-142 ---
+  131:   try {
+  132:     const { company } = await getCompanyContext(req);
+  133: 
+  134:     const file = req.file;
+  135: 
+  136:     if (!file) {
+  137:       res.status(400).json({
+  138:         success: false,
+  139:         message: "File is required. Use multipart/form-data field 'file'.",
+  140:       });
+  141:       return;
+  142:     }
+
+--- lines 134-145 ---
+  134:     const file = req.file;
+  135: 
+  136:     if (!file) {
+  137:       res.status(400).json({
+  138:         success: false,
+  139:         message: "File is required. Use multipart/form-data field 'file'.",
+  140:       });
+  141:       return;
+  142:     }
+  143: 
+  144:     const recordingId = String(
+  145:       req.body?.recordingId ?? "",
+
+--- lines 142-153 ---
+  142:     }
+  143: 
+  144:     const recordingId = String(
+  145:       req.body?.recordingId ?? "",
+  146:     ).trim();
+  147: 
+  148:     if (!recordingId) {
+  149:       res.status(400).json({
+  150:         success: false,
+  151:         message: "recordingId is required.",
+  152:       });
+  153:       return;
+
+--- lines 146-157 ---
+  146:     ).trim();
+  147: 
+  148:     if (!recordingId) {
+  149:       res.status(400).json({
+  150:         success: false,
+  151:         message: "recordingId is required.",
+  152:       });
+  153:       return;
+  154:     }
+  155: 
+  156:     const session = await validateRecording(
+  157:       recordingId,
+
+--- lines 187-198 ---
+  187:         Key: storageKey,
+  188:         Body: file.buffer,
+  189:         ContentType: file.mimetype || "application/octet-stream",
+  190:         Metadata: {
+  191:           companyId: company.id,
+  192:           recordingId: session.id,
+  193:           mediaType,
+  194:           originalFileName: safeFileName,
+  195:           checksum,
+  196:         },
+  197:       }),
+  198:     );
+
+--- lines 197-208 ---
+  197:       }),
+  198:     );
+  199: const idempotencyHeader =
+  200:       req.headers["idempotency-key"] ??
+  201:       req.headers["x-idempotency-key"];
+  202: 
+  203:     const idempotencyKey = Array.isArray(idempotencyHeader)
+  204:       ? idempotencyHeader[0]
+  205:       : idempotencyHeader;
+  206: 
+  207:     const result = await prisma.$transaction(async (tx) => {
+  208:       const lockedRows = await tx.$queryRawUnsafe<Array<{
+
+--- lines 198-209 ---
+  198:     );
+  199: const idempotencyHeader =
+  200:       req.headers["idempotency-key"] ??
+  201:       req.headers["x-idempotency-key"];
+  202: 
+  203:     const idempotencyKey = Array.isArray(idempotencyHeader)
+  204:       ? idempotencyHeader[0]
+  205:       : idempotencyHeader;
+  206: 
+  207:     const result = await prisma.$transaction(async (tx) => {
+  208:       const lockedRows = await tx.$queryRawUnsafe<Array<{
+  209:         id: string;
+
+--- lines 204-215 ---
+  204:       ? idempotencyHeader[0]
+  205:       : idempotencyHeader;
+  206: 
+  207:     const result = await prisma.$transaction(async (tx) => {
+  208:       const lockedRows = await tx.$queryRawUnsafe<Array<{
+  209:         id: string;
+  210:         companyId: string;
+  211:         orderId: string | null;
+  212:         segmentCount: number;
+  213:       }>>(
+  214:         `
+  215:           SELECT
+
+--- lines 336-347 ---
+  336:       };
+  337:     });
+  338: 
+  339:     res.status(201).json({
+  340:       success: true,
+  341:       data: jsonSafe({
+  342:         id: result.segment.id,
+  343:         type: mediaType,
+  344:         status: "uploaded",
+  345:         fileName: originalFileName,
+  346:         storageKey: result.segment.b2Key,
+  347:         contentType: file.mimetype || null,
+
+--- lines 338-349 ---
+  338: 
+  339:     res.status(201).json({
+  340:       success: true,
+  341:       data: jsonSafe({
+  342:         id: result.segment.id,
+  343:         type: mediaType,
+  344:         status: "uploaded",
+  345:         fileName: originalFileName,
+  346:         storageKey: result.segment.b2Key,
+  347:         contentType: file.mimetype || null,
+  348:         sizeBytes: result.segment.sizeBytes,
+  349:         recordingId: result.segment.recordingId,
+
+--- lines 380-391 ---
+  380:         : String(error);
+  381: 
+  382:     if (message === "USER_NOT_FOUND") {
+  383:       res.status(404).json({
+  384:         success: false,
+  385:         message: "Authenticated user is not registered.",
+  386:       });
+  387:       return;
+  388:     }
+  389: 
+  390:     if (message === "USER_INACTIVE") {
+  391:       res.status(403).json({
+
+--- lines 388-399 ---
+  388:     }
+  389: 
+  390:     if (message === "USER_INACTIVE") {
+  391:       res.status(403).json({
+  392:         success: false,
+  393:         message: "User account is inactive.",
+  394:       });
+  395:       return;
+  396:     }
+  397: 
+  398:     if (message === "COMPANY_INACTIVE") {
+  399:       res.status(403).json({
+
+--- lines 396-407 ---
+  396:     }
+  397: 
+  398:     if (message === "COMPANY_INACTIVE") {
+  399:       res.status(403).json({
+  400:         success: false,
+  401:         message: "Company account is inactive.",
+  402:       });
+  403:       return;
+  404:     }
+  405: 
+  406:     if (message === "RECORDING_NOT_FOUND") {
+  407:       res.status(404).json({
+
+--- lines 404-415 ---
+  404:     }
+  405: 
+  406:     if (message === "RECORDING_NOT_FOUND") {
+  407:       res.status(404).json({
+  408:         success: false,
+  409:         message: "Packing session not found for your company.",
+  410:       });
+  411:       return;
+  412:     }
+  413: 
+  414:     if (message.includes("Unique constraint")) {
+  415:       res.status(409).json({
+
+--- lines 412-423 ---
+  412:     }
+  413: 
+  414:     if (message.includes("Unique constraint")) {
+  415:       res.status(409).json({
+  416:         success: false,
+  417:         message: "This upload has already been processed.",
+  418:       });
+  419:       return;
+  420:     }
+  421: 
+  422:     res.status(500).json({
+  423:       success: false,
+
+--- lines 419-430 ---
+  419:       return;
+  420:     }
+  421: 
+  422:     res.status(500).json({
+  423:       success: false,
+  424:       message: "Unable to upload file.",
+  425:     });
+  426:   }
+  427: 
+  428: }
+  429: export async function uploadRecording(
+  430:   req: AuthenticatedRequest,
+
+--- lines 448-459 ---
+  448:     const { company } = await getCompanyContext(req);
+  449: 
+  450:     const storageKey = String(
+  451:       req.query.storageKey ?? "",
+  452:     ).trim();
+  453: 
+  454:     if (!storageKey) {
+  455:       res.status(400).json({
+  456:         success: false,
+  457:         message: "storageKey is required.",
+  458:       });
+  459:       return;
+
+--- lines 452-463 ---
+  452:     ).trim();
+  453: 
+  454:     if (!storageKey) {
+  455:       res.status(400).json({
+  456:         success: false,
+  457:         message: "storageKey is required.",
+  458:       });
+  459:       return;
+  460:     }
+  461: 
+  462:     const storageObject = await prisma.storageObject.findFirst({
+  463:       where: {
+
+--- lines 459-470 ---
+  459:       return;
+  460:     }
+  461: 
+  462:     const storageObject = await prisma.storageObject.findFirst({
+  463:       where: {
+  464:         companyId: company.id,
+  465:         storageKey,
+  466:       },
+  467:       select: {
+  468:         id: true,
+  469:         bucket: true,
+  470:         storageKey: true,
+
+--- lines 460-471 ---
+  460:     }
+  461: 
+  462:     const storageObject = await prisma.storageObject.findFirst({
+  463:       where: {
+  464:         companyId: company.id,
+  465:         storageKey,
+  466:       },
+  467:       select: {
+  468:         id: true,
+  469:         bucket: true,
+  470:         storageKey: true,
+  471:         contentType: true,
+
+--- lines 464-475 ---
+  464:         companyId: company.id,
+  465:         storageKey,
+  466:       },
+  467:       select: {
+  468:         id: true,
+  469:         bucket: true,
+  470:         storageKey: true,
+  471:         contentType: true,
+  472:         sizeBytes: true,
+  473:         originalFileName: true,
+  474:         createdAt: true,
+  475:       },
+
+--- lines 475-486 ---
+  475:       },
+  476:     });
+  477: 
+  478:     if (!storageObject) {
+  479:       res.status(404).json({
+  480:         success: false,
+  481:         message: "Storage object not found.",
+  482:       });
+  483:       return;
+  484:     }
+  485: 
+  486:     const command = new GetObjectCommand({
+
+--- lines 476-487 ---
+  476:     });
+  477: 
+  478:     if (!storageObject) {
+  479:       res.status(404).json({
+  480:         success: false,
+  481:         message: "Storage object not found.",
+  482:       });
+  483:       return;
+  484:     }
+  485: 
+  486:     const command = new GetObjectCommand({
+  487:       Bucket: storageObject.bucket,
+
+--- lines 484-495 ---
+  484:     }
+  485: 
+  486:     const command = new GetObjectCommand({
+  487:       Bucket: storageObject.bucket,
+  488:       Key: storageObject.storageKey,
+  489:     });
+  490: 
+  491:     const expiresIn = Math.max(
+  492:       1,
+  493:       Math.min(
+  494:         Number.isFinite(b2Config.signedUrlTtl)
+  495:           ? b2Config.signedUrlTtl
+
+--- lines 485-496 ---
+  485: 
+  486:     const command = new GetObjectCommand({
+  487:       Bucket: storageObject.bucket,
+  488:       Key: storageObject.storageKey,
+  489:     });
+  490: 
+  491:     const expiresIn = Math.max(
+  492:       1,
+  493:       Math.min(
+  494:         Number.isFinite(b2Config.signedUrlTtl)
+  495:           ? b2Config.signedUrlTtl
+  496:           : 900,
+
+--- lines 502-513 ---
+  502:       expiresIn,
+  503:     });
+  504: 
+  505:     res.json({
+  506:       success: true,
+  507:       data: {
+  508:         url,
+  509:         expiresIn,
+  510:         storageKey: storageObject.storageKey,
+  511:         contentType: storageObject.contentType,
+  512:         sizeBytes: storageObject.sizeBytes.toString(),
+  513:         originalFileName: storageObject.originalFileName,
+
+--- lines 504-515 ---
+  504: 
+  505:     res.json({
+  506:       success: true,
+  507:       data: {
+  508:         url,
+  509:         expiresIn,
+  510:         storageKey: storageObject.storageKey,
+  511:         contentType: storageObject.contentType,
+  512:         sizeBytes: storageObject.sizeBytes.toString(),
+  513:         originalFileName: storageObject.originalFileName,
+  514:         createdAt: storageObject.createdAt,
+  515:       },
+
+--- lines 507-518 ---
+  507:       data: {
+  508:         url,
+  509:         expiresIn,
+  510:         storageKey: storageObject.storageKey,
+  511:         contentType: storageObject.contentType,
+  512:         sizeBytes: storageObject.sizeBytes.toString(),
+  513:         originalFileName: storageObject.originalFileName,
+  514:         createdAt: storageObject.createdAt,
+  515:       },
+  516:     });
+  517:   } catch (error) {
+  518:     console.error("Media URL generation failed:", error);
+
+--- lines 508-519 ---
+  508:         url,
+  509:         expiresIn,
+  510:         storageKey: storageObject.storageKey,
+  511:         contentType: storageObject.contentType,
+  512:         sizeBytes: storageObject.sizeBytes.toString(),
+  513:         originalFileName: storageObject.originalFileName,
+  514:         createdAt: storageObject.createdAt,
+  515:       },
+  516:     });
+  517:   } catch (error) {
+  518:     console.error("Media URL generation failed:", error);
+  519: 
+
+--- lines 509-520 ---
+  509:         expiresIn,
+  510:         storageKey: storageObject.storageKey,
+  511:         contentType: storageObject.contentType,
+  512:         sizeBytes: storageObject.sizeBytes.toString(),
+  513:         originalFileName: storageObject.originalFileName,
+  514:         createdAt: storageObject.createdAt,
+  515:       },
+  516:     });
+  517:   } catch (error) {
+  518:     console.error("Media URL generation failed:", error);
+  519: 
+  520:     const message =
+
+--- lines 510-521 ---
+  510:         storageKey: storageObject.storageKey,
+  511:         contentType: storageObject.contentType,
+  512:         sizeBytes: storageObject.sizeBytes.toString(),
+  513:         originalFileName: storageObject.originalFileName,
+  514:         createdAt: storageObject.createdAt,
+  515:       },
+  516:     });
+  517:   } catch (error) {
+  518:     console.error("Media URL generation failed:", error);
+  519: 
+  520:     const message =
+  521:       error instanceof Error
+
+--- lines 511-522 ---
+  511:         contentType: storageObject.contentType,
+  512:         sizeBytes: storageObject.sizeBytes.toString(),
+  513:         originalFileName: storageObject.originalFileName,
+  514:         createdAt: storageObject.createdAt,
+  515:       },
+  516:     });
+  517:   } catch (error) {
+  518:     console.error("Media URL generation failed:", error);
+  519: 
+  520:     const message =
+  521:       error instanceof Error
+  522:         ? error.message
+
+--- lines 523-534 ---
+  523:         : "Unable to generate media URL.";
+  524: 
+  525:     if (message === "AUTHENTICATION_REQUIRED") {
+  526:       res.status(401).json({
+  527:         success: false,
+  528:         message: "Authentication required.",
+  529:       });
+  530:       return;
+  531:     }
+  532: 
+  533:     res.status(500).json({
+  534:       success: false,
+
+--- lines 530-541 ---
+  530:       return;
+  531:     }
+  532: 
+  533:     res.status(500).json({
+  534:       success: false,
+  535:       message: "Unable to generate media URL.",
+  536:     });
+  537:   }
+  538: }
+  539: 
+  540: export async function getEvidence(
+  541:   req: AuthenticatedRequest,
+
+--- lines 544-555 ---
+  544:   try {
+  545:     const { company } = await getCompanyContext(req);
+  546: 
+  547:     const awb = String(req.params.awb ?? "").trim();
+  548: 
+  549:     if (!awb) {
+  550:       res.status(400).json({
+  551:         success: false,
+  552:         message: "AWB is required.",
+  553:       });
+  554:       return;
+  555:     }
+
+--- lines 547-558 ---
+  547:     const awb = String(req.params.awb ?? "").trim();
+  548: 
+  549:     if (!awb) {
+  550:       res.status(400).json({
+  551:         success: false,
+  552:         message: "AWB is required.",
+  553:       });
+  554:       return;
+  555:     }
+  556: 
+  557:     const records = await prisma.evidenceMedia.findMany({
+  558:       where: {
+
+--- lines 554-565 ---
+  554:       return;
+  555:     }
+  556: 
+  557:     const records = await prisma.evidenceMedia.findMany({
+  558:       where: {
+  559:         packingSession: {
+  560:           shipment: {
+  561:             awb,
+  562:           },
+  563:           order: {
+  564:             companyId: company.id,
+  565:           },
+
+--- lines 555-566 ---
+  555:     }
+  556: 
+  557:     const records = await prisma.evidenceMedia.findMany({
+  558:       where: {
+  559:         packingSession: {
+  560:           shipment: {
+  561:             awb,
+  562:           },
+  563:           order: {
+  564:             companyId: company.id,
+  565:           },
+  566:         },
+
+--- lines 557-568 ---
+  557:     const records = await prisma.evidenceMedia.findMany({
+  558:       where: {
+  559:         packingSession: {
+  560:           shipment: {
+  561:             awb,
+  562:           },
+  563:           order: {
+  564:             companyId: company.id,
+  565:           },
+  566:         },
+  567:       },
+  568:       include: {
+
+--- lines 565-576 ---
+  565:           },
+  566:         },
+  567:       },
+  568:       include: {
+  569:         packingSession: {
+  570:           select: {
+  571:             id: true,
+  572:             status: true,
+  573:             startedAt: true,
+  574:             completedAt: true,
+  575:             orderId: true,
+  576:             shipmentId: true,
+
+--- lines 567-578 ---
+  567:       },
+  568:       include: {
+  569:         packingSession: {
+  570:           select: {
+  571:             id: true,
+  572:             status: true,
+  573:             startedAt: true,
+  574:             completedAt: true,
+  575:             orderId: true,
+  576:             shipmentId: true,
+  577:             warehouseId: true,
+  578:             userId: true,
+
+--- lines 573-584 ---
+  573:             startedAt: true,
+  574:             completedAt: true,
+  575:             orderId: true,
+  576:             shipmentId: true,
+  577:             warehouseId: true,
+  578:             userId: true,
+  579:           },
+  580:         },
+  581:       },
+  582:       orderBy: {
+  583:         createdAt: "desc",
+  584:       },
+
+--- lines 579-590 ---
+  579:           },
+  580:         },
+  581:       },
+  582:       orderBy: {
+  583:         createdAt: "desc",
+  584:       },
+  585:     });
+  586: 
+  587:     res.json({
+  588:       success: true,
+  589:       data: jsonSafe(records),
+  590:       count: records.length,
+
+--- lines 584-595 ---
+  584:       },
+  585:     });
+  586: 
+  587:     res.json({
+  588:       success: true,
+  589:       data: jsonSafe(records),
+  590:       count: records.length,
+  591:     });
+  592:   } catch (error) {
+  593:     console.error("Evidence lookup failed:", error);
+  594: 
+  595:     const message =
+
+--- lines 586-597 ---
+  586: 
+  587:     res.json({
+  588:       success: true,
+  589:       data: jsonSafe(records),
+  590:       count: records.length,
+  591:     });
+  592:   } catch (error) {
+  593:     console.error("Evidence lookup failed:", error);
+  594: 
+  595:     const message =
+  596:       error instanceof Error
+  597:         ? error.message
+
+--- lines 598-609 ---
+  598:         : "Unable to load evidence.";
+  599: 
+  600:     if (message === "AUTHENTICATION_REQUIRED") {
+  601:       res.status(401).json({
+  602:         success: false,
+  603:         message: "Authentication required.",
+  604:       });
+  605:       return;
+  606:     }
+  607: 
+  608:     res.status(500).json({
+  609:       success: false,
+
+--- lines 605-616 ---
+  605:       return;
+  606:     }
+  607: 
+  608:     res.status(500).json({
+  609:       success: false,
+  610:       message: "Unable to load evidence.",
+  611:     });
+  612:   }
+  613: }
+  614: 
+  615: export async function getStorageUsage(
+  616:   req: AuthenticatedRequest,
+
+--- lines 620-631 ---
+  620:     const { company } = await getCompanyContext(req);
+  621: 
+  622:     const [aggregate, grouped, objectCount] = await Promise.all([
+  623:       prisma.storageObject.aggregate({
+  624:         where: {
+  625:           companyId: company.id,
+  626:         },
+  627:         _sum: {
+  628:           sizeBytes: true,
+  629:         },
+  630:       }),
+  631: 
+
+--- lines 621-632 ---
+  621: 
+  622:     const [aggregate, grouped, objectCount] = await Promise.all([
+  623:       prisma.storageObject.aggregate({
+  624:         where: {
+  625:           companyId: company.id,
+  626:         },
+  627:         _sum: {
+  628:           sizeBytes: true,
+  629:         },
+  630:       }),
+  631: 
+  632:       prisma.storageObject.groupBy({
+
+--- lines 629-640 ---
+  629:         },
+  630:       }),
+  631: 
+  632:       prisma.storageObject.groupBy({
+  633:         by: ["objectType"],
+  634:         where: {
+  635:           companyId: company.id,
+  636:         },
+  637:         _count: {
+  638:           _all: true,
+  639:         },
+  640:         _sum: {
+
+--- lines 631-642 ---
+  631: 
+  632:       prisma.storageObject.groupBy({
+  633:         by: ["objectType"],
+  634:         where: {
+  635:           companyId: company.id,
+  636:         },
+  637:         _count: {
+  638:           _all: true,
+  639:         },
+  640:         _sum: {
+  641:           sizeBytes: true,
+  642:         },
+
+--- lines 642-653 ---
+  642:         },
+  643:       }),
+  644: 
+  645:       prisma.storageObject.count({
+  646:         where: {
+  647:           companyId: company.id,
+  648:         },
+  649:       }),
+  650:     ]);
+  651: 
+  652:     const totalBytes = aggregate._sum.sizeBytes ?? BigInt(0);
+  653: 
+
+--- lines 643-654 ---
+  643:       }),
+  644: 
+  645:       prisma.storageObject.count({
+  646:         where: {
+  647:           companyId: company.id,
+  648:         },
+  649:       }),
+  650:     ]);
+  651: 
+  652:     const totalBytes = aggregate._sum.sizeBytes ?? BigInt(0);
+  653: 
+  654:     res.json({
+
+--- lines 651-662 ---
+  651: 
+  652:     const totalBytes = aggregate._sum.sizeBytes ?? BigInt(0);
+  653: 
+  654:     res.json({
+  655:       success: true,
+  656:       data: {
+  657:         companyId: company.id,
+  658:         totalObjects: objectCount,
+  659:         totalBytes: totalBytes.toString(),
+  660:         totalGB: Number(totalBytes) / 1024 / 1024 / 1024,
+  661:         byType: grouped.map((item) => ({
+  662:           objectType: item.objectType,
+
+--- lines 653-664 ---
+  653: 
+  654:     res.json({
+  655:       success: true,
+  656:       data: {
+  657:         companyId: company.id,
+  658:         totalObjects: objectCount,
+  659:         totalBytes: totalBytes.toString(),
+  660:         totalGB: Number(totalBytes) / 1024 / 1024 / 1024,
+  661:         byType: grouped.map((item) => ({
+  662:           objectType: item.objectType,
+  663:           objectCount: item._count._all,
+  664:           sizeBytes: (item._sum.sizeBytes ?? BigInt(0)).toString(),
+
+--- lines 679-690 ---
+  679:         : "Unable to load storage usage.";
+  680: 
+  681:     if (message === "AUTHENTICATION_REQUIRED") {
+  682:       res.status(401).json({
+  683:         success: false,
+  684:         message: "Authentication required.",
+  685:       });
+  686:       return;
+  687:     }
+  688: 
+  689:     res.status(500).json({
+  690:       success: false,
+
+--- lines 686-694 ---
+  686:       return;
+  687:     }
+  688: 
+  689:     res.status(500).json({
+  690:       success: false,
+  691:       message: "Unable to load storage usage.",
+  692:     });
+  693:   }
+  694: }
+
+============================================================
+FILE: .\src\controllers\shipments\shipment.controller.ts
+============================================================
+
+--- lines 2-13 ---
+    2: 
+    3: import type { AuthenticatedRequest } from "../../middleware/firebase-auth.middleware.js";
+    4: import { companyContextService } from "../../services/identity/company-context.service.js";
+    5: import { prisma } from "../../config/prisma.js";
+    6: 
+    7: export async function listShipments(
+    8:   req: AuthenticatedRequest,
+    9:   res: Response,
+   10: ): Promise<void> {
+   11:   const firebaseUid = req.firebaseUser?.uid;
+   12: 
+   13:   if (!firebaseUid) {
+
+--- lines 4-15 ---
+    4: import { companyContextService } from "../../services/identity/company-context.service.js";
+    5: import { prisma } from "../../config/prisma.js";
+    6: 
+    7: export async function listShipments(
+    8:   req: AuthenticatedRequest,
+    9:   res: Response,
+   10: ): Promise<void> {
+   11:   const firebaseUid = req.firebaseUser?.uid;
+   12: 
+   13:   if (!firebaseUid) {
+   14:     res.status(401).json({
+   15:       success: false,
+
+--- lines 8-19 ---
+    8:   req: AuthenticatedRequest,
+    9:   res: Response,
+   10: ): Promise<void> {
+   11:   const firebaseUid = req.firebaseUser?.uid;
+   12: 
+   13:   if (!firebaseUid) {
+   14:     res.status(401).json({
+   15:       success: false,
+   16:       message: "Authentication required.",
+   17:     });
+   18:     return;
+   19:   }
+
+--- lines 11-22 ---
+   11:   const firebaseUid = req.firebaseUser?.uid;
+   12: 
+   13:   if (!firebaseUid) {
+   14:     res.status(401).json({
+   15:       success: false,
+   16:       message: "Authentication required.",
+   17:     });
+   18:     return;
+   19:   }
+   20: 
+   21:   const { company } = await companyContextService.getCompany(firebaseUid);
+   22: 
+
+--- lines 20-31 ---
+   20: 
+   21:   const { company } = await companyContextService.getCompany(firebaseUid);
+   22: 
+   23:   const search = String(req.query.search ?? "").trim();
+   24: 
+   25:   const shipments = await prisma.shipment.findMany({
+   26:     where: {
+   27:       order: {
+   28:         companyId: company.id,
+   29:       },
+   30:       ...(search
+   31:         ? {
+
+--- lines 22-33 ---
+   22: 
+   23:   const search = String(req.query.search ?? "").trim();
+   24: 
+   25:   const shipments = await prisma.shipment.findMany({
+   26:     where: {
+   27:       order: {
+   28:         companyId: company.id,
+   29:       },
+   30:       ...(search
+   31:         ? {
+   32:             OR: [
+   33:               {
+
+--- lines 23-34 ---
+   23:   const search = String(req.query.search ?? "").trim();
+   24: 
+   25:   const shipments = await prisma.shipment.findMany({
+   26:     where: {
+   27:       order: {
+   28:         companyId: company.id,
+   29:       },
+   30:       ...(search
+   31:         ? {
+   32:             OR: [
+   33:               {
+   34:                 awb: {
+
+--- lines 48-59 ---
+   48:           }
+   49:         : {}),
+   50:     },
+   51:     include: {
+   52:       order: {
+   53:         include: {
+   54:           items: {
+   55:             include: {
+   56:               product: true,
+   57:               variant: true,
+   58:             },
+   59:           },
+
+--- lines 50-61 ---
+   50:     },
+   51:     include: {
+   52:       order: {
+   53:         include: {
+   54:           items: {
+   55:             include: {
+   56:               product: true,
+   57:               variant: true,
+   58:             },
+   59:           },
+   60:         },
+   61:       },
+
+--- lines 52-63 ---
+   52:       order: {
+   53:         include: {
+   54:           items: {
+   55:             include: {
+   56:               product: true,
+   57:               variant: true,
+   58:             },
+   59:           },
+   60:         },
+   61:       },
+   62:       barcodeAliases: true,
+   63:     },
+
+--- lines 53-64 ---
+   53:         include: {
+   54:           items: {
+   55:             include: {
+   56:               product: true,
+   57:               variant: true,
+   58:             },
+   59:           },
+   60:         },
+   61:       },
+   62:       barcodeAliases: true,
+   63:     },
+   64:     orderBy: {
+
+--- lines 61-72 ---
+   61:       },
+   62:       barcodeAliases: true,
+   63:     },
+   64:     orderBy: {
+   65:       createdAt: "desc",
+   66:     },
+   67:     take: 100,
+   68:   });
+   69: 
+   70:   res.json({
+   71:     success: true,
+   72:     data: shipments,
+
+--- lines 67-78 ---
+   67:     take: 100,
+   68:   });
+   69: 
+   70:   res.json({
+   71:     success: true,
+   72:     data: shipments,
+   73:   });
+   74: }
+   75: 
+   76: export async function getShipment(
+   77:   req: AuthenticatedRequest,
+   78:   res: Response,
+
+--- lines 69-80 ---
+   69: 
+   70:   res.json({
+   71:     success: true,
+   72:     data: shipments,
+   73:   });
+   74: }
+   75: 
+   76: export async function getShipment(
+   77:   req: AuthenticatedRequest,
+   78:   res: Response,
+   79: ): Promise<void> {
+   80:   const firebaseUid = req.firebaseUser?.uid;
+
+--- lines 73-84 ---
+   73:   });
+   74: }
+   75: 
+   76: export async function getShipment(
+   77:   req: AuthenticatedRequest,
+   78:   res: Response,
+   79: ): Promise<void> {
+   80:   const firebaseUid = req.firebaseUser?.uid;
+   81: 
+   82:   if (!firebaseUid) {
+   83:     res.status(401).json({
+   84:       success: false,
+
+--- lines 77-88 ---
+   77:   req: AuthenticatedRequest,
+   78:   res: Response,
+   79: ): Promise<void> {
+   80:   const firebaseUid = req.firebaseUser?.uid;
+   81: 
+   82:   if (!firebaseUid) {
+   83:     res.status(401).json({
+   84:       success: false,
+   85:       message: "Authentication required.",
+   86:     });
+   87:     return;
+   88:   }
+
+--- lines 80-91 ---
+   80:   const firebaseUid = req.firebaseUser?.uid;
+   81: 
+   82:   if (!firebaseUid) {
+   83:     res.status(401).json({
+   84:       success: false,
+   85:       message: "Authentication required.",
+   86:     });
+   87:     return;
+   88:   }
+   89: 
+   90:   const { company } = await companyContextService.getCompany(firebaseUid);
+   91: 
+
+--- lines 89-100 ---
+   89: 
+   90:   const { company } = await companyContextService.getCompany(firebaseUid);
+   91: 
+   92:   const shipment = await prisma.shipment.findFirst({
+   93:     where: {
+   94:       id: String(req.params.id),
+   95:       order: {
+   96:         companyId: company.id,
+   97:       },
+   98:     },
+   99:     include: {
+  100:       barcodeAliases: true,
+
+--- lines 90-101 ---
+   90:   const { company } = await companyContextService.getCompany(firebaseUid);
+   91: 
+   92:   const shipment = await prisma.shipment.findFirst({
+   93:     where: {
+   94:       id: String(req.params.id),
+   95:       order: {
+   96:         companyId: company.id,
+   97:       },
+   98:     },
+   99:     include: {
+  100:       barcodeAliases: true,
+  101:       order: {
+
+--- lines 91-102 ---
+   91: 
+   92:   const shipment = await prisma.shipment.findFirst({
+   93:     where: {
+   94:       id: String(req.params.id),
+   95:       order: {
+   96:         companyId: company.id,
+   97:       },
+   98:     },
+   99:     include: {
+  100:       barcodeAliases: true,
+  101:       order: {
+  102:         include: {
+
+--- lines 96-107 ---
+   96:         companyId: company.id,
+   97:       },
+   98:     },
+   99:     include: {
+  100:       barcodeAliases: true,
+  101:       order: {
+  102:         include: {
+  103:           warehouse: true,
+  104:           items: {
+  105:             include: {
+  106:               product: {
+  107:                 include: {
+
+--- lines 99-110 ---
+   99:     include: {
+  100:       barcodeAliases: true,
+  101:       order: {
+  102:         include: {
+  103:           warehouse: true,
+  104:           items: {
+  105:             include: {
+  106:               product: {
+  107:                 include: {
+  108:                   variants: true,
+  109:                 },
+  110:               },
+
+--- lines 102-113 ---
+  102:         include: {
+  103:           warehouse: true,
+  104:           items: {
+  105:             include: {
+  106:               product: {
+  107:                 include: {
+  108:                   variants: true,
+  109:                 },
+  110:               },
+  111:               variant: true,
+  112:             },
+  113:           },
+
+--- lines 103-114 ---
+  103:           warehouse: true,
+  104:           items: {
+  105:             include: {
+  106:               product: {
+  107:                 include: {
+  108:                   variants: true,
+  109:                 },
+  110:               },
+  111:               variant: true,
+  112:             },
+  113:           },
+  114:         },
+
+--- lines 104-115 ---
+  104:           items: {
+  105:             include: {
+  106:               product: {
+  107:                 include: {
+  108:                   variants: true,
+  109:                 },
+  110:               },
+  111:               variant: true,
+  112:             },
+  113:           },
+  114:         },
+  115:       },
+
+--- lines 116-127 ---
+  116:     },
+  117:   });
+  118: 
+  119:   if (!shipment) {
+  120:     res.status(404).json({
+  121:       success: false,
+  122:       message: "Shipment not found.",
+  123:     });
+  124:     return;
+  125:   }
+  126: 
+  127:   res.json({
+
+--- lines 117-128 ---
+  117:   });
+  118: 
+  119:   if (!shipment) {
+  120:     res.status(404).json({
+  121:       success: false,
+  122:       message: "Shipment not found.",
+  123:     });
+  124:     return;
+  125:   }
+  126: 
+  127:   res.json({
+  128:     success: true,
+
+--- lines 119-130 ---
+  119:   if (!shipment) {
+  120:     res.status(404).json({
+  121:       success: false,
+  122:       message: "Shipment not found.",
+  123:     });
+  124:     return;
+  125:   }
+  126: 
+  127:   res.json({
+  128:     success: true,
+  129:     data: shipment,
+  130:   });
+
+--- lines 124-131 ---
+  124:     return;
+  125:   }
+  126: 
+  127:   res.json({
+  128:     success: true,
+  129:     data: shipment,
+  130:   });
+  131: }
+
+--- lines 126-131 ---
+  126: 
+  127:   res.json({
+  128:     success: true,
+  129:     data: shipment,
+  130:   });
+  131: }
+
+============================================================
+FILE: .\src\services\products\product.service.ts
+============================================================
+
+--- lines 1-9 ---
+    1: import { prisma } from "../../config/prisma.js";
+    2: 
+    3: export class ProductService {
+    4:   async list(companyId: string, search?: string) {
+    5:     return prisma.product.findMany({
+    6:       where: {
+    7:         companyId,
+    8:         isActive: true,
+    9:         ...(search
+
+--- lines 1-11 ---
+    1: import { prisma } from "../../config/prisma.js";
+    2: 
+    3: export class ProductService {
+    4:   async list(companyId: string, search?: string) {
+    5:     return prisma.product.findMany({
+    6:       where: {
+    7:         companyId,
+    8:         isActive: true,
+    9:         ...(search
+   10:           ? {
+   11:               OR: [
+
+--- lines 2-13 ---
+    2: 
+    3: export class ProductService {
+    4:   async list(companyId: string, search?: string) {
+    5:     return prisma.product.findMany({
+    6:       where: {
+    7:         companyId,
+    8:         isActive: true,
+    9:         ...(search
+   10:           ? {
+   11:               OR: [
+   12:                 {
+   13:                   sku: {
+
+--- lines 3-14 ---
+    3: export class ProductService {
+    4:   async list(companyId: string, search?: string) {
+    5:     return prisma.product.findMany({
+    6:       where: {
+    7:         companyId,
+    8:         isActive: true,
+    9:         ...(search
+   10:           ? {
+   11:               OR: [
+   12:                 {
+   13:                   sku: {
+   14:                     contains: search,
+
+--- lines 25-36 ---
+   25:             }
+   26:           : {}),
+   27:       },
+   28:       include: {
+   29:         variants: {
+   30:           where: {
+   31:             isActive: true,
+   32:           },
+   33:         },
+   34:       },
+   35:       orderBy: {
+   36:         createdAt: "desc",
+
+--- lines 27-38 ---
+   27:       },
+   28:       include: {
+   29:         variants: {
+   30:           where: {
+   31:             isActive: true,
+   32:           },
+   33:         },
+   34:       },
+   35:       orderBy: {
+   36:         createdAt: "desc",
+   37:       },
+   38:       take: 100,
+
+--- lines 32-43 ---
+   32:           },
+   33:         },
+   34:       },
+   35:       orderBy: {
+   36:         createdAt: "desc",
+   37:       },
+   38:       take: 100,
+   39:     });
+   40:   }
+   41: 
+   42:   async get(companyId: string, id: string) {
+   43:     return prisma.product.findFirst({
+
+--- lines 40-51 ---
+   40:   }
+   41: 
+   42:   async get(companyId: string, id: string) {
+   43:     return prisma.product.findFirst({
+   44:       where: {
+   45:         id,
+   46:         companyId,
+   47:       },
+   48:       include: {
+   49:         variants: true,
+   50:       },
+   51:     });
+
+--- lines 41-52 ---
+   41: 
+   42:   async get(companyId: string, id: string) {
+   43:     return prisma.product.findFirst({
+   44:       where: {
+   45:         id,
+   46:         companyId,
+   47:       },
+   48:       include: {
+   49:         variants: true,
+   50:       },
+   51:     });
+   52:   }
+
+--- lines 45-55 ---
+   45:         id,
+   46:         companyId,
+   47:       },
+   48:       include: {
+   49:         variants: true,
+   50:       },
+   51:     });
+   52:   }
+   53: }
+   54: 
+   55: export const productService = new ProductService();
+
+--- lines 52-55 ---
+   52:   }
+   53: }
+   54: 
+   55: export const productService = new ProductService();
+
+============================================================
+FILE: .\src\services\users\user.service.ts
+============================================================
+
+--- lines 1-9 ---
+    1: import { prisma } from "../../config/prisma.js";
+    2: 
+    3: export class UserService {
+    4:   async findByFirebaseUid(uid: string) {
+    5:     return prisma.user.findUnique({
+    6:       where: {
+    7:         firebaseUid: uid,
+    8:       },
+    9: 
+
+--- lines 2-13 ---
+    2: 
+    3: export class UserService {
+    4:   async findByFirebaseUid(uid: string) {
+    5:     return prisma.user.findUnique({
+    6:       where: {
+    7:         firebaseUid: uid,
+    8:       },
+    9: 
+   10:       include: {
+   11:         company: true,
+   12:       },
+   13:     });
+
+--- lines 3-14 ---
+    3: export class UserService {
+    4:   async findByFirebaseUid(uid: string) {
+    5:     return prisma.user.findUnique({
+    6:       where: {
+    7:         firebaseUid: uid,
+    8:       },
+    9: 
+   10:       include: {
+   11:         company: true,
+   12:       },
+   13:     });
+   14:   }
+
+--- lines 7-18 ---
+    7:         firebaseUid: uid,
+    8:       },
+    9: 
+   10:       include: {
+   11:         company: true,
+   12:       },
+   13:     });
+   14:   }
+   15: 
+   16:   async list(companyId?: string) {
+   17:     return prisma.user.findMany({
+   18:       where: companyId
+
+--- lines 14-25 ---
+   14:   }
+   15: 
+   16:   async list(companyId?: string) {
+   17:     return prisma.user.findMany({
+   18:       where: companyId
+   19:         ? {
+   20:             companyId,
+   21:           }
+   22:         : undefined,
+   23: 
+   24:       orderBy: {
+   25:         createdAt: "desc",
+
+--- lines 15-26 ---
+   15: 
+   16:   async list(companyId?: string) {
+   17:     return prisma.user.findMany({
+   18:       where: companyId
+   19:         ? {
+   20:             companyId,
+   21:           }
+   22:         : undefined,
+   23: 
+   24:       orderBy: {
+   25:         createdAt: "desc",
+   26:       },
+
+--- lines 21-30 ---
+   21:           }
+   22:         : undefined,
+   23: 
+   24:       orderBy: {
+   25:         createdAt: "desc",
+   26:       },
+   27:     });
+   28:   }
+   29: }
+   30: 

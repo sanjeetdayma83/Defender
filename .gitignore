@@ -128,3 +128,8 @@ _phase1a_backup_20261008_114812/
 
 
 
+
+# Local Neon credentials and operation artifacts
+**/.neon
+neon-operations-1000.json
+**/neon-operations-*.json

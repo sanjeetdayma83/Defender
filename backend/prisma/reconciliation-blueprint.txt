@@ -1,0 +1,351 @@
+﻿LOSS DEFENDER PRO
+PRISMA / PRODUCTION DATABASE RECONCILIATION BLUEPRINT
+======================================================
+
+AUTHORITATIVE DATABASE
+----------------------
+Production PostgreSQL schema is authoritative.
+Existing production tables and data must not be renamed, dropped,
+or recreated merely to satisfy the current application schema.
+
+COMMON MODELS REQUIRING RECONCILIATION
+--------------------------------------
+
+1. Company
+   Production table: Company
+   Action: REPLACE APPLICATION SHAPE
+
+   Production fields:
+     id
+     companyName
+     email
+     phone
+     gst
+     pan
+     address Json?
+     timezone
+     currency
+     plan Plan
+     storageUsed BigInt
+     storageQuota BigInt
+     status Status
+     logo
+     createdAt
+     updatedAt
+
+2. User
+   Production table: User
+   Action: REPLACE APPLICATION SHAPE
+
+   Production fields:
+     id
+     firebaseUid
+     companyId
+     employeeId
+     name
+     email
+     phone
+     role Role
+     warehouseId
+     stationId
+     status UserStatus
+     profilePhoto
+     joiningDate
+     lastLoginAt
+     createdAt
+     updatedAt
+
+3. Warehouse
+   Production table: Warehouse
+   Action: REPLACE APPLICATION SHAPE
+
+   Production fields:
+     id
+     companyId
+     name
+     code
+     address Json
+     city
+     state
+     country
+     timezone
+     status Status
+     createdAt
+
+4. MarketplaceAccount
+   Production table: MarketplaceAccount
+   Action: REPLACE APPLICATION SHAPE
+
+   Production fields:
+     id
+     companyId
+     marketplace Marketplace
+     accessToken
+     refreshToken
+     webhookSecret
+     status Status
+     lastSyncAt
+     createdAt
+
+5. Order
+   Production table: Order
+   Action: REPLACE APPLICATION SHAPE
+
+   Production fields:
+     id
+     companyId
+     warehouseId
+     marketplace Marketplace
+     marketplaceOrderId
+     status OrderStatus
+     items Json
+     assignedOperatorId
+     stationId
+     awb
+     courier
+     dispatchedAt
+     deliveredAt
+     metadata Json
+     createdAt
+     updatedAt
+
+6. AuditLog
+   Production table: AuditLog
+   Action: REPLACE APPLICATION SHAPE
+
+   Production fields:
+     id
+     companyId
+     actorId
+     action String
+     entityType
+     entityId
+     beforeState Json?
+     afterState Json?
+     ipAddress
+     userAgent
+     createdAt
+
+7. BillingWebhookEvent
+   Production table: BillingWebhookEvent
+   Action: REPLACE APPLICATION SHAPE
+
+   provider String
+   eventId String
+   eventType String
+   payload Json
+   processed Boolean
+   processedAt DateTime?
+   failureReason String?
+   createdAt
+   updatedAt
+
+8. ScanWallet
+   Production table: scan_wallets
+   Action: KEEP PRODUCTION SHAPE
+
+9. ScanTransaction
+   Production table: scan_transactions
+   Action: KEEP PRODUCTION SHAPE
+
+   IMPORTANT:
+   type MUST remain String.
+   Do NOT use ScanTransactionType as the Prisma field type.
+
+10. Invoice
+    Production table: invoices
+    Action: KEEP PRODUCTION SHAPE
+
+    IMPORTANT:
+    subtotalPaise = BigInt
+    gstPaise      = BigInt
+    totalPaise    = BigInt
+    pdfSizeBytes  = BigInt?
+
+11. InvoiceSequence
+    Production table: invoice_sequences
+    Action: KEEP
+
+12. InvoiceItem
+    Production table: invoice_items
+    Action: KEEP PRODUCTION SHAPE
+
+    IMPORTANT:
+    unitPricePaise     = BigInt
+    taxableAmountPaise = BigInt
+    gstPaise            = BigInt
+    totalPaise          = BigInt
+
+
+PRODUCTION MODELS TO RESTORE
+----------------------------
+
+BillingPayment
+BillingSubscription
+Claim
+Evidence
+InviteToken
+Notification
+Recording
+RecordingSegment
+Return
+Session
+Station
+order_identifiers
+plan_configurations
+
+
+APPLICATION MODELS THAT MUST NOT BE BLINDLY MIGRATED
+----------------------------------------------------
+
+Product
+ProductVariant
+BarcodeAlias
+OrderItem
+Shipment
+ShipmentBarcode
+PackingSession
+EvidenceMedia
+Plan
+Subscription
+PlanFeature
+SubscriptionEntitlement
+ExtraScanPack
+RetentionOption
+Payment
+PaymentItem
+StorageObject
+StorageUsageEvent
+BillingProfile
+
+These require application-usage analysis before any database migration.
+
+
+ENUM RECONCILIATION
+-------------------
+
+Production enums must be authoritative for legacy-domain fields:
+
+Role
+UserStatus
+Status
+Marketplace
+OrderStatus
+ClaimStatus
+EvidenceStatus
+IdentifierType
+Plan
+RecordingMode
+RecordingStatus
+StationStatus
+
+Application-only enums must not be mapped onto existing production
+enum columns unless their values are proven compatible.
+
+
+RELATION RECONCILIATION
+-----------------------
+
+Company
+  -> User
+  -> Warehouse
+  -> Order
+  -> MarketplaceAccount
+  -> Claim
+  -> BillingSubscription
+  -> Invoice
+  -> ScanWallet
+  -> ScanTransaction
+  -> order_identifiers
+
+User
+  -> Company
+  -> Warehouse
+
+Warehouse
+  -> Company
+  -> Order
+  -> Station
+  -> User
+
+Order
+  -> Company
+  -> Warehouse
+  -> Claim
+  -> Evidence
+  -> Recording
+  -> order_identifiers
+
+Recording
+  -> Order
+
+RecordingSegment
+  -> Recording
+
+Claim
+  -> Company
+  -> Order
+
+Evidence
+  -> Order
+
+Return
+  -> Company
+  -> Order
+  -> Recording
+
+Station
+  -> Warehouse
+
+MarketplaceAccount
+  -> Company
+
+ScanWallet
+  -> Company
+  -> ScanTransaction
+
+ScanTransaction
+  -> Company
+  -> ScanWallet
+
+
+MIGRATION SAFETY RULES
+----------------------
+
+DO NOT run:
+  prisma migrate deploy
+  prisma migrate resolve
+  prisma db push
+  prisma migrate reset
+
+until the reconciled schema validates against production.
+
+DO NOT rename production tables.
+
+DO NOT drop production tables.
+
+DO NOT recreate production tables.
+
+DO NOT modify production data as part of schema reconciliation.
+
+The failed migration:
+  20260926021320_initial_loss_defender_schema
+
+must be handled only after the Prisma schema has been reconciled.
+
+
+TARGET
+------
+
+Create one canonical Prisma schema capable of:
+
+1. Reading all existing production data.
+2. Writing existing production entities safely.
+3. Supporting current backend services.
+4. Preserving existing billing/invoice data.
+5. Preserving recording/evidence/claim workflows.
+6. Supporting RBAC.
+7. Supporting storage/evidence services.
+8. Supporting future application-domain extensions without
+   corrupting the existing production model.
+

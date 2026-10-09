@@ -1,4 +1,4 @@
-﻿import { Prisma } from "../../generated/prisma/client.js";
+import { Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../config/prisma.js";
 
 export class IdentityService {
@@ -28,22 +28,47 @@ export class IdentityService {
 
     const row = rows[0];
 
-    const warehouses = await prisma.$queryRaw<any[]>(Prisma.sql`
-      SELECT
-        w.id,
-        w."companyId",
-        w.name,
-        w.code,
-        w.address,
-        w.city,
-        w.state,
-        w.country,
-        CASE WHEN w."isActive" THEN 'ACTIVE' ELSE 'INACTIVE' END AS status,
-        w."createdAt"
-      FROM public.warehouses w
-      WHERE w."companyId" = ${row.companyId}
-      ORDER BY w."createdAt" ASC, w.name ASC
-    `);
+    const scopedWarehouseRole = ["MANAGER", "OPERATOR", "WAREHOUSE_MANAGER", "PACKING_OPERATOR"].includes(
+      String(row.role ?? "").toUpperCase(),
+    );
+
+    const warehouses = scopedWarehouseRole
+      ? await prisma.$queryRaw<any[]>(Prisma.sql`
+          SELECT
+            w.id,
+            w."companyId",
+            w.name,
+            w.code,
+            w.address,
+            w.city,
+            w.state,
+            w.country,
+            CASE WHEN w."isActive" THEN 'ACTIVE' ELSE 'INACTIVE' END AS status,
+            w."createdAt"
+          FROM public.user_warehouse_assignments uwa
+          INNER JOIN public.warehouses w
+            ON w.id = uwa."warehouseId"
+          WHERE uwa."userId" = ${row.id}
+            AND w."companyId" = ${row.companyId}
+            AND w."isActive" = TRUE
+          ORDER BY w."createdAt" ASC, w.name ASC
+        `)
+      : await prisma.$queryRaw<any[]>(Prisma.sql`
+          SELECT
+            w.id,
+            w."companyId",
+            w.name,
+            w.code,
+            w.address,
+            w.city,
+            w.state,
+            w.country,
+            CASE WHEN w."isActive" THEN 'ACTIVE' ELSE 'INACTIVE' END AS status,
+            w."createdAt"
+          FROM public.warehouses w
+          WHERE w."companyId" = ${row.companyId}
+          ORDER BY w."createdAt" ASC, w.name ASC
+        `);
 
     return {
       id: row.id,

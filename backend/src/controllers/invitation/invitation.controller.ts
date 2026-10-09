@@ -1,4 +1,4 @@
-﻿import type { Request, Response } from "express";
+import type { Request, Response } from "express";
 import invitationService from "../../services/invitation/invitation.service.js";
 
 function errorResponse(error: unknown) {
@@ -44,6 +44,50 @@ function errorResponse(error: unknown) {
     EMAIL_REQUIRED: {
       status: 400,
       message: "Email is required.",
+    },
+    NAME_REQUIRED: {
+      status: 400,
+      message: "Name is required.",
+    },
+    INVALID_INPUT: {
+      status: 400,
+      message: "The invitation input is invalid.",
+    },
+    ACTOR_NOT_REGISTERED: {
+      status: 403,
+      message: "Your application account is not authorized to invite users.",
+    },
+    ACTOR_INACTIVE: {
+      status: 403,
+      message: "Your account is inactive.",
+    },
+    INVITATION_PERMISSION_DENIED: {
+      status: 403,
+      message: "You do not have permission to invite users.",
+    },
+    COMPANY_REQUIRED: {
+      status: 400,
+      message: "A company is required.",
+    },
+    COMPANY_NOT_FOUND: {
+      status: 404,
+      message: "The selected company was not found.",
+    },
+    WAREHOUSE_NOT_IN_COMPANY: {
+      status: 400,
+      message: "The selected warehouse does not belong to this company.",
+    },
+    WAREHOUSE_INACTIVE: {
+      status: 409,
+      message: "The selected warehouse is inactive.",
+    },
+    USER_ALREADY_ACTIVE: {
+      status: 409,
+      message: "An account with this email already exists.",
+    },
+    INVITATION_ALREADY_PENDING: {
+      status: 409,
+      message: "A pending invitation already exists for this email.",
     },
   };
 

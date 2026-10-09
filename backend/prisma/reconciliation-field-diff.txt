@@ -1,0 +1,678 @@
+﻿LOSS DEFENDER PRO - FIELD LEVEL RECONCILIATION
+Generated: 2026-10-08 18:46:08
+
+============================================================
+MODEL: ScanWallet
+============================================================
+
+----- PRODUCTION -----
+model ScanWallet {
+  id                String            @id @default(cuid())
+  companyId         String            @unique
+  balance           Int               @default(0)
+  lifetimeAllocated Int               @default(0)
+  lifetimeConsumed  Int               @default(0)
+  createdAt         DateTime          @default(now()) @db.Timestamp(6)
+  updatedAt         DateTime          @default(now()) @updatedAt @db.Timestamp(6)
+  transactions      ScanTransaction[]
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "scan_wallets_company_fk")
+
+  @@map("scan_wallets")
+}
+
+----- APPLICATION -----
+model ScanWallet {
+  id String @id @default(cuid())
+
+  companyId String  @unique
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  balance           Int @default(0)
+  lifetimeAllocated Int @default(0)
+  lifetimeConsumed  Int @default(0)
+
+  transactions ScanTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([balance])
+  @@map("scan_wallets")
+}
+
+============================================================
+MODEL: ScanTransaction
+============================================================
+
+----- PRODUCTION -----
+model ScanTransaction {
+  id             String     @id @default(cuid())
+  walletId       String
+  companyId      String
+  type           String
+  credits        Int
+  balanceAfter   Int
+  referenceType  String?
+  referenceId    String?
+  idempotencyKey String?
+  description    String?
+  createdAt      DateTime   @default(now()) @db.Timestamp(6)
+  Company        Company    @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "scan_transactions_company_fk")
+  wallet         ScanWallet @relation(fields: [walletId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "scan_transactions_wallet_fk")
+
+  @@unique([companyId, idempotencyKey], map: "scan_transactions_company_idempotency_key", where: raw("(\"idempotencyKey\" IS NOT NULL)"))
+  @@index([type])
+  @@index([companyId, createdAt(sort: Desc)], map: "scan_transactions_company_created_idx")
+  @@index([referenceType, referenceId], map: "scan_transactions_reference_idx")
+  @@index([walletId, createdAt(sort: Desc)], map: "scan_transactions_wallet_created_idx")
+  @@map("scan_transactions")
+}
+
+----- APPLICATION -----
+model ScanTransaction {
+  id String @id @default(cuid())
+
+  walletId String
+  wallet   ScanWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  companyId String
+  type      ScanTransactionType
+
+  credits      Int
+  balanceAfter Int
+
+  referenceType String?
+  referenceId   String?
+
+  idempotencyKey String? @unique
+  description    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([walletId, createdAt])
+  @@index([companyId, createdAt])
+  @@index([type])
+  @@index([referenceType, referenceId])
+  @@map("scan_transactions")
+}
+
+============================================================
+MODEL: Invoice
+============================================================
+
+----- PRODUCTION -----
+model Invoice {
+  id                     String        @id @default(cuid())
+  companyId              String
+  billingPaymentId       String?       @unique(map: "invoices_billingPaymentId_unique", where: raw("(\"billingPaymentId\" IS NOT NULL)"))
+  invoiceNumber          String        @unique
+  status                 String        @default("DRAFT")
+  currency               String        @default("INR")
+  customerLegalName      String
+  customerDisplayName    String?
+  customerGstin          String?
+  customerPan            String?
+  customerAddressLine1   String?
+  customerAddressLine2   String?
+  customerCity           String?
+  customerState          String?
+  customerStateCode      String?
+  customerPostalCode     String?
+  customerCountry        String        @default("India")
+  customerBillingEmail   String?
+  customerBillingPhone   String?
+  placeOfSupplyState     String?
+  placeOfSupplyStateCode String?
+  subtotalPaise          BigInt
+  gstPaise               BigInt        @default(0)
+  totalPaise             BigInt
+  issuedAt               DateTime?
+  paidAt                 DateTime?
+  voidedAt               DateTime?
+  pdfStorageKey          String?
+  pdfChecksum            String?
+  pdfSizeBytes           BigInt?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @default(now()) @updatedAt
+  items                  InvoiceItem[]
+  company                Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@index([companyId, status])
+  @@index([billingPaymentId])
+  @@index([pdfStorageKey])
+  @@map("invoices")
+}
+
+----- APPLICATION -----
+model Invoice {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  paymentId String?  @unique
+  payment   Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  invoiceNumber String @unique
+
+  status InvoiceStatus @default(DRAFT)
+
+  currency String @default("INR")
+
+  customerLegalName   String
+  customerDisplayName String?
+
+  customerGstin String?
+  customerPan   String?
+
+  customerAddressLine1 String?
+  customerAddressLine2 String?
+  customerCity         String?
+  customerState        String?
+  customerStateCode    String?
+  customerPostalCode   String?
+  customerCountry      String  @default("India")
+
+  customerBillingEmail String?
+  customerBillingPhone String?
+
+  placeOfSupplyState     String?
+  placeOfSupplyStateCode String?
+
+  subtotalPaise Int
+  gstPaise      Int @default(0)
+  totalPaise    Int
+
+  issuedAt DateTime?
+  paidAt   DateTime?
+  voidedAt DateTime?
+
+  pdfStorageObjectId String?
+  pdfStorageObject   StorageObject? @relation(fields: [pdfStorageObjectId], references: [id], onDelete: SetNull)
+
+  items InvoiceItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, createdAt])
+  @@index([companyId, status])
+  @@index([paymentId])
+  @@index([pdfStorageObjectId])
+  @@map("invoices")
+}
+
+============================================================
+MODEL: InvoiceSequence
+============================================================
+
+----- PRODUCTION -----
+model InvoiceSequence {
+  id        String   @id @default(cuid())
+  year      Int      @unique
+  nextValue Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@map("invoice_sequences")
+}
+
+----- APPLICATION -----
+model InvoiceSequence {
+  id        String   @id @default(cuid())
+  year      Int      @unique
+  nextValue Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("invoice_sequences")
+}
+
+============================================================
+MODEL: InvoiceItem
+============================================================
+
+----- PRODUCTION -----
+model InvoiceItem {
+  id                 String   @id @default(cuid())
+  invoiceId          String
+  itemType           String
+  description        String
+  quantity           Int      @default(1)
+  unitPricePaise     BigInt
+  taxableAmountPaise BigInt
+  gstPercent         Int      @default(18)
+  gstPaise           BigInt   @default(0)
+  totalPaise         BigInt
+  referenceType      String?
+  referenceId        String?
+  metadata           Json?
+  createdAt          DateTime @default(now())
+  invoice            Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@index([referenceType, referenceId])
+  @@map("invoice_items")
+}
+
+----- APPLICATION -----
+model InvoiceItem {
+  id String @id @default(cuid())
+
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  itemType InvoiceItemType
+
+  description String
+
+  quantity Int @default(1)
+
+  unitPricePaise     Int
+  taxableAmountPaise Int
+
+  gstPercent Int @default(18)
+  gstPaise   Int @default(0)
+
+  totalPaise Int
+
+  referenceType String?
+  referenceId   String?
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
+  @@index([referenceType, referenceId])
+  @@map("invoice_items")
+}
+
+============================================================
+MODEL: AuditLog
+============================================================
+
+----- PRODUCTION -----
+model AuditLog {
+  id          String   @id
+  companyId   String
+  actorId     String
+  action      String
+  entityType  String
+  entityId    String
+  beforeState Json?
+  afterState  Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([actorId, action])
+  @@index([companyId, createdAt])
+}
+
+----- APPLICATION -----
+model AuditLog {
+  id     String      @id @default(cuid())
+  action AuditAction
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  shipmentId String?
+  shipment   Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+
+  packingSessionId String?
+  packingSession   PackingSession? @relation(fields: [packingSessionId], references: [id], onDelete: SetNull)
+
+  referenceType String?
+  referenceId   String?
+
+  awb         String?
+  description String?
+  metadata    Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([userId, createdAt])
+  @@index([orderId, createdAt])
+  @@index([shipmentId, createdAt])
+  @@index([packingSessionId, createdAt])
+  @@index([action, createdAt])
+  @@index([referenceType, referenceId])
+  @@map("audit_logs")
+}
+
+============================================================
+MODEL: BillingWebhookEvent
+============================================================
+
+----- PRODUCTION -----
+model BillingWebhookEvent {
+  id            String    @id
+  provider      String    @default("RAZORPAY")
+  eventId       String
+  eventType     String
+  payload       Json
+  processed     Boolean   @default(false)
+  processedAt   DateTime? @db.Timestamp(6)
+  failureReason String?
+  createdAt     DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt     DateTime  @default(now()) @db.Timestamp(6)
+
+  @@unique([provider, eventId])
+}
+
+----- APPLICATION -----
+model BillingWebhookEvent {
+  id            String               @id @default(cuid())
+  provider      SubscriptionProvider
+  eventId       String
+  eventType     String
+  payload       Json
+  processed     Boolean              @default(false)
+  processedAt   DateTime?
+  failureReason String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@unique([provider, eventId])
+  @@index([provider, eventType])
+  @@index([processed])
+  @@map("billing_webhook_events")
+}
+
+============================================================
+MODEL: Company
+============================================================
+
+----- PRODUCTION -----
+model Company {
+  id                  String               @id
+  companyName         String
+  email               String               @unique
+  phone               String
+  gst                 String?
+  pan                 String?
+  address             Json?
+  timezone            String               @default("Asia/Kolkata")
+  currency            String               @default("INR")
+  plan                Plan                 @default(free)
+  storageUsed         BigInt               @default(0)
+  storageQuota        BigInt               @default(5368709120)
+  status              Status               @default(active)
+  logo                String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime
+  BillingSubscription BillingSubscription?
+  Claim               Claim[]
+  MarketplaceAccount  MarketplaceAccount[]
+  Order               Order[]
+  User                User[]
+  Warehouse           Warehouse[]
+  invoices            Invoice[]
+  order_identifiers   order_identifiers[]
+  scan_transactions   ScanTransaction[]
+  scanWallet          ScanWallet?
+
+  @@index([status])
+}
+
+----- APPLICATION -----
+model Company {
+  id       String  @id @default(cuid())
+  name     String
+  code     String? @unique
+  isActive Boolean @default(true)
+
+  users               User[]
+  warehouses          Warehouse[]
+  products            Product[]
+  orders              Order[]
+  marketplaceAccounts MarketplaceAccount[]
+  auditLogs           AuditLog[]
+  storageObjects      StorageObject[]
+  storageUsageEvents  StorageUsageEvent[]
+  billingProfile      BillingProfile?
+  invoices            Invoice[]
+
+  subscription Subscription?
+  scanWallet   ScanWallet?
+  payments     Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@map("companies")
+}
+
+============================================================
+MODEL: MarketplaceAccount
+============================================================
+
+----- PRODUCTION -----
+model MarketplaceAccount {
+  id            String      @id
+  companyId     String
+  marketplace   Marketplace
+  accessToken   String
+  refreshToken  String?
+  webhookSecret String?
+  status        Status      @default(active)
+  lastSyncAt    DateTime?
+  createdAt     DateTime    @default(now())
+  Company       Company     @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, marketplace])
+}
+
+----- APPLICATION -----
+model MarketplaceAccount {
+  id          String      @id @default(cuid())
+  marketplace Marketplace
+  accountName String
+  sellerId    String?
+  isActive    Boolean     @default(true)
+
+  // Store encrypted/secured references only.
+  // Raw marketplace secrets should NOT be stored here.
+  credentialRef String?
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  orders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, marketplace, accountName])
+  @@index([companyId, marketplace])
+  @@map("marketplace_accounts")
+}
+
+============================================================
+MODEL: Order
+============================================================
+
+----- PRODUCTION -----
+model Order {
+  id                 String              @id
+  companyId          String
+  warehouseId        String?
+  marketplace        Marketplace         @default(manual)
+  marketplaceOrderId String?
+  status             OrderStatus         @default(synced)
+  items              Json
+  assignedOperatorId String?
+  stationId          String?
+  awb                String?
+  courier            String?
+  dispatchedAt       DateTime?
+  deliveredAt        DateTime?
+  metadata           Json?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime
+  Claim              Claim[]
+  Evidence           Evidence[]
+  Company            Company             @relation(fields: [companyId], references: [id])
+  Warehouse          Warehouse?          @relation(fields: [warehouseId], references: [id])
+  Recording          Recording[]
+  order_identifiers  order_identifiers[]
+
+  @@index([companyId, createdAt])
+  @@index([companyId, status])
+  @@index([marketplaceOrderId])
+}
+
+----- APPLICATION -----
+model Order {
+  id String @id @default(cuid())
+
+  externalOrderId    String
+  marketplaceOrderId String?
+  marketplace        Marketplace
+
+  status OrderStatus @default(PENDING)
+
+  customerName    String?
+  customerPhone   String?
+  shippingAddress String?
+
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  marketplaceAccountId String?
+  marketplaceAccount   MarketplaceAccount? @relation(fields: [marketplaceAccountId], references: [id], onDelete: SetNull)
+
+  items           OrderItem[]
+  shipments       Shipment[]
+  packingSessions PackingSession[]
+  auditLogs       AuditLog[]
+
+  orderedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([companyId, marketplace, externalOrderId])
+  @@index([companyId, status])
+  @@index([warehouseId, status])
+  @@index([marketplace, externalOrderId])
+  @@map("orders")
+}
+
+============================================================
+MODEL: User
+============================================================
+
+----- PRODUCTION -----
+model User {
+  id           String     @id
+  firebaseUid  String?    @unique(map: "User_clerkId_key")
+  companyId    String
+  employeeId   String?
+  name         String
+  email        String     @unique
+  phone        String?
+  role         Role       @default(packing_operator)
+  warehouseId  String?
+  stationId    String?
+  status       UserStatus @default(pending)
+  profilePhoto String?
+  joiningDate  DateTime?
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime
+  Company      Company    @relation(fields: [companyId], references: [id])
+  Warehouse    Warehouse? @relation(fields: [warehouseId], references: [id])
+
+  @@index([companyId, status])
+}
+
+----- APPLICATION -----
+model User {
+  id          String   @id @default(cuid())
+  firebaseUid String   @unique
+  email       String
+  name        String?
+  phone       String?
+  designation String?
+  role        UserRole @default(OPERATOR)
+  isActive    Boolean  @default(true)
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  packingSessions PackingSession[]
+  auditLogs       AuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([email])
+  @@map("users")
+}
+
+============================================================
+MODEL: Warehouse
+============================================================
+
+----- PRODUCTION -----
+model Warehouse {
+  id        String    @id
+  companyId String
+  name      String
+  code      String
+  address   Json
+  city      String
+  state     String
+  country   String    @default("India")
+  timezone  String
+  status    Status    @default(active)
+  createdAt DateTime  @default(now())
+  Order     Order[]
+  Station   Station[]
+  User      User[]
+  Company   Company   @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, code])
+  @@index([companyId, status])
+}
+
+----- APPLICATION -----
+model Warehouse {
+  id       String  @id @default(cuid())
+  name     String
+  code     String
+  address  String?
+  city     String?
+  state    String?
+  country  String  @default("India")
+  isActive Boolean @default(true)
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  orders          Order[]
+  packingSessions PackingSession[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@map("warehouses")
+}
+

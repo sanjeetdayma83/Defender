@@ -1,4 +1,4 @@
-﻿{
+{
     "name":  "loss-defender-backend",
     "version":  "1.0.0",
     "private":  true,
@@ -12,7 +12,8 @@
                     "test:phase5-6":  "tsx scripts/phase5-6.integration.ts",
                     "db:migrate:deploy":  "prisma migrate deploy",
                     "db:migrate:status":  "prisma migrate status",
-                    "db:generate":  "prisma generate"
+                    "db:generate":  "prisma generate",
+                    "test:identity-invitation":  "tsx scripts/identity-invitation.contract.ts"
                 },
     "dependencies":  {
                          "@aws-sdk/client-s3":  "^3.1137.0",

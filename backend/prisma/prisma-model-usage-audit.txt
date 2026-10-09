@@ -1,0 +1,528 @@
+﻿LOSS DEFENDER PRO - PRISMA MODEL USAGE AUDIT
+Generated: 2026-10-08 18:48:18
+
+PRODUCTION MODELS
+  AuditLog
+  BillingPayment
+  BillingSubscription
+  BillingWebhookEvent
+  Claim
+  Company
+  Evidence
+  InviteToken
+  Invoice
+  InvoiceItem
+  InvoiceSequence
+  MarketplaceAccount
+  Notification
+  Order
+  order_identifiers
+  plan_configurations
+  Recording
+  RecordingSegment
+  Return
+  ScanTransaction
+  ScanWallet
+  Session
+  Station
+  User
+  Warehouse
+
+BACKEND USED MODELS
+  AuditLog
+  BarcodeAlias
+  BillingProfile
+  BillingWebhookEvent
+  Company
+  EvidenceMedia
+  ExtraScanPack
+  Invoice
+  InvoiceItem
+  InvoiceSequence
+  MarketplaceAccount
+  Order
+  OrderItem
+  PackingSession
+  Payment
+  PaymentItem
+  Plan
+  PlanFeature
+  Product
+  ProductVariant
+  RetentionOption
+  ScanTransaction
+  ScanWallet
+  Shipment
+  ShipmentBarcode
+  StorageObject
+  StorageUsageEvent
+  Subscription
+  SubscriptionEntitlement
+  User
+  Warehouse
+
+USED AND PRESENT
+  AuditLog
+  BillingWebhookEvent
+  Company
+  Invoice
+  InvoiceItem
+  InvoiceSequence
+  MarketplaceAccount
+  Order
+  ScanTransaction
+  ScanWallet
+  User
+  Warehouse
+
+USED BUT MISSING FROM PRODUCTION
+  BarcodeAlias
+  BillingProfile
+  EvidenceMedia
+  ExtraScanPack
+  OrderItem
+  PackingSession
+  Payment
+  PaymentItem
+  Plan
+  PlanFeature
+  Product
+  ProductVariant
+  RetentionOption
+  Shipment
+  ShipmentBarcode
+  StorageObject
+  StorageUsageEvent
+  Subscription
+  SubscriptionEntitlement
+
+USAGE DETAILS
+
+[AuditLog]
+  src\generated\prisma\internal\class.ts :: auditLog.findMany
+  src\generated\prisma\models\AuditLog.ts :: auditLog.count
+  src\generated\prisma\models\AuditLog.ts :: auditLog.create
+  src\generated\prisma\models\AuditLog.ts :: auditLog.delete
+  src\generated\prisma\models\AuditLog.ts :: auditLog.findFirst
+  src\generated\prisma\models\AuditLog.ts :: auditLog.findMany
+  src\generated\prisma\models\AuditLog.ts :: auditLog.findUnique
+  src\generated\prisma\models\AuditLog.ts :: auditLog.update
+  src\generated\prisma\models\AuditLog.ts :: auditLog.upsert
+
+[BarcodeAlias]
+  src\generated\prisma\internal\class.ts :: barcodeAlias.findMany
+  src\generated\prisma\models\BarcodeAlias.ts :: barcodeAlias.count
+  src\generated\prisma\models\BarcodeAlias.ts :: barcodeAlias.create
+  src\generated\prisma\models\BarcodeAlias.ts :: barcodeAlias.delete
+  src\generated\prisma\models\BarcodeAlias.ts :: barcodeAlias.findFirst
+  src\generated\prisma\models\BarcodeAlias.ts :: barcodeAlias.findMany
+  src\generated\prisma\models\BarcodeAlias.ts :: barcodeAlias.findUnique
+  src\generated\prisma\models\BarcodeAlias.ts :: barcodeAlias.update
+  src\generated\prisma\models\BarcodeAlias.ts :: barcodeAlias.upsert
+
+[BillingProfile]
+  src\generated\prisma\internal\class.ts :: billingProfile.findMany
+  src\generated\prisma\models\BillingProfile.ts :: billingProfile.count
+  src\generated\prisma\models\BillingProfile.ts :: billingProfile.create
+  src\generated\prisma\models\BillingProfile.ts :: billingProfile.delete
+  src\generated\prisma\models\BillingProfile.ts :: billingProfile.findFirst
+  src\generated\prisma\models\BillingProfile.ts :: billingProfile.findMany
+  src\generated\prisma\models\BillingProfile.ts :: billingProfile.findUnique
+  src\generated\prisma\models\BillingProfile.ts :: billingProfile.update
+  src\generated\prisma\models\BillingProfile.ts :: billingProfile.upsert
+  src\services\platform\platform-companies.service.backup_20261005_213027.ts :: billingProfile.findMany
+
+[BillingWebhookEvent]
+  src\generated\prisma\internal\class.ts :: billingWebhookEvent.findMany
+  src\generated\prisma\models\BillingWebhookEvent.ts :: billingWebhookEvent.count
+  src\generated\prisma\models\BillingWebhookEvent.ts :: billingWebhookEvent.create
+  src\generated\prisma\models\BillingWebhookEvent.ts :: billingWebhookEvent.delete
+  src\generated\prisma\models\BillingWebhookEvent.ts :: billingWebhookEvent.findFirst
+  src\generated\prisma\models\BillingWebhookEvent.ts :: billingWebhookEvent.findMany
+  src\generated\prisma\models\BillingWebhookEvent.ts :: billingWebhookEvent.findUnique
+  src\generated\prisma\models\BillingWebhookEvent.ts :: billingWebhookEvent.update
+  src\generated\prisma\models\BillingWebhookEvent.ts :: billingWebhookEvent.upsert
+
+[Company]
+  src\generated\prisma\client.ts :: company.findMany
+  src\generated\prisma\internal\class.ts :: company.findMany
+  src\generated\prisma\models\Company.ts :: company.count
+  src\generated\prisma\models\Company.ts :: company.create
+  src\generated\prisma\models\Company.ts :: company.delete
+  src\generated\prisma\models\Company.ts :: company.findFirst
+  src\generated\prisma\models\Company.ts :: company.findMany
+  src\generated\prisma\models\Company.ts :: company.findUnique
+  src\generated\prisma\models\Company.ts :: company.update
+  src\generated\prisma\models\Company.ts :: company.upsert
+  src\services\platform\platform-companies.service.backup_20261005_213027.ts :: company.count
+  src\services\platform\platform-companies.service.backup_20261005_213027.ts :: company.findMany
+  src\services\platform\platform-companies.service.backup_20261005_213027.ts :: company.findUnique
+  src\services\platform\platform-companies.service.backup_20261005_213027.ts :: company.update
+
+[EvidenceMedia]
+  src\controllers\storage\storage.controller.ts :: evidenceMedia.findMany
+  src\generated\prisma\internal\class.ts :: evidenceMedia.findMany
+  src\generated\prisma\models\EvidenceMedia.ts :: evidenceMedia.count
+  src\generated\prisma\models\EvidenceMedia.ts :: evidenceMedia.create
+  src\generated\prisma\models\EvidenceMedia.ts :: evidenceMedia.delete
+  src\generated\prisma\models\EvidenceMedia.ts :: evidenceMedia.findFirst
+  src\generated\prisma\models\EvidenceMedia.ts :: evidenceMedia.findMany
+  src\generated\prisma\models\EvidenceMedia.ts :: evidenceMedia.findUnique
+  src\generated\prisma\models\EvidenceMedia.ts :: evidenceMedia.update
+  src\generated\prisma\models\EvidenceMedia.ts :: evidenceMedia.upsert
+
+[ExtraScanPack]
+  src\generated\prisma\internal\class.ts :: extraScanPack.findMany
+  src\generated\prisma\models\ExtraScanPack.ts :: extraScanPack.count
+  src\generated\prisma\models\ExtraScanPack.ts :: extraScanPack.create
+  src\generated\prisma\models\ExtraScanPack.ts :: extraScanPack.delete
+  src\generated\prisma\models\ExtraScanPack.ts :: extraScanPack.findFirst
+  src\generated\prisma\models\ExtraScanPack.ts :: extraScanPack.findMany
+  src\generated\prisma\models\ExtraScanPack.ts :: extraScanPack.findUnique
+  src\generated\prisma\models\ExtraScanPack.ts :: extraScanPack.update
+  src\generated\prisma\models\ExtraScanPack.ts :: extraScanPack.upsert
+
+[Invoice]
+  src\generated\prisma\internal\class.ts :: invoice.findMany
+  src\generated\prisma\models\Invoice.ts :: invoice.count
+  src\generated\prisma\models\Invoice.ts :: invoice.create
+  src\generated\prisma\models\Invoice.ts :: invoice.delete
+  src\generated\prisma\models\Invoice.ts :: invoice.findFirst
+  src\generated\prisma\models\Invoice.ts :: invoice.findMany
+  src\generated\prisma\models\Invoice.ts :: invoice.findUnique
+  src\generated\prisma\models\Invoice.ts :: invoice.update
+  src\generated\prisma\models\Invoice.ts :: invoice.upsert
+
+[InvoiceItem]
+  src\generated\prisma\internal\class.ts :: invoiceItem.findMany
+  src\generated\prisma\models\InvoiceItem.ts :: invoiceItem.count
+  src\generated\prisma\models\InvoiceItem.ts :: invoiceItem.create
+  src\generated\prisma\models\InvoiceItem.ts :: invoiceItem.delete
+  src\generated\prisma\models\InvoiceItem.ts :: invoiceItem.findFirst
+  src\generated\prisma\models\InvoiceItem.ts :: invoiceItem.findMany
+  src\generated\prisma\models\InvoiceItem.ts :: invoiceItem.findUnique
+  src\generated\prisma\models\InvoiceItem.ts :: invoiceItem.update
+  src\generated\prisma\models\InvoiceItem.ts :: invoiceItem.upsert
+
+[InvoiceSequence]
+  src\generated\prisma\internal\class.ts :: invoiceSequence.findMany
+  src\generated\prisma\models\InvoiceSequence.ts :: invoiceSequence.count
+  src\generated\prisma\models\InvoiceSequence.ts :: invoiceSequence.create
+  src\generated\prisma\models\InvoiceSequence.ts :: invoiceSequence.delete
+  src\generated\prisma\models\InvoiceSequence.ts :: invoiceSequence.findFirst
+  src\generated\prisma\models\InvoiceSequence.ts :: invoiceSequence.findMany
+  src\generated\prisma\models\InvoiceSequence.ts :: invoiceSequence.findUnique
+  src\generated\prisma\models\InvoiceSequence.ts :: invoiceSequence.update
+  src\generated\prisma\models\InvoiceSequence.ts :: invoiceSequence.upsert
+
+[MarketplaceAccount]
+  src\generated\prisma\internal\class.ts :: marketplaceAccount.findMany
+  src\generated\prisma\models\MarketplaceAccount.ts :: marketplaceAccount.count
+  src\generated\prisma\models\MarketplaceAccount.ts :: marketplaceAccount.create
+  src\generated\prisma\models\MarketplaceAccount.ts :: marketplaceAccount.delete
+  src\generated\prisma\models\MarketplaceAccount.ts :: marketplaceAccount.findFirst
+  src\generated\prisma\models\MarketplaceAccount.ts :: marketplaceAccount.findMany
+  src\generated\prisma\models\MarketplaceAccount.ts :: marketplaceAccount.findUnique
+  src\generated\prisma\models\MarketplaceAccount.ts :: marketplaceAccount.update
+  src\generated\prisma\models\MarketplaceAccount.ts :: marketplaceAccount.upsert
+
+[Order]
+  src\generated\prisma\internal\class.ts :: order.findMany
+  src\generated\prisma\models\Order.ts :: order.count
+  src\generated\prisma\models\Order.ts :: order.create
+  src\generated\prisma\models\Order.ts :: order.delete
+  src\generated\prisma\models\Order.ts :: order.findFirst
+  src\generated\prisma\models\Order.ts :: order.findMany
+  src\generated\prisma\models\Order.ts :: order.findUnique
+  src\generated\prisma\models\Order.ts :: order.update
+  src\generated\prisma\models\Order.ts :: order.upsert
+
+[OrderItem]
+  src\generated\prisma\internal\class.ts :: orderItem.findMany
+  src\generated\prisma\models\OrderItem.ts :: orderItem.count
+  src\generated\prisma\models\OrderItem.ts :: orderItem.create
+  src\generated\prisma\models\OrderItem.ts :: orderItem.delete
+  src\generated\prisma\models\OrderItem.ts :: orderItem.findFirst
+  src\generated\prisma\models\OrderItem.ts :: orderItem.findMany
+  src\generated\prisma\models\OrderItem.ts :: orderItem.findUnique
+  src\generated\prisma\models\OrderItem.ts :: orderItem.update
+  src\generated\prisma\models\OrderItem.ts :: orderItem.upsert
+
+[PackingSession]
+  src\generated\prisma\internal\class.ts :: packingSession.findMany
+  src\generated\prisma\models\PackingSession.ts :: packingSession.count
+  src\generated\prisma\models\PackingSession.ts :: packingSession.create
+  src\generated\prisma\models\PackingSession.ts :: packingSession.delete
+  src\generated\prisma\models\PackingSession.ts :: packingSession.findFirst
+  src\generated\prisma\models\PackingSession.ts :: packingSession.findMany
+  src\generated\prisma\models\PackingSession.ts :: packingSession.findUnique
+  src\generated\prisma\models\PackingSession.ts :: packingSession.update
+  src\generated\prisma\models\PackingSession.ts :: packingSession.upsert
+
+[Payment]
+  src\generated\prisma\internal\class.ts :: payment.findMany
+  src\generated\prisma\models\Payment.ts :: payment.count
+  src\generated\prisma\models\Payment.ts :: payment.create
+  src\generated\prisma\models\Payment.ts :: payment.delete
+  src\generated\prisma\models\Payment.ts :: payment.findFirst
+  src\generated\prisma\models\Payment.ts :: payment.findMany
+  src\generated\prisma\models\Payment.ts :: payment.findUnique
+  src\generated\prisma\models\Payment.ts :: payment.update
+  src\generated\prisma\models\Payment.ts :: payment.upsert
+  src\services\billing\billing.service.before-live-db.ts :: payment.create
+  src\services\billing\billing.service.before-live-db.ts :: payment.findFirst
+  src\services\billing\billing.service.before-live-db.ts :: payment.update
+  src\services\platform\platform-companies.service.backup_20261005_213027.ts :: payment.aggregate
+
+[PaymentItem]
+  src\generated\prisma\internal\class.ts :: paymentItem.findMany
+  src\generated\prisma\models\PaymentItem.ts :: paymentItem.count
+  src\generated\prisma\models\PaymentItem.ts :: paymentItem.create
+  src\generated\prisma\models\PaymentItem.ts :: paymentItem.delete
+  src\generated\prisma\models\PaymentItem.ts :: paymentItem.findFirst
+  src\generated\prisma\models\PaymentItem.ts :: paymentItem.findMany
+  src\generated\prisma\models\PaymentItem.ts :: paymentItem.findUnique
+  src\generated\prisma\models\PaymentItem.ts :: paymentItem.update
+  src\generated\prisma\models\PaymentItem.ts :: paymentItem.upsert
+
+[Plan]
+  src\generated\prisma\internal\class.ts :: plan.findMany
+  src\generated\prisma\models\Plan.ts :: plan.count
+  src\generated\prisma\models\Plan.ts :: plan.create
+  src\generated\prisma\models\Plan.ts :: plan.delete
+  src\generated\prisma\models\Plan.ts :: plan.findFirst
+  src\generated\prisma\models\Plan.ts :: plan.findMany
+  src\generated\prisma\models\Plan.ts :: plan.findUnique
+  src\generated\prisma\models\Plan.ts :: plan.update
+  src\generated\prisma\models\Plan.ts :: plan.upsert
+  src\services\billing\billing.service.before-live-db.ts :: plan.findFirst
+  src\services\platform\platform-companies.service.backup_20261005_213027.ts :: plan.findMany
+
+[PlanFeature]
+  src\generated\prisma\internal\class.ts :: planFeature.findMany
+  src\generated\prisma\models\PlanFeature.ts :: planFeature.count
+  src\generated\prisma\models\PlanFeature.ts :: planFeature.create
+  src\generated\prisma\models\PlanFeature.ts :: planFeature.delete
+  src\generated\prisma\models\PlanFeature.ts :: planFeature.findFirst
+  src\generated\prisma\models\PlanFeature.ts :: planFeature.findMany
+  src\generated\prisma\models\PlanFeature.ts :: planFeature.findUnique
+  src\generated\prisma\models\PlanFeature.ts :: planFeature.update
+  src\generated\prisma\models\PlanFeature.ts :: planFeature.upsert
+
+[Product]
+  src\generated\prisma\internal\class.ts :: product.findMany
+  src\generated\prisma\models\Product.ts :: product.count
+  src\generated\prisma\models\Product.ts :: product.create
+  src\generated\prisma\models\Product.ts :: product.delete
+  src\generated\prisma\models\Product.ts :: product.findFirst
+  src\generated\prisma\models\Product.ts :: product.findMany
+  src\generated\prisma\models\Product.ts :: product.findUnique
+  src\generated\prisma\models\Product.ts :: product.update
+  src\generated\prisma\models\Product.ts :: product.upsert
+  src\services\products\product.service.ts :: product.findFirst
+  src\services\products\product.service.ts :: product.findMany
+
+[ProductVariant]
+  src\generated\prisma\internal\class.ts :: productVariant.findMany
+  src\generated\prisma\models\ProductVariant.ts :: productVariant.count
+  src\generated\prisma\models\ProductVariant.ts :: productVariant.create
+  src\generated\prisma\models\ProductVariant.ts :: productVariant.delete
+  src\generated\prisma\models\ProductVariant.ts :: productVariant.findFirst
+  src\generated\prisma\models\ProductVariant.ts :: productVariant.findMany
+  src\generated\prisma\models\ProductVariant.ts :: productVariant.findUnique
+  src\generated\prisma\models\ProductVariant.ts :: productVariant.update
+  src\generated\prisma\models\ProductVariant.ts :: productVariant.upsert
+
+[RetentionOption]
+  src\generated\prisma\internal\class.ts :: retentionOption.findMany
+  src\generated\prisma\models\RetentionOption.ts :: retentionOption.count
+  src\generated\prisma\models\RetentionOption.ts :: retentionOption.create
+  src\generated\prisma\models\RetentionOption.ts :: retentionOption.delete
+  src\generated\prisma\models\RetentionOption.ts :: retentionOption.findFirst
+  src\generated\prisma\models\RetentionOption.ts :: retentionOption.findMany
+  src\generated\prisma\models\RetentionOption.ts :: retentionOption.findUnique
+  src\generated\prisma\models\RetentionOption.ts :: retentionOption.update
+  src\generated\prisma\models\RetentionOption.ts :: retentionOption.upsert
+
+[ScanTransaction]
+  src\generated\prisma\internal\class.ts :: scanTransaction.findMany
+  src\generated\prisma\models\ScanTransaction.ts :: scanTransaction.count
+  src\generated\prisma\models\ScanTransaction.ts :: scanTransaction.create
+  src\generated\prisma\models\ScanTransaction.ts :: scanTransaction.delete
+  src\generated\prisma\models\ScanTransaction.ts :: scanTransaction.findFirst
+  src\generated\prisma\models\ScanTransaction.ts :: scanTransaction.findMany
+  src\generated\prisma\models\ScanTransaction.ts :: scanTransaction.findUnique
+  src\generated\prisma\models\ScanTransaction.ts :: scanTransaction.update
+  src\generated\prisma\models\ScanTransaction.ts :: scanTransaction.upsert
+  src\services\platform\platform-companies.service.backup_20261005_213027.ts :: scanTransaction.aggregate
+
+[ScanWallet]
+  src\generated\prisma\internal\class.ts :: scanWallet.findMany
+  src\generated\prisma\models\ScanWallet.ts :: scanWallet.count
+  src\generated\prisma\models\ScanWallet.ts :: scanWallet.create
+  src\generated\prisma\models\ScanWallet.ts :: scanWallet.delete
+  src\generated\prisma\models\ScanWallet.ts :: scanWallet.findFirst
+  src\generated\prisma\models\ScanWallet.ts :: scanWallet.findMany
+  src\generated\prisma\models\ScanWallet.ts :: scanWallet.findUnique
+  src\generated\prisma\models\ScanWallet.ts :: scanWallet.update
+  src\generated\prisma\models\ScanWallet.ts :: scanWallet.upsert
+
+[Shipment]
+  src\controllers\shipments\shipment.controller.ts :: shipment.findFirst
+  src\controllers\shipments\shipment.controller.ts :: shipment.findMany
+  src\generated\prisma\internal\class.ts :: shipment.findMany
+  src\generated\prisma\models\Shipment.ts :: shipment.count
+  src\generated\prisma\models\Shipment.ts :: shipment.create
+  src\generated\prisma\models\Shipment.ts :: shipment.delete
+  src\generated\prisma\models\Shipment.ts :: shipment.findFirst
+  src\generated\prisma\models\Shipment.ts :: shipment.findMany
+  src\generated\prisma\models\Shipment.ts :: shipment.findUnique
+  src\generated\prisma\models\Shipment.ts :: shipment.update
+  src\generated\prisma\models\Shipment.ts :: shipment.upsert
+
+[ShipmentBarcode]
+  src\generated\prisma\internal\class.ts :: shipmentBarcode.findMany
+  src\generated\prisma\models\ShipmentBarcode.ts :: shipmentBarcode.count
+  src\generated\prisma\models\ShipmentBarcode.ts :: shipmentBarcode.create
+  src\generated\prisma\models\ShipmentBarcode.ts :: shipmentBarcode.delete
+  src\generated\prisma\models\ShipmentBarcode.ts :: shipmentBarcode.findFirst
+  src\generated\prisma\models\ShipmentBarcode.ts :: shipmentBarcode.findMany
+  src\generated\prisma\models\ShipmentBarcode.ts :: shipmentBarcode.findUnique
+  src\generated\prisma\models\ShipmentBarcode.ts :: shipmentBarcode.update
+  src\generated\prisma\models\ShipmentBarcode.ts :: shipmentBarcode.upsert
+
+[StorageObject]
+  src\controllers\storage\storage.controller.ts :: storageObject.aggregate
+  src\controllers\storage\storage.controller.ts :: storageObject.count
+  src\controllers\storage\storage.controller.ts :: storageObject.findFirst
+  src\controllers\storage\storage.controller.ts :: storageObject.groupBy
+  src\generated\prisma\internal\class.ts :: storageObject.findMany
+  src\generated\prisma\models\StorageObject.ts :: storageObject.count
+  src\generated\prisma\models\StorageObject.ts :: storageObject.create
+  src\generated\prisma\models\StorageObject.ts :: storageObject.delete
+  src\generated\prisma\models\StorageObject.ts :: storageObject.findFirst
+  src\generated\prisma\models\StorageObject.ts :: storageObject.findMany
+  src\generated\prisma\models\StorageObject.ts :: storageObject.findUnique
+  src\generated\prisma\models\StorageObject.ts :: storageObject.update
+  src\generated\prisma\models\StorageObject.ts :: storageObject.upsert
+
+[StorageUsageEvent]
+  src\generated\prisma\internal\class.ts :: storageUsageEvent.findMany
+  src\generated\prisma\models\StorageUsageEvent.ts :: storageUsageEvent.count
+  src\generated\prisma\models\StorageUsageEvent.ts :: storageUsageEvent.create
+  src\generated\prisma\models\StorageUsageEvent.ts :: storageUsageEvent.delete
+  src\generated\prisma\models\StorageUsageEvent.ts :: storageUsageEvent.findFirst
+  src\generated\prisma\models\StorageUsageEvent.ts :: storageUsageEvent.findMany
+  src\generated\prisma\models\StorageUsageEvent.ts :: storageUsageEvent.findUnique
+  src\generated\prisma\models\StorageUsageEvent.ts :: storageUsageEvent.update
+  src\generated\prisma\models\StorageUsageEvent.ts :: storageUsageEvent.upsert
+
+[Subscription]
+  src\generated\prisma\internal\class.ts :: subscription.findMany
+  src\generated\prisma\models\Subscription.ts :: subscription.count
+  src\generated\prisma\models\Subscription.ts :: subscription.create
+  src\generated\prisma\models\Subscription.ts :: subscription.delete
+  src\generated\prisma\models\Subscription.ts :: subscription.findFirst
+  src\generated\prisma\models\Subscription.ts :: subscription.findMany
+  src\generated\prisma\models\Subscription.ts :: subscription.findUnique
+  src\generated\prisma\models\Subscription.ts :: subscription.update
+  src\generated\prisma\models\Subscription.ts :: subscription.upsert
+
+[SubscriptionEntitlement]
+  src\generated\prisma\internal\class.ts :: subscriptionEntitlement.findMany
+  src\generated\prisma\models\SubscriptionEntitlement.ts :: subscriptionEntitlement.count
+  src\generated\prisma\models\SubscriptionEntitlement.ts :: subscriptionEntitlement.create
+  src\generated\prisma\models\SubscriptionEntitlement.ts :: subscriptionEntitlement.delete
+  src\generated\prisma\models\SubscriptionEntitlement.ts :: subscriptionEntitlement.findFirst
+  src\generated\prisma\models\SubscriptionEntitlement.ts :: subscriptionEntitlement.findMany
+  src\generated\prisma\models\SubscriptionEntitlement.ts :: subscriptionEntitlement.findUnique
+  src\generated\prisma\models\SubscriptionEntitlement.ts :: subscriptionEntitlement.update
+  src\generated\prisma\models\SubscriptionEntitlement.ts :: subscriptionEntitlement.upsert
+
+[User]
+  src\generated\prisma\internal\class.ts :: user.create
+  src\generated\prisma\internal\class.ts :: user.findMany
+  src\generated\prisma\models\AuditLog.ts :: user.aggregate
+  src\generated\prisma\models\AuditLog.ts :: user.groupBy
+  src\generated\prisma\models\BarcodeAlias.ts :: user.aggregate
+  src\generated\prisma\models\BarcodeAlias.ts :: user.groupBy
+  src\generated\prisma\models\BillingProfile.ts :: user.aggregate
+  src\generated\prisma\models\BillingProfile.ts :: user.groupBy
+  src\generated\prisma\models\BillingWebhookEvent.ts :: user.aggregate
+  src\generated\prisma\models\BillingWebhookEvent.ts :: user.groupBy
+  src\generated\prisma\models\Company.ts :: user.aggregate
+  src\generated\prisma\models\Company.ts :: user.groupBy
+  src\generated\prisma\models\EvidenceMedia.ts :: user.aggregate
+  src\generated\prisma\models\EvidenceMedia.ts :: user.groupBy
+  src\generated\prisma\models\ExtraScanPack.ts :: user.aggregate
+  src\generated\prisma\models\ExtraScanPack.ts :: user.groupBy
+  src\generated\prisma\models\Invoice.ts :: user.aggregate
+  src\generated\prisma\models\Invoice.ts :: user.groupBy
+  src\generated\prisma\models\InvoiceItem.ts :: user.aggregate
+  src\generated\prisma\models\InvoiceItem.ts :: user.groupBy
+  src\generated\prisma\models\InvoiceSequence.ts :: user.aggregate
+  src\generated\prisma\models\InvoiceSequence.ts :: user.groupBy
+  src\generated\prisma\models\MarketplaceAccount.ts :: user.aggregate
+  src\generated\prisma\models\MarketplaceAccount.ts :: user.groupBy
+  src\generated\prisma\models\Order.ts :: user.aggregate
+  src\generated\prisma\models\Order.ts :: user.groupBy
+  src\generated\prisma\models\OrderItem.ts :: user.aggregate
+  src\generated\prisma\models\OrderItem.ts :: user.groupBy
+  src\generated\prisma\models\PackingSession.ts :: user.aggregate
+  src\generated\prisma\models\PackingSession.ts :: user.groupBy
+  src\generated\prisma\models\Payment.ts :: user.aggregate
+  src\generated\prisma\models\Payment.ts :: user.groupBy
+  src\generated\prisma\models\PaymentItem.ts :: user.aggregate
+  src\generated\prisma\models\PaymentItem.ts :: user.groupBy
+  src\generated\prisma\models\Plan.ts :: user.aggregate
+  src\generated\prisma\models\Plan.ts :: user.groupBy
+  src\generated\prisma\models\PlanFeature.ts :: user.aggregate
+  src\generated\prisma\models\PlanFeature.ts :: user.groupBy
+  src\generated\prisma\models\Product.ts :: user.aggregate
+  src\generated\prisma\models\Product.ts :: user.groupBy
+  src\generated\prisma\models\ProductVariant.ts :: user.aggregate
+  src\generated\prisma\models\ProductVariant.ts :: user.groupBy
+  src\generated\prisma\models\RetentionOption.ts :: user.aggregate
+  src\generated\prisma\models\RetentionOption.ts :: user.groupBy
+  src\generated\prisma\models\ScanTransaction.ts :: user.aggregate
+  src\generated\prisma\models\ScanTransaction.ts :: user.groupBy
+  src\generated\prisma\models\ScanWallet.ts :: user.aggregate
+  src\generated\prisma\models\ScanWallet.ts :: user.groupBy
+  src\generated\prisma\models\Shipment.ts :: user.aggregate
+  src\generated\prisma\models\Shipment.ts :: user.groupBy
+  src\generated\prisma\models\ShipmentBarcode.ts :: user.aggregate
+  src\generated\prisma\models\ShipmentBarcode.ts :: user.groupBy
+  src\generated\prisma\models\StorageObject.ts :: user.aggregate
+  src\generated\prisma\models\StorageObject.ts :: user.groupBy
+  src\generated\prisma\models\StorageUsageEvent.ts :: user.aggregate
+  src\generated\prisma\models\StorageUsageEvent.ts :: user.groupBy
+  src\generated\prisma\models\Subscription.ts :: user.aggregate
+  src\generated\prisma\models\Subscription.ts :: user.groupBy
+  src\generated\prisma\models\SubscriptionEntitlement.ts :: user.aggregate
+  src\generated\prisma\models\SubscriptionEntitlement.ts :: user.groupBy
+  src\generated\prisma\models\User.ts :: user.aggregate
+  src\generated\prisma\models\User.ts :: user.count
+  src\generated\prisma\models\User.ts :: user.create
+  src\generated\prisma\models\User.ts :: user.delete
+  src\generated\prisma\models\User.ts :: user.findFirst
+  src\generated\prisma\models\User.ts :: user.findMany
+  src\generated\prisma\models\User.ts :: user.findUnique
+  src\generated\prisma\models\User.ts :: user.groupBy
+  src\generated\prisma\models\User.ts :: user.update
+  src\generated\prisma\models\User.ts :: user.upsert
+  src\generated\prisma\models\Warehouse.ts :: user.aggregate
+  src\generated\prisma\models\Warehouse.ts :: user.groupBy
+  src\services\platform\platform-companies.service.backup_20261005_213027.ts :: user.count
+  src\services\users\user.service.ts :: user.findMany
+  src\services\users\user.service.ts :: user.findUnique
+
+[Warehouse]
+  src\generated\prisma\internal\class.ts :: warehouse.findMany
+  src\generated\prisma\models\Warehouse.ts :: warehouse.count
+  src\generated\prisma\models\Warehouse.ts :: warehouse.create
+  src\generated\prisma\models\Warehouse.ts :: warehouse.delete
+  src\generated\prisma\models\Warehouse.ts :: warehouse.findFirst
+  src\generated\prisma\models\Warehouse.ts :: warehouse.findMany
+  src\generated\prisma\models\Warehouse.ts :: warehouse.findUnique
+  src\generated\prisma\models\Warehouse.ts :: warehouse.update
+  src\generated\prisma\models\Warehouse.ts :: warehouse.upsert

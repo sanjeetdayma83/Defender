@@ -1,0 +1,605 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model ScanWallet {
+  id                String            @id @default(cuid())
+  companyId         String            @unique
+  balance           Int               @default(0)
+  lifetimeAllocated Int               @default(0)
+  lifetimeConsumed  Int               @default(0)
+  createdAt         DateTime          @default(now()) @db.Timestamp(6)
+  updatedAt         DateTime          @default(now()) @updatedAt @db.Timestamp(6)
+  transactions      ScanTransaction[]
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "scan_wallets_company_fk")
+
+  @@map("scan_wallets")
+}
+
+model ScanTransaction {
+  id             String     @id @default(cuid())
+  walletId       String
+  companyId      String
+  type           String
+  credits        Int
+  balanceAfter   Int
+  referenceType  String?
+  referenceId    String?
+  idempotencyKey String?
+  description    String?
+  createdAt      DateTime   @default(now()) @db.Timestamp(6)
+  Company        Company    @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "scan_transactions_company_fk")
+  wallet         ScanWallet @relation(fields: [walletId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "scan_transactions_wallet_fk")
+
+  @@unique([companyId, idempotencyKey], map: "scan_transactions_company_idempotency_key", where: raw("(\"idempotencyKey\" IS NOT NULL)"))
+  @@index([type])
+  @@index([companyId, createdAt(sort: Desc)], map: "scan_transactions_company_created_idx")
+  @@index([referenceType, referenceId], map: "scan_transactions_reference_idx")
+  @@index([walletId, createdAt(sort: Desc)], map: "scan_transactions_wallet_created_idx")
+  @@map("scan_transactions")
+}
+
+model Invoice {
+  id                     String        @id @default(cuid())
+  companyId              String
+  billingPaymentId       String?       @unique(map: "invoices_billingPaymentId_unique", where: raw("(\"billingPaymentId\" IS NOT NULL)"))
+  invoiceNumber          String        @unique
+  status                 String        @default("DRAFT")
+  currency               String        @default("INR")
+  customerLegalName      String
+  customerDisplayName    String?
+  customerGstin          String?
+  customerPan            String?
+  customerAddressLine1   String?
+  customerAddressLine2   String?
+  customerCity           String?
+  customerState          String?
+  customerStateCode      String?
+  customerPostalCode     String?
+  customerCountry        String        @default("India")
+  customerBillingEmail   String?
+  customerBillingPhone   String?
+  placeOfSupplyState     String?
+  placeOfSupplyStateCode String?
+  subtotalPaise          BigInt
+  gstPaise               BigInt        @default(0)
+  totalPaise             BigInt
+  issuedAt               DateTime?
+  paidAt                 DateTime?
+  voidedAt               DateTime?
+  pdfStorageKey          String?
+  pdfChecksum            String?
+  pdfSizeBytes           BigInt?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @default(now()) @updatedAt
+  items                  InvoiceItem[]
+  company                Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@index([companyId, status])
+  @@index([billingPaymentId])
+  @@index([pdfStorageKey])
+  @@map("invoices")
+}
+
+model InvoiceSequence {
+  id        String   @id @default(cuid())
+  year      Int      @unique
+  nextValue Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@map("invoice_sequences")
+}
+
+model InvoiceItem {
+  id                 String   @id @default(cuid())
+  invoiceId          String
+  itemType           String
+  description        String
+  quantity           Int      @default(1)
+  unitPricePaise     BigInt
+  taxableAmountPaise BigInt
+  gstPercent         Int      @default(18)
+  gstPaise           BigInt   @default(0)
+  totalPaise         BigInt
+  referenceType      String?
+  referenceId        String?
+  metadata           Json?
+  createdAt          DateTime @default(now())
+  invoice            Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@index([referenceType, referenceId])
+  @@map("invoice_items")
+}
+
+model AuditLog {
+  id          String   @id
+  companyId   String
+  actorId     String
+  action      String
+  entityType  String
+  entityId    String
+  beforeState Json?
+  afterState  Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([actorId, action])
+  @@index([companyId, createdAt])
+}
+
+model BillingPayment {
+  id                String    @id
+  companyId         String
+  provider          String    @default("RAZORPAY")
+  providerOrderId   String?   @unique
+  providerPaymentId String?   @unique
+  status            String    @default("PENDING")
+  plan              String
+  billingInterval   String    @default("MONTHLY")
+  currency          String    @default("INR")
+  amountPaise       BigInt
+  gstPaise          BigInt    @default(0)
+  totalPaise        BigInt
+  providerSignature String?
+  metadata          Json?
+  failureReason     String?
+  paidAt            DateTime? @db.Timestamp(6)
+  createdAt         DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt         DateTime  @default(now()) @db.Timestamp(6)
+
+  @@index([companyId])
+  @@index([status])
+}
+
+model BillingSubscription {
+  id                 String   @id
+  companyId          String   @unique
+  razorpaySubId      String?  @unique
+  plan               Plan
+  status             String
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime
+  Company            Company  @relation(fields: [companyId], references: [id])
+}
+
+model BillingWebhookEvent {
+  id            String    @id
+  provider      String    @default("RAZORPAY")
+  eventId       String
+  eventType     String
+  payload       Json
+  processed     Boolean   @default(false)
+  processedAt   DateTime? @db.Timestamp(6)
+  failureReason String?
+  createdAt     DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt     DateTime  @default(now()) @db.Timestamp(6)
+
+  @@unique([provider, eventId])
+}
+
+model Claim {
+  id          String      @id
+  companyId   String
+  orderId     String
+  reason      String
+  marketplace Marketplace
+  description String?
+  status      ClaimStatus @default(open)
+  decision    String?
+  decidedBy   String?
+  decidedAt   DateTime?
+  attachments Json?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime
+  Company     Company     @relation(fields: [companyId], references: [id])
+  Order       Order       @relation(fields: [orderId], references: [id])
+
+  @@index([companyId, status])
+}
+
+model Company {
+  id                  String               @id
+  companyName         String
+  email               String               @unique
+  phone               String
+  gst                 String?
+  pan                 String?
+  address             Json?
+  timezone            String               @default("Asia/Kolkata")
+  currency            String               @default("INR")
+  plan                Plan                 @default(free)
+  storageUsed         BigInt               @default(0)
+  storageQuota        BigInt               @default(5368709120)
+  status              Status               @default(active)
+  logo                String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime
+  BillingSubscription BillingSubscription?
+  Claim               Claim[]
+  MarketplaceAccount  MarketplaceAccount[]
+  Order               Order[]
+  User                User[]
+  Warehouse           Warehouse[]
+  invoices            Invoice[]
+  order_identifiers   order_identifiers[]
+  scan_transactions   ScanTransaction[]
+  scanWallet          ScanWallet?
+
+  @@index([status])
+}
+
+model Evidence {
+  id          String         @id
+  companyId   String
+  recordingId String         @unique
+  status      EvidenceStatus @default(processing)
+  frameCount  Int            @default(0)
+  frames      Json?
+  checksum    String?
+  createdAt   DateTime       @default(now())
+  orderId     String?
+  Order       Order?         @relation(fields: [orderId], references: [id])
+
+  @@index([companyId])
+  @@index([companyId, orderId])
+}
+
+model InviteToken {
+  id        String    @id
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model MarketplaceAccount {
+  id            String      @id
+  companyId     String
+  marketplace   Marketplace
+  accessToken   String
+  refreshToken  String?
+  webhookSecret String?
+  status        Status      @default(active)
+  lastSyncAt    DateTime?
+  createdAt     DateTime    @default(now())
+  Company       Company     @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, marketplace])
+}
+
+model Notification {
+  id        String    @id
+  companyId String
+  userId    String?
+  channel   String
+  payload   Json
+  status    String    @default("pending")
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([companyId, status])
+}
+
+model Order {
+  id                 String              @id
+  companyId          String
+  warehouseId        String?
+  marketplace        Marketplace         @default(manual)
+  marketplaceOrderId String?
+  status             OrderStatus         @default(synced)
+  items              Json
+  assignedOperatorId String?
+  stationId          String?
+  awb                String?
+  courier            String?
+  dispatchedAt       DateTime?
+  deliveredAt        DateTime?
+  metadata           Json?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime
+  Claim              Claim[]
+  Evidence           Evidence[]
+  Company            Company             @relation(fields: [companyId], references: [id])
+  Warehouse          Warehouse?          @relation(fields: [warehouseId], references: [id])
+  Recording          Recording[]
+  order_identifiers  order_identifiers[]
+
+  @@index([companyId, createdAt])
+  @@index([companyId, status])
+  @@index([marketplaceOrderId])
+}
+
+model Recording {
+  id               String             @id
+  companyId        String
+  operatorId       String
+  stationId        String?
+  status           RecordingStatus    @default(started)
+  startedAt        DateTime           @default(now())
+  stoppedAt        DateTime?
+  segmentCount     Int                @default(0)
+  b2KeyPrefix      String?
+  createdAt        DateTime           @default(now())
+  orderId          String?
+  mode             RecordingMode      @default(forward)
+  Order            Order?             @relation(fields: [orderId], references: [id])
+  RecordingSegment RecordingSegment[]
+  Return           Return?
+
+  @@unique([companyId, operatorId, orderId], map: "recording_one_active_per_order_operator", where: raw("(status = ANY (ARRAY['started'::\"RecordingStatus\", 'paused'::\"RecordingStatus\"]))"))
+  @@index([companyId])
+  @@index([companyId, mode, status])
+  @@index([companyId, orderId, status])
+}
+
+model RecordingSegment {
+  id          String    @id
+  recordingId String
+  sequence    Int
+  b2Key       String
+  checksum    String
+  sizeBytes   BigInt
+  uploadedAt  DateTime?
+  Recording   Recording @relation(fields: [recordingId], references: [id])
+
+  @@unique([recordingId, sequence])
+}
+
+model Return {
+  id                  String     @id
+  companyId           String
+  orderId             String
+  unboxingRecordingId String?    @unique
+  condition           String?
+  decision            String?
+  decidedAt           DateTime?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime
+  Recording           Recording? @relation(fields: [unboxingRecordingId], references: [id])
+
+  @@index([companyId])
+}
+
+model Session {
+  id             String    @id
+  userId         String
+  clerkSessionId String    @unique
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime  @default(now())
+  revokedAt      DateTime?
+
+  @@index([userId])
+}
+
+model Station {
+  id              String        @id
+  warehouseId     String
+  stationName     String
+  stationCode     String
+  cameraConfig    Json?
+  scannerConfig   Json?
+  printerConfig   Json?
+  status          StationStatus @default(offline)
+  lastHeartbeatAt DateTime?
+  Warehouse       Warehouse     @relation(fields: [warehouseId], references: [id])
+
+  @@unique([warehouseId, stationCode])
+}
+
+model User {
+  id           String     @id
+  firebaseUid  String?    @unique(map: "User_clerkId_key")
+  companyId    String
+  employeeId   String?
+  name         String
+  email        String     @unique
+  phone        String?
+  role         Role       @default(packing_operator)
+  warehouseId  String?
+  stationId    String?
+  status       UserStatus @default(pending)
+  profilePhoto String?
+  joiningDate  DateTime?
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime
+  Company      Company    @relation(fields: [companyId], references: [id])
+  Warehouse    Warehouse? @relation(fields: [warehouseId], references: [id])
+
+  @@index([companyId, status])
+}
+
+model Warehouse {
+  id        String    @id
+  companyId String
+  name      String
+  code      String
+  address   Json
+  city      String
+  state     String
+  country   String    @default("India")
+  timezone  String
+  status    Status    @default(active)
+  createdAt DateTime  @default(now())
+  Order     Order[]
+  Station   Station[]
+  User      User[]
+  Company   Company   @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, code])
+  @@index([companyId, status])
+}
+
+model order_identifiers {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id       String
+  order_id         String
+  identifier_type  IdentifierType
+  identifier_value String
+  normalized_value String
+  source           String?
+  metadata         Json?
+  created_at       DateTime       @default(now())
+  updated_at       DateTime       @default(now())
+  Company          Company        @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  Order            Order          @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@unique([company_id, identifier_type, normalized_value], map: "order_identifiers_company_type_normalized_key")
+  @@index([company_id, normalized_value], map: "order_identifiers_company_normalized_idx")
+  @@index([company_id, identifier_type], map: "order_identifiers_company_type_idx")
+  @@index([order_id], map: "order_identifiers_order_idx")
+}
+
+model plan_configurations {
+  id                String   @id
+  code              String   @unique(map: "plan_configurations_code_unique")
+  name              String
+  description       String?
+  pricePaise        BigInt   @default(0)
+  currency          String   @default("INR")
+  billingInterval   String   @default("MONTHLY")
+  validityMonths    Int      @default(1)
+  includedScans     Int      @default(0)
+  retentionDays     Int      @default(0)
+  storageQuotaBytes BigInt   @default(0)
+  maxWarehouses     Int?
+  maxOperators      Int?
+  gstPercent        Int      @default(18)
+  isCommercial      Boolean  @default(true)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now())
+
+  @@index([isActive], map: "plan_configurations_active_idx")
+  @@index([isCommercial, isActive], map: "plan_configurations_commercial_active_idx")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MANAGER
+  OPERATOR
+  VIEWER
+}
+
+enum Marketplace {
+  amazon
+  flipkart
+  meesho
+  shopify
+  woocommerce
+  manual
+}
+
+enum OrderStatus {
+  synced
+  queued
+  packing
+  recording
+  scanned
+  evidence_ready
+  dispatched
+  shipped
+  claimed
+  returned
+  closed
+}
+
+enum EvidenceStatus {
+  processing
+  ready
+  failed
+}
+
+enum ClaimStatus {
+  open
+  under_review
+  investigating
+  approved
+  rejected
+  escalated
+  closed
+}
+
+enum IdentifierType {
+  order_id
+  shipment_id
+  order_item_id
+  tracking_id
+  awb
+  barcode
+  qr
+  sku
+  fsn
+  invoice_no
+  other
+}
+
+enum Plan {
+  free
+  starter
+  professional
+  enterprise
+  growth
+}
+
+enum RecordingMode {
+  forward
+  return
+}
+
+enum RecordingStatus {
+  started
+  paused
+  completed
+  failed
+}
+
+enum Role {
+  super_admin
+  company_admin
+  warehouse_manager
+  supervisor
+  packing_operator
+  qc_operator
+  claims_executive
+  marketplace_manager
+  viewer
+  auditor
+}
+
+enum StationStatus {
+  online
+  offline
+  maintenance
+  inactive
+}
+
+enum Status {
+  active
+  suspended
+  deleted
+}
+
+enum UserStatus {
+  pending
+  active
+  suspended
+  deleted
+}
+
+
