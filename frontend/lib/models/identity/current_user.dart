@@ -1,4 +1,4 @@
-﻿class CurrentUser {
+class CurrentUser {
   final String id;
   final String firebaseUid;
   final String email;
@@ -111,4 +111,3 @@ class WarehouseInfo {
     );
   }
 }
-

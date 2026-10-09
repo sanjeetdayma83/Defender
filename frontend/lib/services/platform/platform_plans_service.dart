@@ -127,9 +127,9 @@ class PlatformPlansService {
       'pricePaise': pricePaise,
       'billingInterval': period == 'yearly' ? 'YEARLY' : 'MONTHLY',
       if (code case final value? when value.isNotEmpty) 'code': value.trim(),
-      if (includedScans case final value?) 'includedScans': value,
-      if (maxWarehouses case final value?) 'maxWarehouses': value,
-      if (maxOperators case final value?) 'maxOperators': value,
+      'includedScans': ?includedScans,
+      'maxWarehouses': ?maxWarehouses,
+      'maxOperators': ?maxOperators,
     };
 
     final response = await _client.post(
@@ -157,9 +157,9 @@ class PlatformPlansService {
       'billingInterval': period == 'yearly' ? 'YEARLY' : 'MONTHLY',
       'isActive': isActive,
       if (code case final value? when value.isNotEmpty) 'code': value.trim(),
-      if (includedScans case final value?) 'includedScans': value,
-      if (maxWarehouses case final value?) 'maxWarehouses': value,
-      if (maxOperators case final value?) 'maxOperators': value,
+      'includedScans': ?includedScans,
+      'maxWarehouses': ?maxWarehouses,
+      'maxOperators': ?maxOperators,
     };
 
     final response = await _client.patch(

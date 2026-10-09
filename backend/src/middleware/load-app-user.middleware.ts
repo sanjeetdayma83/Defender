@@ -88,6 +88,15 @@ export async function loadAppUser(
         ? String((error as { code?: unknown }).code)
         : undefined;
 
+    if (error instanceof Error && error.message === "USER_NOT_FOUND") {
+      res.status(404).json({
+        success: false,
+        code: "USER_NOT_REGISTERED",
+        message: "No application account is linked to this Firebase user.",
+      });
+      return;
+    }
+
     if (code === "ROLE_UNKNOWN") {
       res.status(403).json({
         success: false,
@@ -106,3 +115,4 @@ export async function loadAppUser(
     });
   }
 }
+

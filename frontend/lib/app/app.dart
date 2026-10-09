@@ -1,33 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../providers/session_provider.dart';
+import '../screens/session/session_gate.dart';
 import '../screens/saas/saas_portal_screen.dart';
 
 class LossDefenderApp extends StatelessWidget {
-  const LossDefenderApp({super.key});
+  final bool useSessionGate;
+
+  const LossDefenderApp({super.key, this.useSessionGate = true});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Loss Defender',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2563EB),
-          brightness: Brightness.light,
+    return ChangeNotifierProvider<SessionProvider>(
+      create: (_) => SessionProvider(),
+      child: MaterialApp(
+        title: 'Loss Defender Pro',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          useMaterial3: true,
+          fontFamily: 'Inter',
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF0061FC),
+            brightness: Brightness.light,
+          ),
+          scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Colors.white,
+            foregroundColor: Color(0xFF021F4F),
+            elevation: 0,
+          ),
         ),
-        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+        home: useSessionGate ? const LDSessionGate() : const SaaSPortalScreen(),
       ),
-      home: const LossDefenderHome(),
     );
-  }
-}
-
-class LossDefenderHome extends StatelessWidget {
-  const LossDefenderHome({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const SaaSPortalScreen();
   }
 }

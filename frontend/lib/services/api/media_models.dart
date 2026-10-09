@@ -1,4 +1,4 @@
-﻿class CloudMedia {
+class CloudMedia {
   final String type;
   final String bucket;
   final String key;
@@ -19,11 +19,11 @@
     return CloudMedia(
       type: json['type']?.toString() ?? 'recording',
       bucket: json['bucket']?.toString() ?? '',
-      key: json['key']?.toString() ??
-          json['storageKey']?.toString() ??
-          '',
+      key: json['key']?.toString() ?? json['storageKey']?.toString() ?? '',
       contentType: json['contentType']?.toString() ?? '',
-      sizeBytes: json['sizeBytes'] is num ? (json['sizeBytes'] as num).toInt() : int.tryParse(json['sizeBytes']?.toString() ?? '') ?? 0,
+      sizeBytes: json['sizeBytes'] is num
+          ? (json['sizeBytes'] as num).toInt()
+          : int.tryParse(json['sizeBytes']?.toString() ?? '') ?? 0,
       url: json['url']?.toString() ?? '',
     );
   }
@@ -34,11 +34,7 @@ class MediaUploadResponse {
   final CloudMedia? media;
   final String? message;
 
-  const MediaUploadResponse({
-    required this.success,
-    this.media,
-    this.message,
-  });
+  const MediaUploadResponse({required this.success, this.media, this.message});
 
   factory MediaUploadResponse.fromJson(Map<String, dynamic> json) {
     final rawMedia = json['media'];

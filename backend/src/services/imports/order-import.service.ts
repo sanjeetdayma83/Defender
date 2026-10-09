@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import crypto from "node:crypto";
 
 import { prisma } from "../../config/prisma.js";
 import {
@@ -197,7 +198,7 @@ function marketplaceFromValue(value: string): Marketplace {
   if (normalized.includes("flipkart")) return Marketplace.FLIPKART;
   if (normalized.includes("meesho")) return Marketplace.MEESHO;
 
-  return Marketplace.OTHER;
+  return Marketplace.MANUAL;
 }
 
 function parseDate(value: string): Date | undefined {
@@ -623,41 +624,64 @@ export class OrderImportService {
           }
         }
 
-        const existingOrder = await tx.order.findUnique({
-          where: {
-            companyId_marketplace_externalOrderId: {
-              companyId,
-              marketplace: row.marketplace,
-              externalOrderId: row.orderId,
-            },
-          },
-        });
+        const existingOrder = await tx.order.findFirst({
+  where: {
+    companyId,
+    marketplace: row.marketplace,
+    marketplaceOrderId: row.orderId,
+  },
+  orderBy: {
+    createdAt: "desc",
+  },
+});
 
-        const order = await tx.order.upsert({
-          where: {
-            companyId_marketplace_externalOrderId: {
-              companyId,
-              marketplace: row.marketplace,
-              externalOrderId: row.orderId,
-            },
-          },
-          update: {
-            warehouseId,
-            customerName: row.customerName,
-            orderedAt: row.orderDate,
-            status: OrderStatus.PENDING,
-          },
-          create: {
-            companyId,
-            warehouseId,
-            externalOrderId: row.orderId,
-            marketplaceOrderId: row.orderId,
-            marketplace: row.marketplace,
-            customerName: row.customerName,
-            orderedAt: row.orderDate,
-            status: OrderStatus.PENDING,
-          },
-        });
+const importedItem = {
+  sku: row.sku,
+  productName: row.productName,
+  quantity: row.quantity,
+  ...(row.variant ? { variant: row.variant } : {}),
+  ...(row.color ? { color: row.color } : {}),
+  ...(row.size ? { size: row.size } : {}),
+  ...(row.imageUrl ? { imageUrl: row.imageUrl } : {}),
+};
+
+const importedMetadata = {
+  source: "spreadsheet_import",
+  ...(row.customerName ? { customerName: row.customerName } : {}),
+  ...(row.orderDate
+    ? { orderDate: row.orderDate.toISOString() }
+    : {}),
+};
+
+const order = existingOrder
+  ? await tx.order.update({
+      where: {
+        id: existingOrder.id,
+      },
+      data: {
+        warehouseId,
+        marketplaceOrderId: row.orderId,
+        marketplace: row.marketplace,
+        awb: row.awb,
+        items: [importedItem],
+        metadata: importedMetadata,
+        status: OrderStatus.SYNCED,
+      },
+    })
+  : await tx.order.create({
+      data: {
+        id: crypto.randomUUID(),
+        updatedAt: new Date(),
+        companyId,
+        warehouseId,
+        marketplaceOrderId: row.orderId,
+        marketplace: row.marketplace,
+        awb: row.awb,
+        items: [importedItem],
+        metadata: importedMetadata,
+        status: OrderStatus.SYNCED,
+      },
+    });
 
         if (existingOrder) {
           result.updatedOrders += 1;

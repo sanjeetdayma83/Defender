@@ -38,7 +38,7 @@ export async function listShipments(
               },
               {
                 order: {
-                  externalOrderId: {
+                  marketplaceOrderId: {
                     contains: search,
                     mode: "insensitive",
                   },
@@ -51,7 +51,7 @@ export async function listShipments(
     include: {
       order: {
         include: {
-          items: {
+          orderItems: {
             include: {
               product: true,
               variant: true,
@@ -100,8 +100,8 @@ export async function getShipment(
       barcodeAliases: true,
       order: {
         include: {
-          warehouse: true,
-          items: {
+          Warehouse: true,
+          orderItems: {
             include: {
               product: {
                 include: {

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../services/firebase_auth_service.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -173,4 +173,3 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     );
   }
 }
-

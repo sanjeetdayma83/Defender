@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # ENVIRONMENT / SECRETS
 # ============================================================
 
@@ -97,7 +97,8 @@ _backup/
 # ============================================================
 
 .vscode/settings.json
-.vscode/launch.json_UPLOAD_QUEUE_BACKUP_20261007_231751/
+.vscode/launch.json
+_UPLOAD_QUEUE_BACKUP_20261007_231751/
 _owner_live_ui_backup_20261006_183142/
 _repair_backup_20261006_181509/
 _safe_repair_20261006_183808/
@@ -124,3 +125,6 @@ frontend/lib/screens/platform/platform_ops_screens.dart.bak-topups
 frontend/lib/screens/saas/saas_portal_screen.dart.bak-wire-20261006-153008
 _UPLOAD_QUEUE_BACKUP_20261007_231751/
 _phase1a_backup_20261008_114812/
+
+
+

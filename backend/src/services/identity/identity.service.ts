@@ -3,30 +3,28 @@ import { prisma } from "../../config/prisma.js";
 
 export class IdentityService {
   private async getUserByFirebaseUid(firebaseUid: string) {
+    // Compatibility with the existing lowercase legacy tables.
     const rows = await prisma.$queryRaw<any[]>(Prisma.sql`
       SELECT
         u.id,
         u."firebaseUid",
         u.email,
         u.name,
-        u.phone,
+        NULL::text AS phone,
         u.role::text AS role,
-        u.status::text AS status,
+        CASE WHEN u."isActive" THEN 'ACTIVE' ELSE 'INACTIVE' END AS status,
         u."companyId",
-        c."companyName" AS "companyName",
-        c.email AS "companyEmail",
-        c.phone AS "companyPhone",
-        c.status::text AS "companyStatus"
-      FROM "User" u
-      LEFT JOIN "Company" c
+        c.name AS "companyName",
+        c.code AS "companyCode",
+        c."isActive" AS "companyIsActive"
+      FROM public.users u
+      LEFT JOIN public.companies c
         ON c.id = u."companyId"
       WHERE u."firebaseUid" = ${firebaseUid}
       LIMIT 1
     `);
 
-    if (!rows.length) {
-      return null;
-    }
+    if (!rows.length) return null;
 
     const row = rows[0];
 
@@ -40,10 +38,9 @@ export class IdentityService {
         w.city,
         w.state,
         w.country,
-        w.timezone,
-        w.status::text AS status,
+        CASE WHEN w."isActive" THEN 'ACTIVE' ELSE 'INACTIVE' END AS status,
         w."createdAt"
-      FROM "Warehouse" w
+      FROM public.warehouses w
       WHERE w."companyId" = ${row.companyId}
       ORDER BY w."createdAt" ASC, w.name ASC
     `);
@@ -55,17 +52,16 @@ export class IdentityService {
       name: row.name,
       phone: row.phone,
       role: row.role,
-      isActive: String(row.status ?? "").toLowerCase() === "active",
       status: row.status,
+      isActive: Boolean(row.isActive ?? row.status === "ACTIVE"),
       companyId: row.companyId,
       company: {
         id: row.companyId,
         name: row.companyName,
-        code: "",
-        email: row.companyEmail,
-        phone: row.companyPhone,
-        isActive:
-          String(row.companyStatus ?? "").toLowerCase() === "active",
+        code: row.companyCode ?? "",
+        email: null,
+        phone: null,
+        isActive: Boolean(row.companyIsActive),
       },
       warehouses: (warehouses ?? []).map((w: any) => ({
         id: w.id,
@@ -76,9 +72,9 @@ export class IdentityService {
         city: w.city,
         state: w.state,
         country: w.country,
-        timezone: w.timezone,
+        timezone: null,
         status: w.status,
-        isActive: String(w.status ?? "").toLowerCase() === "active",
+        isActive: w.status === "ACTIVE",
       })),
     };
   }
@@ -99,18 +95,13 @@ export class IdentityService {
     name?: string;
   }) {
     const existing = await this.getUserByFirebaseUid(input.firebaseUid);
-
-    if (existing) {
-      return existing;
-    }
+    if (existing) return existing;
 
     const email = input.email.trim().toLowerCase();
 
     const existingByEmail = await prisma.$queryRaw<any[]>(Prisma.sql`
-      SELECT
-        id,
-        "firebaseUid"
-      FROM "User"
+      SELECT id, "firebaseUid"
+      FROM public.users
       WHERE lower(email) = ${email}
       LIMIT 1
     `);
@@ -126,10 +117,9 @@ export class IdentityService {
     }
 
     await prisma.$executeRaw(Prisma.sql`
-      UPDATE "User"
-      SET
-        "firebaseUid" = ${input.firebaseUid},
-        "updatedAt" = NOW()
+      UPDATE public.users
+      SET "firebaseUid" = ${input.firebaseUid},
+          "updatedAt" = NOW()
       WHERE id = ${existingByEmail[0].id}
     `);
 
@@ -141,10 +131,8 @@ export class IdentityService {
 
     if (name) {
       await prisma.$executeRaw(Prisma.sql`
-        UPDATE "User"
-        SET
-          name = ${name},
-          "updatedAt" = NOW()
+        UPDATE public.users
+        SET name = ${name}, "updatedAt" = NOW()
         WHERE "firebaseUid" = ${firebaseUid}
       `);
     }

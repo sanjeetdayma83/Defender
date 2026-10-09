@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import '../api/api_client.dart';
 import '../api/api_config.dart';
@@ -24,9 +24,7 @@ class CompanyBillingService {
   }
 
   Future<List<Map<String, dynamic>>> plans() async {
-    final response = await _api.get(
-      Uri.parse('${ApiConfig.baseUrl}/plans'),
-    );
+    final response = await _api.get(Uri.parse('${ApiConfig.baseUrl}/plans'));
 
     final decoded = _decode(response, 'Unable to load plans.');
     final raw = decoded['data'] ?? decoded;

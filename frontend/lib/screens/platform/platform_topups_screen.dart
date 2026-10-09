@@ -286,7 +286,7 @@ class _PlatformTopUpsScreenState extends State<PlatformTopUpsScreen> {
               return ListView.separated(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
                 itemCount: packs.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
                 itemBuilder: (context, index) {
                   final pack = packs[index];
 

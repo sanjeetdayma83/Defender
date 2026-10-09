@@ -1,82 +1,613 @@
-enum AuditAction {
-  CREATE
-  UPDATE
-  DELETE
-  LOGIN
-  LOGOUT
-  IMPORT
-  SCAN
-  PACKING_STARTED
-  EVIDENCE_UPLOADED
-  WALLET_CONSUMED
-  PACKING_COMPLETED
-  ORDER_PACKED
-  ERROR
-
-  PLAN_CREATED
-  PLAN_UPDATED
-  PLAN_DEACTIVATED
-
-  SUBSCRIPTION_CREATED
-  SUBSCRIPTION_ACTIVATED
-  SUBSCRIPTION_UPDATED
-  SUBSCRIPTION_CANCELLED
-  SUBSCRIPTION_EXPIRED
-
-  PAYMENT_CREATED
-  PAYMENT_SUCCESS
-  PAYMENT_FAILED
-  PAYMENT_REFUNDED
-
-  CREDIT_ALLOCATION
-  EXTRA_SCAN_PURCHASE
-  RETENTION_PURCHASE
-}
-
-// ============================================================
-// LOSS DEFENDER - DATABASE SCHEMA
-// PostgreSQL / Neon + Prisma 7
-// ============================================================
-
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
   provider = "postgresql"
 }
 
-// ============================================================
-// ENUMS
-// ============================================================
+model ScanWallet {
+  id                String            @id @default(cuid())
+  companyId         String            @unique
+  balance           Int               @default(0)
+  lifetimeAllocated Int               @default(0)
+  lifetimeConsumed  Int               @default(0)
+  createdAt         DateTime          @default(now()) @db.Timestamp(6)
+  updatedAt         DateTime          @default(now()) @updatedAt @db.Timestamp(6)
+  transactions      ScanTransaction[]
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "scan_wallets_company_fk")
 
-enum UserRole {
-  PLATFORM_ADMIN
-  OWNER
-  ADMIN
-  MANAGER
-  OPERATOR
-  VIEWER
+  @@map("scan_wallets")
+}
+
+model ScanTransaction {
+  id             String     @id @default(cuid())
+  walletId       String
+  companyId      String
+  type           String
+  credits        Int
+  balanceAfter   Int
+  referenceType  String?
+  referenceId    String?
+  idempotencyKey String?
+  description    String?
+  createdAt      DateTime   @default(now()) @db.Timestamp(6)
+  Company        Company    @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "scan_transactions_company_fk")
+  wallet         ScanWallet @relation(fields: [walletId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "scan_transactions_wallet_fk")
+
+  @@unique([companyId, idempotencyKey], map: "scan_transactions_company_idempotency_key", where: raw("(\"idempotencyKey\" IS NOT NULL)"))
+  @@index([type])
+  @@index([companyId, createdAt(sort: Desc)], map: "scan_transactions_company_created_idx")
+  @@index([referenceType, referenceId], map: "scan_transactions_reference_idx")
+  @@index([walletId, createdAt(sort: Desc)], map: "scan_transactions_wallet_created_idx")
+  @@map("scan_transactions")
+}
+
+model Invoice {
+  id                     String        @id @default(cuid())
+  companyId              String
+  billingPaymentId       String?       @unique(map: "invoices_billingPaymentId_unique", where: raw("(\"billingPaymentId\" IS NOT NULL)"))
+  invoiceNumber          String        @unique
+  status                 String        @default("DRAFT")
+  currency               String        @default("INR")
+  customerLegalName      String
+  customerDisplayName    String?
+  customerGstin          String?
+  customerPan            String?
+  customerAddressLine1   String?
+  customerAddressLine2   String?
+  customerCity           String?
+  customerState          String?
+  customerStateCode      String?
+  customerPostalCode     String?
+  customerCountry        String        @default("India")
+  customerBillingEmail   String?
+  customerBillingPhone   String?
+  placeOfSupplyState     String?
+  placeOfSupplyStateCode String?
+  subtotalPaise          BigInt
+  gstPaise               BigInt        @default(0)
+  totalPaise             BigInt
+  issuedAt               DateTime?
+  paidAt                 DateTime?
+  voidedAt               DateTime?
+  pdfStorageKey          String?
+  pdfChecksum            String?
+  pdfSizeBytes           BigInt?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @default(now()) @updatedAt
+  items                  InvoiceItem[]
+  company                Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@index([companyId, status])
+  @@index([billingPaymentId])
+  @@index([pdfStorageKey])
+  @@map("invoices")
+}
+
+model InvoiceSequence {
+  id        String   @id @default(cuid())
+  year      Int      @unique
+  nextValue Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@map("invoice_sequences")
+}
+
+model InvoiceItem {
+  id                 String   @id @default(cuid())
+  invoiceId          String
+  itemType           String
+  description        String
+  quantity           Int      @default(1)
+  unitPricePaise     BigInt
+  taxableAmountPaise BigInt
+  gstPercent         Int      @default(18)
+  gstPaise           BigInt   @default(0)
+  totalPaise         BigInt
+  referenceType      String?
+  referenceId        String?
+  metadata           Json?
+  createdAt          DateTime @default(now())
+  invoice            Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@index([referenceType, referenceId])
+  @@map("invoice_items")
+}
+
+model AuditLog {
+  id          String   @id
+  companyId   String
+  actorId     String
+  action      String
+  entityType  String
+  entityId    String
+  beforeState Json?
+  afterState  Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([actorId, action])
+  @@index([companyId, createdAt])
+}
+
+model BillingPayment {
+  id                String    @id
+  companyId         String
+  provider          String    @default("RAZORPAY")
+  providerOrderId   String?   @unique
+  providerPaymentId String?   @unique
+  status            String    @default("PENDING")
+  plan              String
+  billingInterval   String    @default("MONTHLY")
+  currency          String    @default("INR")
+  amountPaise       BigInt
+  gstPaise          BigInt    @default(0)
+  totalPaise        BigInt
+  providerSignature String?
+  metadata          Json?
+  failureReason     String?
+  paidAt            DateTime? @db.Timestamp(6)
+  createdAt         DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt         DateTime  @default(now()) @db.Timestamp(6)
+
+  @@index([companyId])
+  @@index([status])
+}
+
+model BillingSubscription {
+  id                 String   @id
+  companyId          String   @unique
+  razorpaySubId      String?  @unique
+  plan               Plan
+  status             String
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime
+  Company            Company  @relation(fields: [companyId], references: [id])
+}
+
+model BillingWebhookEvent {
+  id            String    @id
+  provider      String    @default("RAZORPAY")
+  eventId       String
+  eventType     String
+  payload       Json
+  processed     Boolean   @default(false)
+  processedAt   DateTime? @db.Timestamp(6)
+  failureReason String?
+  createdAt     DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt     DateTime  @default(now()) @db.Timestamp(6)
+
+  @@unique([provider, eventId])
+}
+
+model Claim {
+  id          String      @id
+  companyId   String
+  orderId     String
+  reason      String
+  marketplace Marketplace
+  description String?
+  status      ClaimStatus @default(OPEN)
+  decision    String?
+  decidedBy   String?
+  decidedAt   DateTime?
+  attachments Json?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime
+  Company     Company     @relation(fields: [companyId], references: [id])
+  Order       Order       @relation(fields: [orderId], references: [id])
+
+  @@index([companyId, status])
+}
+
+model Company {
+  id                  String               @id
+  companyName         String
+  email               String               @unique
+  phone               String
+  gst                 String?
+  pan                 String?
+  address             Json?
+  timezone            String               @default("Asia/Kolkata")
+  currency            String               @default("INR")
+  plan                Plan                 @default(FREE)
+  storageUsed         BigInt               @default(0)
+  storageQuota        BigInt               @default(5368709120)
+  status              Status               @default(ACTIVE)
+  logo                String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime
+  BillingSubscription BillingSubscription?
+  Claim               Claim[]
+  MarketplaceAccount  MarketplaceAccount[]
+  Order               Order[]
+  User                User[]
+  Warehouse           Warehouse[]
+  invoices            Invoice[]
+  order_identifiers   order_identifiers[]
+  scan_transactions   ScanTransaction[]
+  scanWallet          ScanWallet?
+
+  @@index([status])
+  products           Product[]
+  storageObjects     StorageObject[]
+  storageUsageEvents StorageUsageEvent[]
+  billingProfile     BillingProfile?
+}
+
+model Evidence {
+  id          String         @id
+  companyId   String
+  recordingId String         @unique
+  status      EvidenceStatus @default(PROCESSING)
+  frameCount  Int            @default(0)
+  frames      Json?
+  checksum    String?
+  createdAt   DateTime       @default(now())
+  orderId     String?
+  Order       Order?         @relation(fields: [orderId], references: [id])
+
+  @@index([companyId])
+  @@index([companyId, orderId])
+}
+
+model InviteToken {
+  id        String    @id
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model MarketplaceAccount {
+  id            String      @id
+  companyId     String
+  marketplace   Marketplace
+  accessToken   String
+  refreshToken  String?
+  webhookSecret String?
+  status        Status      @default(ACTIVE)
+  lastSyncAt    DateTime?
+  createdAt     DateTime    @default(now())
+  Company       Company     @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, marketplace])
+}
+
+model Notification {
+  id        String    @id
+  companyId String
+  userId    String?
+  channel   String
+  payload   Json
+  status    String    @default("pending")
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([companyId, status])
+}
+
+model Order {
+  id                 String              @id
+  companyId          String
+  warehouseId        String?
+  marketplace        Marketplace         @default(MANUAL)
+  marketplaceOrderId String?
+  status             OrderStatus         @default(SYNCED)
+  items              Json
+  assignedOperatorId String?
+  stationId          String?
+  awb                String?
+  courier            String?
+  dispatchedAt       DateTime?
+  deliveredAt        DateTime?
+  metadata           Json?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime
+  Claim              Claim[]
+  Evidence           Evidence[]
+  Company            Company             @relation(fields: [companyId], references: [id])
+  Warehouse          Warehouse?          @relation(fields: [warehouseId], references: [id])
+  Recording          Recording[]
+  order_identifiers  order_identifiers[]
+
+  @@index([companyId, createdAt])
+  @@index([companyId, status])
+  @@index([marketplaceOrderId])
+  orderItems      OrderItem[]
+  shipments       Shipment[]
+  packingSessions PackingSession[]
+}
+
+model Recording {
+  id               String             @id
+  companyId        String
+  operatorId       String
+  stationId        String?
+  status           RecordingStatus    @default(STARTED)
+  startedAt        DateTime           @default(now())
+  stoppedAt        DateTime?
+  segmentCount     Int                @default(0)
+  b2KeyPrefix      String?
+  createdAt        DateTime           @default(now())
+  orderId          String?
+  mode             RecordingMode      @default(FORWARD)
+  Order            Order?             @relation(fields: [orderId], references: [id])
+  RecordingSegment RecordingSegment[]
+  Return           Return?
+
+  @@unique([companyId, operatorId, orderId], map: "recording_one_active_per_order_operator", where: raw("(status = ANY (ARRAY['started'::\"RecordingStatus\", 'paused'::\"RecordingStatus\"]))"))
+  @@index([companyId])
+  @@index([companyId, mode, status])
+  @@index([companyId, orderId, status])
+}
+
+model RecordingSegment {
+  id          String    @id
+  recordingId String
+  sequence    Int
+  b2Key       String
+  checksum    String
+  sizeBytes   BigInt
+  uploadedAt  DateTime?
+  Recording   Recording @relation(fields: [recordingId], references: [id])
+
+  @@unique([recordingId, sequence])
+}
+
+model Return {
+  id                  String     @id
+  companyId           String
+  orderId             String
+  unboxingRecordingId String?    @unique
+  condition           String?
+  decision            String?
+  decidedAt           DateTime?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime
+  Recording           Recording? @relation(fields: [unboxingRecordingId], references: [id])
+
+  @@index([companyId])
+}
+
+model Session {
+  id             String    @id
+  userId         String
+  clerkSessionId String    @unique
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime  @default(now())
+  revokedAt      DateTime?
+
+  @@index([userId])
+}
+
+model Station {
+  id              String        @id
+  warehouseId     String
+  stationName     String
+  stationCode     String
+  cameraConfig    Json?
+  scannerConfig   Json?
+  printerConfig   Json?
+  status          StationStatus @default(OFFLINE)
+  lastHeartbeatAt DateTime?
+  Warehouse       Warehouse     @relation(fields: [warehouseId], references: [id])
+
+  @@unique([warehouseId, stationCode])
+}
+
+model User {
+  id           String     @id
+  firebaseUid  String?    @unique(map: "User_clerkId_key")
+  companyId    String
+  employeeId   String?
+  name         String
+  email        String     @unique
+  phone        String?
+  role         UserRole       @default(packing_operator)
+  warehouseId  String?
+  stationId    String?
+  status       UserStatus @default(PENDING)
+  profilePhoto String?
+  joiningDate  DateTime?
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime
+  Company      Company    @relation(fields: [companyId], references: [id])
+  Warehouse    Warehouse? @relation(fields: [warehouseId], references: [id])
+
+  @@index([companyId, status])
+  packingSessions PackingSession[]
+}
+
+model Warehouse {
+  id        String    @id
+  companyId String
+  name      String
+  code      String
+  address   Json
+  city      String
+  state     String
+  country   String    @default("India")
+  timezone  String
+  status    Status    @default(ACTIVE)
+  createdAt DateTime  @default(now())
+  Order     Order[]
+  Station   Station[]
+  User      User[]
+  Company   Company   @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, code])
+  @@index([companyId, status])
+  packingSessions PackingSession[]
+}
+
+model order_identifiers {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id       String
+  order_id         String
+  identifier_type  IdentifierType
+  identifier_value String
+  normalized_value String
+  source           String?
+  metadata         Json?
+  created_at       DateTime       @default(now())
+  updated_at       DateTime       @default(now())
+  Company          Company        @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  Order            Order          @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@unique([company_id, identifier_type, normalized_value], map: "order_identifiers_company_type_normalized_key")
+  @@index([company_id, normalized_value], map: "order_identifiers_company_normalized_idx")
+  @@index([company_id, identifier_type], map: "order_identifiers_company_type_idx")
+  @@index([order_id], map: "order_identifiers_order_idx")
+}
+
+model plan_configurations {
+  id                String   @id
+  code              String   @unique(map: "plan_configurations_code_unique")
+  name              String
+  description       String?
+  pricePaise        BigInt   @default(0)
+  currency          String   @default("INR")
+  billingInterval   String   @default("MONTHLY")
+  validityMonths    Int      @default(1)
+  includedScans     Int      @default(0)
+  retentionDays     Int      @default(0)
+  storageQuotaBytes BigInt   @default(0)
+  maxWarehouses     Int?
+  maxOperators      Int?
+  gstPercent        Int      @default(18)
+  isCommercial      Boolean  @default(true)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now())
+
+  @@index([isActive], map: "plan_configurations_active_idx")
+  @@index([isCommercial, isActive], map: "plan_configurations_commercial_active_idx")
 }
 
 enum Marketplace {
-  FLIPKART
-  AMAZON
-  MEESHO
-  OTHER
+  AMAZON @map("amazon")
+  FLIPKART @map("flipkart")
+  MEESHO @map("meesho")
+  SHOPIFY @map("shopify")
+  WOOCOMMERCE @map("woocommerce")
+  MANUAL @map("manual")
 }
 
 enum OrderStatus {
-  PENDING
-  CONFIRMED
-  PACKING
-  PACKED
-  SHIPPED
-  DELIVERED
-  CANCELLED
-  RETURNED
+  SYNCED @map("synced")
+  QUEUED @map("queued")
+  PACKING @map("packing")
+  RECORDING @map("recording")
+  SCANNED @map("scanned")
+  EVIDENCE_READY @map("evidence_ready")
+  DISPATCHED @map("dispatched")
+  SHIPPED @map("shipped")
+  CLAIMED @map("claimed")
+  RETURNED @map("returned")
+  CLOSED @map("closed")
 }
+
+enum EvidenceStatus {
+  PROCESSING @map("processing")
+  READY @map("ready")
+  FAILED @map("failed")
+}
+
+enum ClaimStatus {
+  OPEN @map("open")
+  UNDER_REVIEW @map("under_review")
+  INVESTIGATING @map("investigating")
+  APPROVED @map("approved")
+  REJECTED @map("rejected")
+  ESCALATED @map("escalated")
+  CLOSED @map("closed")
+}
+
+enum IdentifierType {
+  ORDER_ID @map("order_id")
+  SHIPMENT_ID @map("shipment_id")
+  ORDER_ITEM_ID @map("order_item_id")
+  TRACKING_ID @map("tracking_id")
+  AWB @map("awb")
+  BARCODE @map("barcode")
+  QR @map("qr")
+  SKU @map("sku")
+  FSN @map("fsn")
+  INVOICE_NO @map("invoice_no")
+  OTHER @map("other")
+}
+
+enum Plan {
+  FREE @map("free")
+  STARTER @map("starter")
+  PROFESSIONAL @map("professional")
+  ENTERPRISE @map("enterprise")
+  GROWTH @map("growth")
+}
+
+enum RecordingMode {
+  FORWARD @map("forward")
+  RETURN @map("return")
+}
+
+enum RecordingStatus {
+  STARTED @map("started")
+  PAUSED @map("paused")
+  COMPLETED @map("completed")
+  FAILED @map("failed")
+}
+
+enum UserRole {
+  super_admin
+  company_admin
+  warehouse_manager
+  supervisor
+  packing_operator
+  qc_operator
+  claims_executive
+  marketplace_manager
+  viewer
+  auditor
+}
+
+enum StationStatus {
+  ONLINE @map("online")
+  OFFLINE @map("offline")
+  MAINTENANCE @map("maintenance")
+  INACTIVE @map("inactive")
+}
+
+enum Status {
+  ACTIVE @map("active")
+  SUSPENDED @map("suspended")
+  DELETED @map("deleted")
+}
+
+enum UserStatus {
+  PENDING @map("pending")
+  ACTIVE @map("active")
+  SUSPENDED @map("suspended")
+  DELETED @map("deleted")
+}
+
+/*
+============================================================
+LOSS DEFENDER PRO - ADDITIVE APPLICATION DOMAIN
+============================================================
+*/
 
 enum ShipmentStatus {
   CREATED
@@ -96,15 +627,26 @@ enum PackingSessionStatus {
   CANCELLED
 }
 
-enum EvidenceStatus {
-  PROCESSING
-  READY
-  FAILED
-}
-
 enum MediaType {
   VIDEO
   PHOTO
+}
+
+enum StorageObjectType {
+  RECORDING
+  EVIDENCE
+  INVOICE
+  DOCUMENT
+  IMAGE
+  VIDEO
+  OTHER
+}
+
+enum StorageUsageEventType {
+  UPLOAD
+  DELETE
+  RESTORE
+  ADJUSTMENT
 }
 
 enum SubscriptionStatus {
@@ -125,15 +667,6 @@ enum SubscriptionProvider {
   RAZORPAY
   STRIPE
   OTHER
-}
-
-enum ScanTransactionType {
-  ALLOCATION
-  CONSUMPTION
-  TOPUP
-  REFUND
-  ADJUSTMENT
-  EXPIRATION
 }
 
 enum PaymentStatus {
@@ -158,10 +691,6 @@ enum SubscriptionEntitlementUnit {
   BOOLEAN
 }
 
-// ============================================================
-// COMPANY / USER / WAREHOUSE
-// ============================================================
-
 enum InvoiceStatus {
   DRAFT
   ISSUED
@@ -178,131 +707,51 @@ enum InvoiceItemType {
   ADJUSTMENT
 }
 
-model Company {
-  id       String  @id @default(cuid())
-  name     String
-  code     String? @unique
-  isActive Boolean @default(true)
-
-  users               User[]
-  warehouses          Warehouse[]
-  products            Product[]
-  orders              Order[]
-  marketplaceAccounts MarketplaceAccount[]
-  auditLogs           AuditLog[]
-  storageObjects      StorageObject[]
-  storageUsageEvents  StorageUsageEvent[]
-  billingProfile      BillingProfile?
-  invoices            Invoice[]
-
-  subscription Subscription?
-  scanWallet   ScanWallet?
-  payments     Payment[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([isActive])
-  @@map("companies")
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  IMPORT
+  SCAN
+  PACKING_STARTED
+  EVIDENCE_UPLOADED
+  WALLET_CONSUMED
+  PACKING_COMPLETED
+  ORDER_PACKED
+  ERROR
+  PLAN_CREATED
+  PLAN_UPDATED
+  PLAN_DEACTIVATED
+  SUBSCRIPTION_CREATED
+  SUBSCRIPTION_ACTIVATED
+  SUBSCRIPTION_UPDATED
+  SUBSCRIPTION_CANCELLED
+  SUBSCRIPTION_EXPIRED
+  PAYMENT_CREATED
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  PAYMENT_REFUNDED
+  CREDIT_ALLOCATION
+  EXTRA_SCAN_PURCHASE
+  RETENTION_PURCHASE
 }
-
-model User {
-  id          String   @id @default(cuid())
-  firebaseUid String   @unique
-  email       String
-  name        String?
-  phone       String?
-  designation String?
-  role        UserRole @default(OPERATOR)
-  isActive    Boolean  @default(true)
-
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  packingSessions PackingSession[]
-  auditLogs       AuditLog[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([companyId])
-  @@index([email])
-  @@map("users")
-}
-
-model Warehouse {
-  id       String  @id @default(cuid())
-  name     String
-  code     String
-  address  String?
-  city     String?
-  state    String?
-  country  String  @default("India")
-  isActive Boolean @default(true)
-
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  orders          Order[]
-  packingSessions PackingSession[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([companyId, code])
-  @@index([companyId])
-  @@map("warehouses")
-}
-
-// ============================================================
-// MARKETPLACE
-// ============================================================
-
-model MarketplaceAccount {
-  id          String      @id @default(cuid())
-  marketplace Marketplace
-  accountName String
-  sellerId    String?
-  isActive    Boolean     @default(true)
-
-  // Store encrypted/secured references only.
-  // Raw marketplace secrets should NOT be stored here.
-  credentialRef String?
-
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  orders Order[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([companyId, marketplace, accountName])
-  @@index([companyId, marketplace])
-  @@map("marketplace_accounts")
-}
-
-// ============================================================
-// PRODUCTS
-// ============================================================
 
 model Product {
-  id          String  @id @default(cuid())
-  sku         String
-  name        String
-  description String?
-  imageUrl    String?
-  isActive    Boolean @default(true)
-
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
+  id             String          @id @default(cuid())
+  sku            String
+  name           String
+  description    String?
+  imageUrl       String?
+  isActive       Boolean         @default(true)
+  companyId      String
+  company        Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   variants       ProductVariant[]
   orderItems     OrderItem[]
   barcodeAliases BarcodeAlias[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   @@unique([companyId, sku])
   @@index([companyId])
@@ -311,24 +760,21 @@ model Product {
 }
 
 model ProductVariant {
-  id          String  @id @default(cuid())
-  sku         String
-  name        String?
-  variantName String?
-  color       String?
-  size        String?
-  imageUrl    String?
-  quantity    Int     @default(0)
-  isActive    Boolean @default(true)
-
-  productId String
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
+  id             String          @id @default(cuid())
+  sku            String
+  name           String?
+  variantName    String?
+  color          String?
+  size           String?
+  imageUrl       String?
+  quantity       Int             @default(0)
+  isActive       Boolean         @default(true)
+  productId      String
+  product        Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
   orderItems     OrderItem[]
   barcodeAliases BarcodeAlias[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   @@unique([productId, sku])
   @@index([sku])
@@ -336,19 +782,16 @@ model ProductVariant {
 }
 
 model BarcodeAlias {
-  id       String  @id @default(cuid())
-  barcode  String
-  type     String
-  isActive Boolean @default(true)
-
+  id        String          @id @default(cuid())
+  barcode   String
+  type      String
+  isActive  Boolean         @default(true)
   productId String
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
   variantId String?
   variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
 
   @@unique([barcode])
   @@index([productId])
@@ -356,92 +799,36 @@ model BarcodeAlias {
   @@map("barcode_aliases")
 }
 
-// ============================================================
-// ORDERS
-// ============================================================
-
-model Order {
-  id String @id @default(cuid())
-
-  externalOrderId    String
-  marketplaceOrderId String?
-  marketplace        Marketplace
-
-  status OrderStatus @default(PENDING)
-
-  customerName    String?
-  customerPhone   String?
-  shippingAddress String?
-
-  warehouseId String
-  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
-
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  marketplaceAccountId String?
-  marketplaceAccount   MarketplaceAccount? @relation(fields: [marketplaceAccountId], references: [id], onDelete: SetNull)
-
-  items           OrderItem[]
-  shipments       Shipment[]
-  packingSessions PackingSession[]
-  auditLogs       AuditLog[]
-
-  orderedAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  @@unique([companyId, marketplace, externalOrderId])
-  @@index([companyId, status])
-  @@index([warehouseId, status])
-  @@index([marketplace, externalOrderId])
-  @@map("orders")
-}
-
 model OrderItem {
-  id String @id @default(cuid())
-
+  id        String          @id @default(cuid())
   quantity  Int
-  unitPrice Decimal? @db.Decimal(12, 2)
-
-  orderId String
-  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
+  unitPrice Decimal?        @db.Decimal(12, 2)
+  orderId   String
+  order     Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productId String
-  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
-
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
   variantId String?
   variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
 
   @@index([orderId])
   @@index([productId])
   @@map("order_items")
 }
 
-// ============================================================
-// SHIPMENTS
-// ============================================================
-
 model Shipment {
-  id String @id @default(cuid())
-
-  awb         String
-  carrier     String?
-  trackingUrl String?
-  status      ShipmentStatus @default(CREATED)
-
-  orderId String
-  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
+  id              String          @id @default(cuid())
+  awb             String
+  carrier         String?
+  trackingUrl     String?
+  status          ShipmentStatus  @default(CREATED)
+  orderId         String
+  order           Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   packingSessions PackingSession[]
-  auditLogs       AuditLog[]
   barcodeAliases  ShipmentBarcode[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
   @@unique([awb])
   @@index([orderId])
@@ -450,49 +837,41 @@ model Shipment {
 }
 
 model ShipmentBarcode {
-  id       String  @id @default(cuid())
-  barcode  String
-  type     String
-  isActive Boolean @default(true)
-
+  id         String   @id @default(cuid())
+  barcode    String
+  type       String
+  isActive   Boolean  @default(true)
   shipmentId String
   shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 
   @@unique([barcode])
   @@index([shipmentId])
   @@map("shipment_barcodes")
 }
 
-// ============================================================
-// PACKING / EVIDENCE
-// ============================================================
-
 model PackingSession {
-  id     String               @id @default(cuid())
-  status PackingSessionStatus @default(ACTIVE)
-
-  startedAt   DateTime  @default(now())
+  id          String               @id @default(cuid())
+  status      PackingSessionStatus @default(ACTIVE)
+  startedAt   DateTime             @default(now())
   completedAt DateTime?
 
-  orderId String
-  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId     String
+  order       Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  shipmentId String
-  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId  String
+  shipment    Shipment             @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
 
   warehouseId String
-  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  warehouse   Warehouse            @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
 
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  userId      String
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
 
-  media     EvidenceMedia[]
-  auditLogs AuditLog[]
+  media       EvidenceMedia[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
 
   @@index([orderId])
   @@index([shipmentId])
@@ -502,21 +881,18 @@ model PackingSession {
 }
 
 model EvidenceMedia {
-  id     String         @id @default(cuid())
-  type   MediaType
-  status EvidenceStatus @default(PROCESSING)
-
-  fileName        String
-  storageKey      String
-  contentType     String?
-  sizeBytes       BigInt?
-  durationSeconds Float?
-
+  id               String         @id @default(cuid())
+  type             MediaType
+  status           EvidenceStatus @default(PROCESSING)
+  fileName         String
+  storageKey       String
+  contentType      String?
+  sizeBytes        BigInt?
+  durationSeconds  Float?
   packingSessionId String
   packingSession   PackingSession @relation(fields: [packingSessionId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
   @@index([packingSessionId])
   @@index([type])
@@ -524,378 +900,23 @@ model EvidenceMedia {
   @@map("evidence_media")
 }
 
-// ============================================================
-// PLANS / SUBSCRIPTIONS
-// ============================================================
-
-model Plan {
-  id          String  @id @default(cuid())
-  code        String  @unique
-  name        String
-  description String?
-
-  monthlyPrice Decimal? @db.Decimal(12, 2)
-  yearlyPrice  Decimal? @db.Decimal(12, 2)
-
-  monthlyScanCredits Int @default(0)
-  maxWarehouses      Int @default(1)
-  maxOperators       Int @default(1)
-  maxOrdersPerMonth  Int @default(0)
-
-  // Billing configuration
-  pricePaise          Int?
-  gstPercent          Int  @default(18)
-  validityMonths      Int?
-  includedScans       Int  @default(0)
-  normalRetentionDays Int  @default(30)
-  sortOrder           Int  @default(0)
-
-  isActive Boolean @default(true)
-
-  subscriptions Subscription[]
-  features      PlanFeature[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([isActive])
-  @@map("plans")
-}
-
-model Subscription {
-  id String @id @default(cuid())
-
-  companyId String  @unique
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  planId String
-  plan   Plan   @relation(fields: [planId], references: [id], onDelete: Restrict)
-
-  status          SubscriptionStatus   @default(TRIALING)
-  billingInterval BillingInterval      @default(MONTHLY)
-  provider        SubscriptionProvider @default(MANUAL)
-
-  providerCustomerId     String?
-  providerSubscriptionId String?
-
-  currentPeriodStart DateTime?
-  currentPeriodEnd   DateTime?
-  trialEnd           DateTime?
-  cancelledAt        DateTime?
-
-  entitlements SubscriptionEntitlement[]
-  payments     Payment[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([planId])
-  @@index([status])
-  @@index([providerSubscriptionId])
-  @@map("subscriptions")
-}
-
-model PlanFeature {
-  id String @id @default(cuid())
-
-  planId String
-  plan   Plan   @relation(fields: [planId], references: [id], onDelete: Cascade)
-
-  featureCode String
-  enabled     Boolean @default(true)
-
-  quantity Int?
-  unit     String?
-
-  metadata Json?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([planId, featureCode])
-  @@index([planId])
-  @@index([featureCode])
-  @@map("plan_features")
-}
-
-model SubscriptionEntitlement {
-  id String @id @default(cuid())
-
-  subscriptionId String
-  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-
-  code         String
-  name         String
-  valueInt     Int?
-  valueDecimal Decimal?                    @db.Decimal(12, 4)
-  unit         SubscriptionEntitlementUnit @default(COUNT)
-  metadata     Json?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([subscriptionId, code])
-  @@index([subscriptionId])
-  @@map("subscription_entitlements")
-}
-
-model ExtraScanPack {
-  id String @id @default(cuid())
-
-  code        String  @unique
-  name        String
-  description String?
-
-  scanCredits Int
-
-  pricePaise Int
-  gstPercent Int @default(18)
-
-  isActive  Boolean @default(true)
-  sortOrder Int     @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([isActive])
-  @@index([sortOrder])
-  @@map("extra_scan_packs")
-}
-
-model RetentionOption {
-  id String @id @default(cuid())
-
-  code String @unique
-  name String
-
-  retentionDays Int
-
-  pricePaisePerScan Int
-  gstPercent        Int @default(18)
-
-  isActive  Boolean @default(true)
-  sortOrder Int     @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([retentionDays])
-  @@index([isActive])
-  @@index([sortOrder])
-  @@map("retention_options")
-}
-
-model BillingWebhookEvent {
-  id            String               @id @default(cuid())
-  provider      SubscriptionProvider
-  eventId       String
-  eventType     String
-  payload       Json
-  processed     Boolean              @default(false)
-  processedAt   DateTime?
-  failureReason String?
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
-
-  @@unique([provider, eventId])
-  @@index([provider, eventType])
-  @@index([processed])
-  @@map("billing_webhook_events")
-}
-
-model Payment {
-  id String @id @default(cuid())
-
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  subscriptionId String?
-  subscription   Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
-
-  provider          SubscriptionProvider @default(MANUAL)
-  providerPaymentId String?
-  providerOrderId   String?
-  providerSignature String?
-
-  status PaymentStatus @default(PENDING)
-
-  currency      String @default("INR")
-  subtotalPaise Int
-  gstPaise      Int    @default(0)
-  totalPaise    Int
-
-  paidAt        DateTime?
-  failureReason String?
-  metadata      Json?
-
-  items    PaymentItem[]
-  invoices Invoice[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([provider, providerPaymentId])
-  @@index([companyId, createdAt])
-  @@index([subscriptionId])
-  @@index([status])
-  @@map("payments")
-}
-
-model PaymentItem {
-  id String @id @default(cuid())
-
-  paymentId String
-  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-
-  itemType    PaymentItemType
-  referenceId String?
-  code        String
-  name        String
-
-  quantity Int @default(1)
-
-  unitPricePaise Int
-  gstPaise       Int @default(0)
-  totalPaise     Int
-
-  metadata Json?
-
-  createdAt DateTime @default(now())
-
-  @@index([paymentId])
-  @@index([itemType])
-  @@map("payment_items")
-}
-
-// ============================================================
-// SCAN WALLET
-// ============================================================
-
-model ScanWallet {
-  id String @id @default(cuid())
-
-  companyId String  @unique
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  balance           Int @default(0)
-  lifetimeAllocated Int @default(0)
-  lifetimeConsumed  Int @default(0)
-
-  transactions ScanTransaction[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([balance])
-  @@map("scan_wallets")
-}
-
-model ScanTransaction {
-  id String @id @default(cuid())
-
-  walletId String
-  wallet   ScanWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
-
-  companyId String
-  type      ScanTransactionType
-
-  credits      Int
-  balanceAfter Int
-
-  referenceType String?
-  referenceId   String?
-
-  idempotencyKey String? @unique
-  description    String?
-
-  createdAt DateTime @default(now())
-
-  @@index([walletId, createdAt])
-  @@index([companyId, createdAt])
-  @@index([type])
-  @@index([referenceType, referenceId])
-  @@map("scan_transactions")
-}
-
-model AuditLog {
-  id     String      @id @default(cuid())
-  action AuditAction
-
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  userId String?
-  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
-
-  orderId String?
-  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
-
-  shipmentId String?
-  shipment   Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
-
-  packingSessionId String?
-  packingSession   PackingSession? @relation(fields: [packingSessionId], references: [id], onDelete: SetNull)
-
-  referenceType String?
-  referenceId   String?
-
-  awb         String?
-  description String?
-  metadata    Json?
-
-  createdAt DateTime @default(now())
-
-  @@index([companyId, createdAt])
-  @@index([userId, createdAt])
-  @@index([orderId, createdAt])
-  @@index([shipmentId, createdAt])
-  @@index([packingSessionId, createdAt])
-  @@index([action, createdAt])
-  @@index([referenceType, referenceId])
-  @@map("audit_logs")
-}
-
-enum StorageObjectType {
-  EVIDENCE
-  INVOICE
-  CREDIT_NOTE
-  EXPORT
-  OTHER
-}
-
-enum StorageUsageEventType {
-  UPLOAD
-  DELETE
-  RETENTION_DELETE
-  RECONCILIATION
-  ADJUSTMENT
-}
-
 model StorageObject {
-  id String @id @default(cuid())
-
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  objectType StorageObjectType @default(OTHER)
-
-  bucket     String
-  storageKey String
-
-  contentType String?
-  sizeBytes   BigInt  @default(0)
-
+  id               String            @id @default(cuid())
+  companyId        String
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  objectType       StorageObjectType @default(OTHER)
+  bucket           String
+  storageKey       String
+  contentType      String?
+  sizeBytes        BigInt            @default(0)
   originalFileName String?
+  checksum         String?
+  referenceType    String?
+  referenceId      String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
-  checksum String?
-
-  referenceType String?
-  referenceId   String?
-
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
   storageUsageEvents StorageUsageEvent[]
-  invoices           Invoice[]
 
   @@index([companyId, objectType])
   @@index([companyId, createdAt])
@@ -905,23 +926,16 @@ model StorageObject {
 }
 
 model StorageUsageEvent {
-  id String @id @default(cuid())
-
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
+  id              String               @id @default(cuid())
+  companyId       String
+  company         Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   storageObjectId String?
-  storageObject   StorageObject? @relation(fields: [storageObjectId], references: [id], onDelete: SetNull)
-
-  eventType StorageUsageEventType
-
-  sizeBytes BigInt
-
-  reason String?
-
-  idempotencyKey String? @unique
-
-  createdAt DateTime @default(now())
+  storageObject   StorageObject?       @relation(fields: [storageObjectId], references: [id], onDelete: SetNull)
+  eventType       StorageUsageEventType
+  sizeBytes       BigInt
+  reason          String?
+  idempotencyKey  String?              @unique
+  createdAt       DateTime             @default(now())
 
   @@index([companyId, createdAt])
   @@index([companyId, eventType])
@@ -930,131 +944,25 @@ model StorageUsageEvent {
 }
 
 model BillingProfile {
-  id String @id @default(cuid())
-
-  companyId String  @unique
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  legalName   String
-  displayName String?
-
-  gstin String?
-  pan   String?
-
+  id           String   @id @default(cuid())
+  companyId    String   @unique
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  legalName    String
+  displayName  String?
+  gstin        String?
+  pan          String?
   addressLine1 String?
   addressLine2 String?
   city         String?
   state        String?
   stateCode    String?
   postalCode   String?
-  country      String  @default("India")
-
+  country      String   @default("India")
   billingEmail String?
   billingPhone String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([gstin])
   @@map("billing_profiles")
-}
-
-model Invoice {
-  id String @id @default(cuid())
-
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  paymentId String?  @unique
-  payment   Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
-
-  invoiceNumber String @unique
-
-  status InvoiceStatus @default(DRAFT)
-
-  currency String @default("INR")
-
-  customerLegalName   String
-  customerDisplayName String?
-
-  customerGstin String?
-  customerPan   String?
-
-  customerAddressLine1 String?
-  customerAddressLine2 String?
-  customerCity         String?
-  customerState        String?
-  customerStateCode    String?
-  customerPostalCode   String?
-  customerCountry      String  @default("India")
-
-  customerBillingEmail String?
-  customerBillingPhone String?
-
-  placeOfSupplyState     String?
-  placeOfSupplyStateCode String?
-
-  subtotalPaise Int
-  gstPaise      Int @default(0)
-  totalPaise    Int
-
-  issuedAt DateTime?
-  paidAt   DateTime?
-  voidedAt DateTime?
-
-  pdfStorageObjectId String?
-  pdfStorageObject   StorageObject? @relation(fields: [pdfStorageObjectId], references: [id], onDelete: SetNull)
-
-  items InvoiceItem[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([companyId, createdAt])
-  @@index([companyId, status])
-  @@index([paymentId])
-  @@index([pdfStorageObjectId])
-  @@map("invoices")
-}
-
-model InvoiceSequence {
-  id        String   @id @default(cuid())
-  year      Int      @unique
-  nextValue Int      @default(1)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("invoice_sequences")
-}
-
-model InvoiceItem {
-  id String @id @default(cuid())
-
-  invoiceId String
-  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-
-  itemType InvoiceItemType
-
-  description String
-
-  quantity Int @default(1)
-
-  unitPricePaise     Int
-  taxableAmountPaise Int
-
-  gstPercent Int @default(18)
-  gstPaise   Int @default(0)
-
-  totalPaise Int
-
-  referenceType String?
-  referenceId   String?
-
-  metadata Json?
-
-  createdAt DateTime @default(now())
-
-  @@index([invoiceId])
-  @@index([referenceType, referenceId])
-  @@map("invoice_items")
 }

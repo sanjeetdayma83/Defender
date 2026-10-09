@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../services/platform/platform_ops_service.dart';
 import '../../widgets/platform/platform_async_body.dart';
@@ -431,6 +431,3 @@ class _PlatformScaffold extends StatelessWidget {
     );
   }
 }
-
-
-

@@ -1,4 +1,4 @@
-﻿import { prisma } from "../../config/prisma.js";
+import { prisma } from "../../config/prisma.js";
 
 export class UserService {
   async findByFirebaseUid(uid: string) {
@@ -8,7 +8,7 @@ export class UserService {
       },
 
       include: {
-        company: true,
+        Company: true,
       },
     });
   }
