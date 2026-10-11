@@ -1,200 +1,202 @@
 ﻿import { prisma } from "../../config/prisma.js";
 
-type LiveOrder = {
+type LookupRow = {
   id: string;
   companyId: string;
-  warehouseId: string | null;
-  marketplace: string | null;
+  warehouseId: string;
+  externalOrderId: string;
   marketplaceOrderId: string | null;
-  status: string | null;
+  marketplace: string;
+  orderStatus: string;
+  orderDate: Date;
+  shipmentId: string | null;
   awb: string | null;
-  courier: string | null;
-  items: any;
-  metadata: any;
-  createdAt: Date;
+  carrier: string | null;
+  shipmentStatus: string | null;
+  items: unknown;
 };
+
+type LookupType = "BARCODE" | "AWB" | "ORDER_ID" | "SKU";
+
+function parseItems(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return value.map((raw: any, index: number) => ({
+    id: String(raw.id ?? `item-${index + 1}`),
+    sku: raw.sku ?? null,
+    productName: raw.productName ?? "Unknown Product",
+    quantity: Number(raw.quantity ?? 0),
+    variant: raw.variantName ?? null,
+    product: {
+      id: raw.productId ?? null,
+      sku: raw.sku ?? null,
+      name: raw.productName ?? "Unknown Product",
+      imageUrl: raw.imageUrl ?? null,
+    },
+    status: null,
+    scannedQty: 0,
+  }));
+}
 
 export class ScanService {
   private normalize(value: string) {
-    return value.trim();
+    return String(value ?? "").trim();
   }
 
-  private async findOrderByIdentifier(companyId: string, value: string) {
-    const normalized = this.normalize(value);
+  private async findOrder(
+    companyId: string,
+    value: string,
+    mode: "identifier" | "order" | "sku",
+  ): Promise<LookupRow[]> {
+    const needle = this.normalize(value);
+    if (!needle) return [];
 
-    const directAwb = await prisma.$queryRawUnsafe<LiveOrder[]>(
-      `SELECT
+    const identifierPredicate = `
+      (
+        lower(trim(s.awb)) = lower(trim($2))
+        OR EXISTS (
+          SELECT 1
+          FROM public.shipment_barcodes sb
+          WHERE sb."shipmentId" = s.id
+            AND sb."isActive" = TRUE
+            AND lower(trim(sb.barcode)) = lower(trim($2))
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM public.barcode_aliases ba
+          WHERE ba."isActive" = TRUE
+            AND lower(trim(ba.barcode)) = lower(trim($2))
+            AND (
+              ba."productId" IN (
+                SELECT oi."productId"
+                FROM public.order_items oi
+                WHERE oi."orderId" = o.id
+              )
+              OR ba."variantId" IN (
+                SELECT oi."variantId"
+                FROM public.order_items oi
+                WHERE oi."orderId" = o.id
+                  AND oi."variantId" IS NOT NULL
+              )
+            )
+        )
+      )
+    `;
+
+    const orderPredicate = `
+      (
+        o.id = $2
+        OR lower(trim(o."externalOrderId")) = lower(trim($2))
+        OR lower(trim(coalesce(o."marketplaceOrderId", ''))) = lower(trim($2))
+      )
+    `;
+
+    const skuPredicate = `
+      EXISTS (
+        SELECT 1
+        FROM public.order_items oi
+        JOIN public.products p ON p.id = oi."productId"
+        LEFT JOIN public.product_variants pv ON pv.id = oi."variantId"
+        WHERE oi."orderId" = o.id
+          AND (
+            lower(trim(p.sku)) = lower(trim($2))
+            OR lower(trim(coalesce(pv.sku, ''))) = lower(trim($2))
+            OR EXISTS (
+              SELECT 1
+              FROM public.barcode_aliases ba
+              WHERE ba."isActive" = TRUE
+                AND lower(trim(ba.barcode)) = lower(trim($2))
+                AND (
+                  ba."productId" = p.id
+                  OR ba."variantId" = pv.id
+                )
+            )
+          )
+      )
+    `;
+
+    const predicate =
+      mode === "identifier"
+        ? identifierPredicate
+        : mode === "order"
+          ? orderPredicate
+          : skuPredicate;
+
+    return prisma.$queryRawUnsafe<LookupRow[]>(
+      `
+      SELECT
         o.id,
         o."companyId",
         o."warehouseId",
-        o.marketplace,
+        o."externalOrderId",
         o."marketplaceOrderId",
-        o.status,
-        o.awb,
-        o.courier,
-        o.items,
-        o.metadata,
-        o."createdAt"
-       FROM "Order" o
-       WHERE o."companyId" = $1
-         AND lower(trim(coalesce(o.awb, ''))) = lower(trim($2))
-       LIMIT 1`,
+        o.marketplace::text AS marketplace,
+        o.status::text AS "orderStatus",
+        o."orderedAt" AS "orderDate",
+        s.id AS "shipmentId",
+        s.awb,
+        s.carrier,
+        s.status::text AS "shipmentStatus",
+        COALESCE(
+          (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'id', oi.id,
+                'productId', p.id,
+                'sku', COALESCE(pv.sku, p.sku),
+                'productName', p.name,
+                'imageUrl', COALESCE(pv."imageUrl", p."imageUrl"),
+                'quantity', oi.quantity,
+                'variantName', pv."variantName"
+              )
+              ORDER BY oi."createdAt", oi.id
+            )
+            FROM public.order_items oi
+            JOIN public.products p ON p.id = oi."productId"
+            LEFT JOIN public.product_variants pv ON pv.id = oi."variantId"
+            WHERE oi."orderId" = o.id
+          ),
+          '[]'::jsonb
+        ) AS items
+      FROM public.orders o
+      LEFT JOIN public.shipments s ON s."orderId" = o.id
+      WHERE o."companyId" = $1
+        AND ${predicate}
+      ORDER BY
+        CASE WHEN s.id IS NOT NULL THEN 0 ELSE 1 END,
+        o."createdAt" DESC
+      LIMIT 20
+      `,
       companyId,
-      normalized,
+      needle,
     );
-
-    if (directAwb.length) {
-      return {
-        order: directAwb[0],
-        lookupType: "AWB" as const,
-      };
-    }
-
-    const identifierRows = await prisma.$queryRawUnsafe<
-      { order_id: string; identifier_type: string }[]
-    >(
-      `SELECT oi.order_id, oi.identifier_type
-       FROM order_identifiers oi
-       WHERE oi.company_id = $1
-         AND (
-           lower(trim(coalesce(oi.normalized_value, ''))) = lower(trim($2))
-           OR lower(trim(coalesce(oi.identifier_value, ''))) = lower(trim($2))
-         )
-       ORDER BY
-         CASE
-           WHEN oi.identifier_type = 'awb' THEN 1
-           WHEN oi.identifier_type = 'barcode' THEN 2
-           WHEN oi.identifier_type = 'order_id' THEN 3
-           ELSE 4
-         END,
-         oi.created_at DESC
-       LIMIT 1`,
-      companyId,
-      normalized,
-    );
-
-    if (!identifierRows.length) {
-      return null;
-    }
-
-    const orderRows = await prisma.$queryRawUnsafe<LiveOrder[]>(
-      `SELECT
-        o.id,
-        o."companyId",
-        o."warehouseId",
-        o.marketplace,
-        o."marketplaceOrderId",
-        o.status,
-        o.awb,
-        o.courier,
-        o.items,
-        o.metadata,
-        o."createdAt"
-       FROM "Order" o
-       WHERE o.id = $1
-         AND o."companyId" = $2
-       LIMIT 1`,
-      identifierRows[0].order_id,
-      companyId,
-    );
-
-    if (!orderRows.length) {
-      return null;
-    }
-
-    const type = identifierRows[0].identifier_type;
-
-    return {
-      order: orderRows[0],
-      lookupType:
-        type === "awb"
-          ? ("AWB" as const)
-          : type === "order_id"
-            ? ("ORDER_ID" as const)
-            : ("BARCODE" as const),
-    };
-  }
-
-  private async findOrderByOrderId(companyId: string, value: string) {
-    const rows = await prisma.$queryRawUnsafe<LiveOrder[]>(
-      `SELECT
-        o.id,
-        o."companyId",
-        o."warehouseId",
-        o.marketplace,
-        o."marketplaceOrderId",
-        o.status,
-        o.awb,
-        o.courier,
-        o.items,
-        o.metadata,
-        o."createdAt"
-       FROM "Order" o
-       WHERE o."companyId" = $1
-         AND (
-           o.id::text = $2
-           OR lower(trim(coalesce(o."marketplaceOrderId", ''))) = lower(trim($2))
-         )
-       LIMIT 1`,
-      companyId,
-      value,
-    );
-
-    return rows[0] ?? null;
-  }
-
-  private parseItems(order: LiveOrder) {
-    if (!Array.isArray(order.items)) {
-      return [];
-    }
-
-    return order.items.map((item: any, index: number) => ({
-      id: `${order.id}-item-${index + 1}`,
-      sku: item?.sku ?? null,
-      productName: item?.name ?? "Unknown Product",
-      quantity: Number(item?.qty ?? item?.quantity ?? 0),
-      variant: null,
-      product: {
-        id: null,
-        sku: item?.sku ?? null,
-        name: item?.name ?? "Unknown Product",
-        imageUrl: item?.imageUrl ?? null,
-      },
-      status: item?.status ?? null,
-      scannedQty: Number(item?.scannedQty ?? 0),
-    }));
   }
 
   private buildLookupResponse(
-    order: LiveOrder,
-    lookupType: "BARCODE" | "AWB" | "ORDER_ID" | "SKU",
-    matchedIdentifier?: string | null,
+    row: LookupRow,
+    lookupType: LookupType,
+    matchedIdentifier: string | null = null,
   ) {
-    const items = this.parseItems(order);
-
-    const barcodes = matchedIdentifier
-      ? [matchedIdentifier]
-      : [];
-
     return {
       found: true,
       lookupType,
       shipment: {
-        id: order.id,
-        awb: order.awb,
-        carrier: order.courier,
-        status: order.status,
-        barcodes,
+        id: row.shipmentId ?? row.id,
+        awb: row.awb,
+        carrier: row.carrier,
+        status: row.shipmentStatus ?? row.orderStatus,
+        barcodes: matchedIdentifier ? [matchedIdentifier] : [],
       },
       order: {
-        id: order.id,
-        externalOrderId: order.id,
-        marketplaceOrderId: order.marketplaceOrderId,
-        marketplace: order.marketplace,
-        status: order.status,
-        orderDate: order.createdAt,
+        id: row.id,
+        externalOrderId: row.externalOrderId,
+        marketplaceOrderId: row.marketplaceOrderId,
+        marketplace: row.marketplace,
+        status: row.orderStatus,
+        orderDate: row.orderDate,
+        warehouseId: row.warehouseId,
       },
-      items,
+      items: parseItems(row.items),
     };
   }
 
@@ -209,84 +211,37 @@ export class ScanService {
       };
     }
 
-    const identifierResult = await this.findOrderByIdentifier(
-      companyId,
-      normalized,
-    );
+    const identifiers = await this.findOrder(companyId, normalized, "identifier");
 
-    if (identifierResult) {
-      return this.buildLookupResponse(
-        identifierResult.order,
-        identifierResult.lookupType,
-        normalized,
-      );
+    if (identifiers.length > 0) {
+      const row = identifiers[0];
+      const lookupType: LookupType =
+        row.awb && row.awb.toLowerCase() === normalized.toLowerCase()
+          ? "AWB"
+          : "BARCODE";
+
+      return this.buildLookupResponse(row, lookupType, normalized);
     }
 
-    const orderById = await this.findOrderByOrderId(
-      companyId,
-      normalized,
-    );
+    const byOrder = await this.findOrder(companyId, normalized, "order");
 
-    if (orderById) {
-      return this.buildLookupResponse(
-        orderById,
-        "ORDER_ID",
-        null,
-      );
+    if (byOrder.length > 0) {
+      return this.buildLookupResponse(byOrder[0], "ORDER_ID");
     }
 
-    const skuOrders = await prisma.$queryRawUnsafe<LiveOrder[]>(
-      `SELECT
-        o.id,
-        o."companyId",
-        o."warehouseId",
-        o.marketplace,
-        o."marketplaceOrderId",
-        o.status,
-        o.awb,
-        o.courier,
-        o.items,
-        o.metadata,
-        o."createdAt"
-       FROM "Order" o
-       WHERE o."companyId" = $1
-         AND o.status IN (
-           'queued',
-           'synced',
-           'packing',
-           'evidence_ready'
-         )
-         AND EXISTS (
-           SELECT 1
-           FROM jsonb_array_elements(
-             CASE
-               WHEN jsonb_typeof(o.items) = 'array' THEN o.items
-               ELSE '[]'::jsonb
-             END
-           ) item
-           WHERE lower(trim(coalesce(item->>'sku', ''))) =
-                 lower(trim($2))
-         )
-       ORDER BY o."createdAt" DESC`,
-      companyId,
-      normalized,
-    );
+    const bySku = await this.findOrder(companyId, normalized, "sku");
 
-    if (skuOrders.length > 1) {
+    if (bySku.length > 1) {
       return {
         found: false,
         lookupType: "SKU",
         message:
-          "SKU is ambiguous. Please scan the shipping barcode or AWB instead.",
+          "SKU matches multiple orders. Scan the shipment barcode or AWB instead.",
       };
     }
 
-    if (skuOrders.length === 1) {
-      return this.buildLookupResponse(
-        skuOrders[0],
-        "SKU",
-        null,
-      );
+    if (bySku.length === 1) {
+      return this.buildLookupResponse(bySku[0], "SKU");
     }
 
     return {
@@ -298,5 +253,3 @@ export class ScanService {
 }
 
 export const scanService = new ScanService();
-
-

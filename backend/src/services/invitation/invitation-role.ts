@@ -1,5 +1,10 @@
 export type InvitationRole = "ADMIN" | "MANAGER" | "OPERATOR" | "VIEWER";
 
+export function requiresWarehouseAssignment(value: string): boolean {
+  const role = normalizeRole(value);
+  return role === "MANAGER" || role === "OPERATOR";
+}
+
 export function normalizeRole(value: string): InvitationRole {
   const role = String(value ?? "").trim().toUpperCase();
   if (["ADMIN", "MANAGER", "OPERATOR", "VIEWER"].includes(role)) return role as InvitationRole;

@@ -2,7 +2,7 @@
 
 export class PlanService {
   async listActive() {
-    const result = await prisma.$queryRawUnsafe<any[]>(`
+    return prisma.$queryRawUnsafe<any[]>(`
       SELECT
         id,
         code,
@@ -21,20 +21,19 @@ export class PlanService {
         "isCommercial",
         "isActive",
         "createdAt",
-        "updatedAt"
-      FROM plan_configurations
+        "updatedAt",
+        "maxOrdersPerMonth"
+      FROM public.plans
       WHERE "isActive" = true
         AND "isCommercial" = true
       ORDER BY "pricePaise" ASC, code ASC
     `);
-
-    return result;
   }
 
   async getByCode(code: string) {
     const normalizedCode = code.trim().toLowerCase();
 
-    const result = await prisma.$queryRawUnsafe<any[]>(`
+    const rows = await prisma.$queryRawUnsafe<any[]>(`
       SELECT
         id,
         code,
@@ -53,51 +52,54 @@ export class PlanService {
         "isCommercial",
         "isActive",
         "createdAt",
-        "updatedAt"
-      FROM plan_configurations
+        "updatedAt",
+        "maxOrdersPerMonth"
+      FROM public.plans
       WHERE LOWER(code) = $1
       LIMIT 1
     `, normalizedCode);
 
-    return result[0] ?? null;
+    return rows[0] ?? null;
   }
 
   async getSubscription(companyId: string) {
-    const result = await prisma.$queryRawUnsafe<any[]>(`
+    const rows = await prisma.$queryRawUnsafe<any[]>(`
       SELECT
-        bs.id,
-        bs."companyId",
-        bs."razorpaySubId",
-        bs.plan,
-        bs.status,
-        bs."currentPeriodStart",
-        bs."currentPeriodEnd",
-        bs."createdAt",
-        bs."updatedAt",
-        pc.id AS "planConfigurationId",
-        pc.code AS "planCode",
-        pc.name AS "planName",
-        pc.description AS "planDescription",
-        pc."pricePaise",
-        pc.currency,
-        pc."billingInterval",
-        pc."validityMonths",
-        pc."includedScans",
-        pc."retentionDays",
-        pc."storageQuotaBytes",
-        pc."maxWarehouses",
-        pc."maxOperators",
-        pc."gstPercent",
-        pc."isCommercial",
-        pc."isActive"
-      FROM "BillingSubscription" bs
-      LEFT JOIN plan_configurations pc
-        ON LOWER(pc.code) = LOWER(bs.plan::text)
-      WHERE bs."companyId" = $1
+        s.id,
+        s."companyId",
+        s."providerSubscriptionId" AS "razorpaySubId",
+        p.code AS plan,
+        s.status::text AS status,
+        s."currentPeriodStart",
+        s."currentPeriodEnd",
+        s."createdAt",
+        s."updatedAt",
+        p.id AS "planConfigurationId",
+        p.code AS "planCode",
+        p.name AS "planName",
+        p.description AS "planDescription",
+        p."pricePaise",
+        p.currency,
+        p."billingInterval",
+        p."validityMonths",
+        p."includedScans",
+        p."retentionDays",
+        p."storageQuotaBytes",
+        p."maxWarehouses",
+        p."maxOperators",
+        p."gstPercent",
+        p."isCommercial",
+        p."isActive",
+        p."maxOrdersPerMonth"
+      FROM public.subscriptions s
+      LEFT JOIN public.plans p
+        ON p.id = s."planId"
+      WHERE s."companyId" = $1
+      ORDER BY s."createdAt" DESC
       LIMIT 1
     `, companyId);
 
-    return result[0] ?? null;
+    return rows[0] ?? null;
   }
 
   async subscribeCompany(_input: {

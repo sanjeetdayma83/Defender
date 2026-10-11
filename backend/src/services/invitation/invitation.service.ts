@@ -1,5 +1,10 @@
 import crypto from "node:crypto";
-import { normalizeRole, toDatabaseUserRole, type InvitationRole } from "./invitation-role.js";
+import {
+  normalizeRole,
+  requiresWarehouseAssignment,
+  toDatabaseUserRole,
+  type InvitationRole,
+} from "./invitation-role.js";
 import { prisma } from "../../config/prisma.js";
 
 const INVITE_TTL_DAYS = 7;
@@ -52,13 +57,18 @@ export class InvitationService {
       throw new Error("WAREHOUSE_INACTIVE");
     }
 
+    const role = normalizeRole(row.role);
+    if (requiresWarehouseAssignment(role) && !row.warehouseId) {
+      throw new Error("WAREHOUSE_REQUIRED");
+    }
+
     return {
       valid: true,
       invitation: {
         id: row.invitationId,
         name: row.name,
         email: row.email,
-        role: normalizeRole(row.role),
+        role,
         companyId: row.companyId,
         companyName: row.companyName,
         warehouseId: row.warehouseId ?? null,
@@ -130,7 +140,7 @@ export class InvitationService {
       if (!companies[0].isActive) throw new Error("COMPANY_INACTIVE");
 
       const warehouseId = String(input.warehouseId ?? "").trim() || null;
-      if (["MANAGER", "OPERATOR"].includes(role) && !warehouseId) {
+      if (requiresWarehouseAssignment(role) && !warehouseId) {
         throw new Error("WAREHOUSE_REQUIRED");
       }
 
@@ -224,6 +234,14 @@ export class InvitationService {
       const invitation = rows[0];
       if (!invitation) throw new Error("INVALID_INVITATION");
       if (invitation.accepted_at) throw new Error("INVITATION_USED");
+
+      const invitationRole = normalizeRole(invitation.role);
+      if (
+        requiresWarehouseAssignment(invitationRole) &&
+        !invitation.warehouse_id
+      ) {
+        throw new Error("WAREHOUSE_REQUIRED");
+      }
       if (new Date(invitation.expires_at).getTime() <= Date.now()) {
         throw new Error("INVITATION_EXPIRED");
       }
